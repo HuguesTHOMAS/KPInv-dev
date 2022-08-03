@@ -436,6 +436,9 @@ class GpuSceneSegDataset(Dataset):
         # Concatenate batch
         ###################
 
+
+
+
         stacked_points = np.concatenate(p_list, axis=0)
         stacked_features = np.concatenate(f_list, axis=0)
         stacked_labels = np.concatenate(l_list, axis=0)
@@ -443,6 +446,18 @@ class GpuSceneSegDataset(Dataset):
         cloud_inds = np.array(ci_list, dtype=np.int32)
         input_inds = np.concatenate(pi_list, axis=0)
         input_invs = np.concatenate(pinv_list, axis=0)
+
+
+        print(stacked_points.shape)
+        print(stacked_features.shape)
+        print(stacked_labels.shape)
+        print(center_points.shape)
+        print(cloud_inds.shape)
+        print(input_inds.shape)
+        print(input_invs.shape)
+
+        a = 1/0
+
         stack_lengths = np.array([pp.shape[0] for pp in p_list], dtype=np.int32)
         scales = np.array(s_list, dtype=np.float32)
         rots = np.stack(R_list, axis=0)

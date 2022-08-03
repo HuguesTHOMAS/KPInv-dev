@@ -328,7 +328,6 @@ class KPFCNN(nn.Module):
                            norm_type=cfg.model.norm,
                            bn_momentum=cfg.model.bn_momentum)
 
-
     def get_residual_block(self, in_C, out_C, radius, sigma, cfg, strided=False):
 
         return KPResidualBlock(in_C,
@@ -344,7 +343,7 @@ class KPFCNN(nn.Module):
                                norm_type=cfg.model.norm,
                                bn_momentum=cfg.model.bn_momentum)
 
-    def forward(self, batch, cfg):
+    def forward(self, batch):
 
         #  ------ Init ------
 

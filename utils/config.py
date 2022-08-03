@@ -125,11 +125,12 @@ def init_cfg():
     
     cfg.train.optimizer = 'SGD'         #   Str, optimizer ('SGD' or 'Adam')
     cfg.train.lr = 1e-2                 # Float, initial learning rate
-    cfg.train.sgd_momentum = 0.95       # Float, learning rate momentum
+    cfg.train.sgd_momentum = 0.95       # Float, learning rate momentum for sgd optimizer
+    cfg.train.adam_b = (0.9, 0.999)     # Float, betas for Adam optimizer
+    cfg.train.adam_eps = 1e-08          # Float, eps for Adam optimizer
     cfg.train.weight_decay = 1e-4       # Float, weight decay
     cfg.train.lr_decays = {'10': 0.1}   #  Dict, decay values with their epoch {epoch: decay}
     cfg.train.warmup = True             #  Bool, should the first epoch be a warmup
-    
     cfg.train.grad_clip = 100.0         #   Int, gradient clipping value (negative means no clipping)
     cfg.train.class_w = []              #  List, weight for each class in the segmentation loss
 
@@ -153,7 +154,7 @@ def init_cfg():
     cfg.test.num_workers = 16           #   Int, number of parallel workers for input dataset.
 
     cfg.test.max_votes = 10             #   Int, number of training epochs
-    cfg.test.steps_per_epoch = 1000     #   Int, number of steps per epoch
+    cfg.test.steps_per_epoch = 100      #   Int, number of steps per epoch
 
     cfg.test.in_radius = 1.0            # Float, radius of the input sphere
     cfg.test.batch_size = 8             #   Int, number of input point cloud per batch

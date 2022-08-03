@@ -9,6 +9,7 @@
 import os
 import sys
 import time
+import signal
 from torch.utils.data import DataLoader
 
 # Local libs
@@ -26,6 +27,8 @@ from models.architectures import KPFCNN
 from datasets.scene_seg import GpuSceneSegSampler, GpuSceneSegCollate
 
 from experiments.S3DIS_simple.S3DIS import S3DIS_cfg, S3DISDataset
+
+from tasks.trainval import train_and_validate
 
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -233,26 +236,14 @@ if __name__ == '__main__':
     #           > Use multidataset, multihead segmentation and test deeper and deeper networks
     #
 
-
-    underline('Preparing trainer class')
-
-    # Define a trainer class
-    trainer = ModelTrainer(net, config, chkp_path=chosen_chkp)
-    print('Done in {:.1f}s\n'.format(time.time() - t1))
-
-
-    underline('Start training')
-
     print('\n')
-    frame_lines_1(['Data Preparation'])
+    frame_lines_1(['Training and Validation'])
 
-    # Training
-    trainer.train(net, training_loader, test_loader, config)
+    train_and_validate(net, training_loader, test_loader, cfg)
 
     print('Forcing exit now')
     os.kill(os.getpid(), signal.SIGINT)
 
-
-
+    
 
 
