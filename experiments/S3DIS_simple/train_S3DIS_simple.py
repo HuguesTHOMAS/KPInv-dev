@@ -56,7 +56,7 @@ def my_config():
 
     cfg.data.sub_size = 0.02          # -1.0 so that dataset point clouds are not initially subsampled
     cfg.model.init_sub_size = 0.04    # Adapt this with train.in_radius. Try to keep a ratio of ~50
-    cfg.model.sub_mode = 'ph'
+    cfg.model.sub_mode = 'grid'
 
     cfg.model.input_channels = 5    # This value has to be compatible with one of the dataset input features definition
 

@@ -5,14 +5,9 @@ import torch
 import itertools
 from pykeops.torch import Vi, Vj
 
-from utils.gpu_init import init_gpu
+from utils.gpu_init import init_gpu, tensor_MB
 
-
-
-
-
-
-
+from pykeops.torch import LazyTensor
 
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -21,14 +16,25 @@ from utils.gpu_init import init_gpu
 #       \**********************/
 #
 
+@torch.no_grad()
+def reverse_ravel_hash(hash_values, max_voxels):
+    dimension = int(max_voxels.shape[-1])
+    voxels = torch.zeros((int(hash_values.shape[0]), dimension),
+                         dtype=hash_values.dtype).to(hash_values.device)
+    for i in range(0, dimension):
+        divisor = torch.prod(max_voxels[i+1:])
+        divided = torch.div(hash_values, divisor, rounding_mode="floor")
+        voxels[..., i] = divided
+        hash_values -= divided * divisor
+    return voxels
 
 @torch.no_grad()
 def ravel_hash_func(voxels, max_voxels):
-    dimension = voxels.shape[1]
-    hash_values = voxels[:, 0].clone()
+    dimension = voxels.shape[-1]
+    hash_values = voxels[..., 0].clone()
     for i in range(1, dimension):
         hash_values *= max_voxels[i]
-        hash_values += voxels[:, i]
+        hash_values += voxels[..., i]
     return hash_values
 
 
@@ -204,8 +210,8 @@ def permutohedral_subsample(points, sub_size0, features=None, labels=None, retur
     proj_mat = torch.from_numpy(ph_proj_mat(pts_dim + 1)).to(points.device)
     points_elevated = torch.matmul(points_elevated, proj_mat.T)
 
-    # Trick: offset the hyper plane by 1/2 of the 1-vector (normal of the 1-plane)
-    points_elevated += sub_size * 0.5
+    # # Trick: offset the hyper plane by 1/2 of the 1-vector (normal of the 1-plane)
+    # points_elevated += sub_size * 0.5
 
     # Get voxel indices for each points
     voxels = torch.floor(points_elevated * inv_sub_size).long()
@@ -222,9 +228,21 @@ def permutohedral_subsample(points, sub_size0, features=None, labels=None, retur
     # p = points.cpu().numpy()
     # # Save ply
     # from utils.ply import write_ply
+    # if p.shape[1] == 2:
+    #     p = np.concatenate((p, p[:, :1]*0), axis=1)
+    #     write_ply('results/test_ph2.ply',
+    #                 [p, voxels.cpu().numpy().astype(np.int32), f.astype(np.int32)],
+    #                 ['x', 'y', 'z', 'i', 'j', 'k', 'f'])
+    # else:   
+    #     write_ply('results/test_ph2.ply',
+    #                 [p, voxels.cpu().numpy().astype(np.int32), f.astype(np.int32)],
+    #                 ['x', 'y', 'z', 'i', 'j', 'k', 'l', 'f'])
+
     # write_ply('results/test_ph.ply',
     #             [p, f.astype(np.int32)],
     #             ['x', 'y', 'z', 'f'])
+
+    # a = 1/0
 
     # Get unique values and subsampled indices
     aaa, inv_indices0, unique_counts = torch.unique(hash_values,
@@ -267,8 +285,20 @@ def permutohedral_subsample(points, sub_size0, features=None, labels=None, retur
         return return_list[0]
 
 
+# # Test Permutohedral
+# x = torch.arange(-1, 5, 0.05)
+# y = torch.arange(-1, 5, 0.05)
+# z = torch.arange(-1, 5, 0.05)
+# grid_x, grid_y, grid_z = torch.meshgrid(x, y, z, indexing='xy')
+# pts = torch.concat((torch.reshape(grid_x, (-1, 1)), torch.reshape(grid_y, (-1, 1)), torch.reshape(grid_z, (-1, 1))), dim=1)
+
+# s = permutohedral_subsample(pts, 0.3)
+
+# a = 1/0
+
+
 @torch.no_grad()
-def hexagonal_subsample(points, sub_size0, features=None, labels=None, return_inverse=False):
+def hexagonal_subsample(points, sub_size0, features=None, labels=None, return_inverse=False, eps=1e-6):
     """
     Similar to permutohedral subsample but with overlap between subampling regions. Slower but better quality.
     Cannot return inverse indices though.
@@ -285,69 +315,121 @@ def hexagonal_subsample(points, sub_size0, features=None, labels=None, return_in
     # Parameters
     inv_sub_size = 1.0 / sub_size
     pts_dim = int(points.shape[1])
+    
+    # Prepare labels if needed
+    if labels is not None:
+        one_hot_labels = torch.nn.functional.one_hot(labels).type(torch.int16)  # (N, C)
+    else:
+        one_hot_labels = None
 
     # Project points to a higher dimension in the 1-plane Rotate to avoid deformation
-    points_elevated = torch.cat((points, torch.zeros_like(points[:, :1])), dim=1)
+    points_elevated = torch.cat((points + eps, torch.zeros_like(points[:, :1])), dim=1)
     proj_mat = torch.from_numpy(ph_proj_mat(pts_dim + 1)).to(points.device)
     points_elevated = torch.matmul(points_elevated, proj_mat.T)
 
     # Get voxel indices for each points
     voxels = torch.floor(points_elevated * inv_sub_size).long()
 
-    # Pad to avoid negative pixel values
-    voxels -= voxels.amin(0, keepdim=True)  # (L, D + 1)
+    # We offset in diferrent directions to get a neighborhood of multiple permutohedral cells
+    offsets = np.array(list(itertools.product([0, 1], repeat=pts_dim+1)), dtype=np.int64)
+    offsets[:, -1] *= -1
+    offsets = torch.from_numpy(offsets).to(points.device) # (O, D)
 
-    # We padd in all positive direction excpet the 1 vector
-    offsets = list(itertools.product([0, 1], repeat=pts_dim+1))
-    offsets = np.array(offsets[1:-1])
+    # Pad to avoid negative pixel values  (-1 because of offsets)
+    vox_origin = voxels.amin(0, keepdim=True) - 1
+    voxels -= vox_origin
 
-    print(offsets)
-    print(offsets.shape)
+    # Get maximum values (+1 because of offsets)
+    max_voxels = voxels.amax(0) + 2
+    
+    # Get the type of voxel with the sum of coordinates
+    type_values = torch.unique(torch.sum(voxels, dim=1))
+    if pts_dim == 2:
+        wanted_type = type_values[0].item()
+    elif pts_dim == 3:
+        wanted_type = type_values[1].item()
+    else:
+        wanted_type = type_values[0].item()
 
-    a = 1/0
+    # get hash values for each offset
+    hash_values = []
+    hash_inds = []
+    for offset in offsets:
 
+        # We automatically know an offset will not be valid
+        ###################################################
 
+        # We already the sum of coordinates after offset:
+        new_types = type_values - torch.sum(offset)
 
-    # Vectorize multiple dimensions
-    max_voxels = voxels.amax(0) + 1
-    hash_values = ravel_hash_func(voxels, max_voxels)
+        # if the sum of it is not contained in the valid types
+        if wanted_type not in new_types:
+            continue
 
-    # # Debug:
-    # f = hash_values.cpu().numpy()
-    # p = points.cpu().numpy()
-    # # Save ply
-    # from utils.ply import write_ply
-    # write_ply('results/test_ph.ply',
-    #             [p, f.astype(np.int32)],
-    #             ['x', 'y', 'z', 'f'])
+        # Otherwise offset and only keep the wanted cells
+        #################################################
+
+        # offset voxels
+        voxels_off = voxels - offset
+
+        # Get voxel type 
+        vox_types = torch.sum(voxels_off, dim=1)  # (N, )
+
+        # Only consider valid voxels
+        valid_mask = vox_types == wanted_type
+        voxels_off = voxels_off[valid_mask]  # (Ni, )
+
+        # Vectorize multiple dimensions
+        hash_values.append(ravel_hash_func(voxels_off, max_voxels)) # (Ni,)
+        hash_inds.append(torch.nonzero(valid_mask, as_tuple=True)[0])
+
+    # Stack all offset points and hash
+    hash_values = torch.concat(hash_values, dim=0)  # (Ntot)
+    hash_inds = torch.concat(hash_inds, dim=0)  # (Ntot)
 
     # Get unique values and subsampled indices
-    aaa, inv_indices0, unique_counts = torch.unique(hash_values,
-                                                    return_inverse=True,
-                                                    return_counts=True)  # (M) (N) (M)
+    unique_hashs, inv_indices0, unique_counts = torch.unique(hash_values,
+                                                  return_inverse=True,
+                                                  return_counts=True)  # (M,) (Ntot,) (M,)
 
     # Get average points per voxel
-    inv_indices = inv_indices0.unsqueeze(1).expand(-1, pts_dim)  # (N, D)
+    inv_indices = inv_indices0.unsqueeze(1).expand(-1, pts_dim)  # (Ntot, D)
     s_points = torch.zeros(size=(unique_counts.shape[0], pts_dim)).to(points.device)  # (M, D)
-    s_points.scatter_add_(0, inv_indices, points)  # (M, D)
+    s_points.scatter_add_(0, inv_indices, points[hash_inds])  # (M, D)
     s_points /= unique_counts.unsqueeze(1).float()  # (M, D)
+
+
+    # #### DEBUG: central point instead of barycenter ####
+    # #
+    # # Get central point for each occupied cell
+    # unique_voxels = reverse_ravel_hash(unique_hashs, max_voxels)
+    # unique_voxels += vox_origin
+    # # unique_voxels += torch.tensor([1, 1, 1, -1], dtype=torch.long, device=unique_voxels.device)
+    # central_pts_e = unique_voxels * sub_size
+    # central_pts = torch.matmul(central_pts_e, proj_mat)
+    # s_points = central_pts[:, :pts_dim]
+    # #### DEBUG: central point instead of barycenter ####
+
+    # #
+    # #   TODO: erase barycenters that are to far from cell center
+    # #
+
 
     if features is not None:
         # Get average features per voxel
         f_dim = int(features.shape[1])
         inv_indices = inv_indices0.unsqueeze(1).expand(-1, f_dim)  # (N, D)
         s_features = torch.zeros(size=(unique_counts.shape[0], f_dim)).to(points.device)  # (M, D)
-        s_features.scatter_add_(0, inv_indices, features)  # (M, D)
+        s_features.scatter_add_(0, inv_indices, features[hash_inds])  # (M, D)
         s_features /= unique_counts.unsqueeze(1).float()  # (M, D)
 
     if labels is not None:
         # Get most represented label per voxel
-        one_hot_labels = torch.nn.functional.one_hot(labels) # (N, C)
         l_dim = int(one_hot_labels.shape[1])
         inv_indices = inv_indices0.unsqueeze(1).expand(-1, l_dim)  # (N, C)
-        s_labels = torch.zeros(size=(unique_counts.shape[0], l_dim), dtype=torch.long).to(points.device)  # (M, C)
-        s_labels.scatter_add_(0, inv_indices, one_hot_labels)  # (M, C)
-        s_labels = torch.argmax(s_labels, dim=1) # (M, C)
+        s_labels = torch.zeros(size=(unique_counts.shape[0], l_dim), dtype=torch.int16).to(points.device)  # (M, C)
+        s_labels.scatter_add_(0, inv_indices, one_hot_labels[hash_inds])  # (M, C)
+        s_labels = torch.argmax(s_labels, dim=1) # (M,)
 
     return_list = [s_points]
     if (features is not None):
@@ -360,6 +442,19 @@ def hexagonal_subsample(points, sub_size0, features=None, labels=None, return_in
         return return_list
     else:
         return return_list[0]
+
+
+# # Test Hexagonal
+# x = torch.arange(-1, 5, 0.05)
+# y = torch.arange(-1, 5, 0.05)
+# z = torch.arange(-1, 5, 0.05)
+# grid_x, grid_y, grid_z = torch.meshgrid(x, y, z, indexing='xy')
+# pts = torch.concat((torch.reshape(grid_x, (-1, 1)), torch.reshape(grid_y, (-1, 1)), torch.reshape(grid_z, (-1, 1))), dim=1)
+
+# s = hexagonal_subsample(pts, 0.3)
+
+# a = 1/0
+
 
 # ----------------------------------------------------------------------------------------------------------------------
 #

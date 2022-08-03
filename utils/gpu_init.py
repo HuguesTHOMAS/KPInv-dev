@@ -50,3 +50,6 @@ def init_gpu(gpu_id='auto'):
 
     return torch.device("cuda")
 
+
+def tensor_MB(a):
+    return round(a.element_size() * a.nelement() / 1024 / 1024, 2)

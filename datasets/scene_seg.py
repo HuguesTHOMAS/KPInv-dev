@@ -125,7 +125,7 @@ class GpuSceneSegDataset(Dataset):
             sub_ply_file = join(tree_path, '{:s}.ply'.format(cloud_name))
 
             # Check if inputs have already been computed
-            if exists(KDTree_file):
+            if False and exists(KDTree_file):
                 print('\nFound KDTree for cloud {:s}, subsampled at {:.3f}'.format(cloud_name, dl))
 
                 # read ply with data
