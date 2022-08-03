@@ -86,8 +86,6 @@ class S3DISDataset(GpuSceneSegDataset):
         ############
         # S3DIS data
         ############
-        
-        self.regular_sampling = regular_sampling
 
         # Here provide the list of .ply files depending on the set (training/validation/test)
         self.scene_names, self.scene_files = self.S3DIS_files()
@@ -175,9 +173,9 @@ class S3DISDataset(GpuSceneSegDataset):
         if self.cfg.model.input_channels == 1:
             pass
         elif self.cfg.model.input_channels == 4:
-            stacked_features = np.hstack((stacked_features, in_features[:, :3]))
+            selected_features = np.hstack((selected_features, in_features[:, :3]))
         elif self.cfg.model.input_channels == 5:
-            stacked_features = np.hstack((stacked_features, in_features))
+            selected_features = np.hstack((selected_features, in_features))
         else:
             raise ValueError('Only accepted input dimensions are 1, 4 and 5')
 

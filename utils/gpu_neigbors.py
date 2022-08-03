@@ -1,8 +1,10 @@
-from typing import Tuple, List
+from typing import Tuple
 
 import torch
 from torch import Tensor
+import pykeops
 from pykeops.torch import LazyTensor
+pykeops.set_verbose(False)
 
 from utils.batch_conversion import batch_to_pack, pack_to_batch, pack_to_list, list_to_pack
 from utils.gpu_subsampling import subsample_list_mode
@@ -45,11 +47,10 @@ def keops_knn(q_points: Tensor, s_points: Tensor, k: int) -> Tuple[Tensor, Tenso
         knn_distance (Tensor): (*, N, k)
         knn_indices (LongTensor): (*, N, k)
     """
-    num_batch_dims = q_points.dim() - 2
     xi = LazyTensor(q_points.unsqueeze(-2))  # (*, N, 1, C)
     xj = LazyTensor(s_points.unsqueeze(-3))  # (*, 1, M, C)
     dij = (xi - xj).norm2()  # (*, N, M)
-    knn_distances, knn_indices = dij.Kmin_argKmin(k, dim=num_batch_dims + 1)  # (*, N, K)
+    knn_distances, knn_indices = dij.Kmin_argKmin(k, dim=q_points.dim() - 1)  # (*, N, K)
     return knn_distances, knn_indices
 
 @torch.no_grad()

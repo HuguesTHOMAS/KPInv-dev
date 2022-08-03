@@ -1,13 +1,10 @@
 
-import imp
 import numpy as np
 import torch
 import itertools
-from pykeops.torch import Vi, Vj
 
 from utils.gpu_init import init_gpu, tensor_MB
 
-from pykeops.torch import LazyTensor
 
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -534,7 +531,8 @@ def subsample_list_mode(points, lengths, sub_size, method='grid'):
         raise ValueError('Wrong Subsampling method: {:s}'.format(method))
 
     # Convert length to tensor
-    if type(lengths) == list:
+    length_as_list = type(lengths) == list
+    if length_as_list:
         lengths = torch.LongTensor(lengths).to(points.device)
 
     # Parameters
@@ -553,4 +551,7 @@ def subsample_list_mode(points, lengths, sub_size, method='grid'):
     # Packing the list of points
     sampled_points = torch.cat(sampled_points_list, dim=0)
     sampled_lengths = [x.shape[0] for x in sampled_points_list]
+    if not length_as_list:
+        sampled_lengths = torch.LongTensor(sampled_lengths).to(points.device)
+
     return sampled_points, sampled_lengths

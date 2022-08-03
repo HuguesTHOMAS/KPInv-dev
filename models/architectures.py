@@ -223,7 +223,7 @@ class KPFCNN(nn.Module):
 
         # Next blocks
         for _ in range(self.layer_blocks[0] - 2):
-            self.encoder_1.append(self.get_residual_block(C * 2, C * 2, conv_r, conv_sig))
+            self.encoder_1.append(self.get_residual_block(C * 2, C * 2, conv_r, conv_sig, cfg))
 
         # Pooling block
         self.pooling_1 = self.get_residual_block(C * 2, C * 2, conv_r, conv_sig, cfg, strided=True)
@@ -241,7 +241,7 @@ class KPFCNN(nn.Module):
 
             # Next blocks
             for _ in range(self.layer_blocks[layer - 1] - 1):
-                encoder_i.append(self.get_residual_block(C * 2, C * 2, conv_r, conv_sig))
+                encoder_i.append(self.get_residual_block(C * 2, C * 2, conv_r, conv_sig, cfg))
             setattr(self, 'encoder_{:d}'.format(layer), encoder_i)
 
             # Pooling block (not for the last layer)
@@ -282,26 +282,28 @@ class KPFCNN(nn.Module):
 
 
 
-        # ################
-        # # Network Losses
-        # ################
+        ################
+        # Network Losses
+        ################
 
-        # # List of valid labels (those not ignored in loss)
-        # self.valid_labels = np.sort([c for c in lbl_values if c not in ign_lbls])
+        # List of valid labels (those not ignored in loss)
+        self.valid_labels = np.sort([c for c in cfg.data.label_values if c not in cfg.data.ignored_labels])
 
-        # # Choose segmentation loss
-        # if len(config.class_w) > 0:
-        #     class_w = torch.from_numpy(np.array(config.class_w, dtype=np.float32))
-        #     self.criterion = torch.nn.CrossEntropyLoss(weight=class_w, ignore_index=-1)
-        # else:
-        #     self.criterion = torch.nn.CrossEntropyLoss(ignore_index=-1)
+        # Choose segmentation loss
+        if len(cfg.train.class_w) > 0:
+            class_w = torch.from_numpy(np.array(cfg.train.class_w, dtype=np.float32))
+            self.criterion = torch.nn.CrossEntropyLoss(weight=class_w, ignore_index=-1)
+        else:
+            self.criterion = torch.nn.CrossEntropyLoss(ignore_index=-1)
+
         # self.deform_fitting_mode = config.deform_fitting_mode
         # self.deform_fitting_power = config.deform_fitting_power
         # self.deform_lr_factor = config.deform_lr_factor
         # self.repulse_extent = config.repulse_extent
-        # self.output_loss = 0
-        # self.reg_loss = 0
-        # self.l1 = nn.L1Loss()
+
+        self.output_loss = 0
+        self.reg_loss = 0
+        self.l1 = nn.L1Loss()
 
         return
 
@@ -346,6 +348,9 @@ class KPFCNN(nn.Module):
     def forward(self, batch):
 
         #  ------ Init ------
+        
+        torch.cuda.synchronize(batch.points.device)
+        t = [time.time()]
 
         # First prepare the pyramid graph structure
         pyramid = build_graph_pyramid(batch.points,
@@ -355,9 +360,15 @@ class KPFCNN(nn.Module):
                                       self.first_radius,
                                       self.neighbor_limits,
                                       sub_mode=self.sub_mode)
+           
+        torch.cuda.synchronize(batch.points.device)                           
+        t += [time.time()]
 
         # Get input features
         feats = batch.features.clone().detach()
+              
+        torch.cuda.synchronize(batch.points.device)                        
+        t += [time.time()]
 
 
         #  ------ Encoder ------
@@ -382,6 +393,9 @@ class KPFCNN(nn.Module):
                 layer_pool = getattr(self, 'pooling_{:d}'.format(layer))
                 feats = layer_pool(pyramid.points[l+1], pyramid.points[l], feats, pyramid.pools[l])
 
+             
+        torch.cuda.synchronize(batch.points.device)                         
+        t += [time.time()]
 
         #  ------ Decoder ------
 
@@ -404,6 +418,15 @@ class KPFCNN(nn.Module):
         #  ------ Head ------
 
         logits = self.head(feats)
+                
+        torch.cuda.synchronize(batch.points.device)                      
+        t += [time.time()]
+
+        mean_dt = 1000 * (np.array(t[1:]) - np.array(t[:-1]))
+        message = ' ' * 75 + 'net (ms):'
+        for dt in mean_dt:
+            message += ' {:5.1f}'.format(dt)
+        print(message)
 
         return logits
 
@@ -423,21 +446,21 @@ class KPFCNN(nn.Module):
         # Reshape to have a minibatch size of 1
         outputs = torch.transpose(outputs, 0, 1)
         outputs = outputs.unsqueeze(0)
-        target = target.unsqueeze(0)
+        target = target.squeeze().unsqueeze(0)
 
         # Cross entropy loss
         self.output_loss = self.criterion(outputs, target)
 
-        # Regularization of deformable offsets
-        if self.deform_fitting_mode == 'point2point':
-            self.reg_loss = p2p_fitting_regularizer(self)
-        elif self.deform_fitting_mode == 'point2plane':
-            raise ValueError('point2plane fitting mode not implemented yet.')
-        else:
-            raise ValueError('Unknown fitting mode: ' + self.deform_fitting_mode)
+        # # Regularization of deformable offsets
+        # if self.deform_fitting_mode == 'point2point':
+        #     self.reg_loss = p2p_fitting_regularizer(self)
+        # elif self.deform_fitting_mode == 'point2plane':
+        #     raise ValueError('point2plane fitting mode not implemented yet.')
+        # else:
+        #     raise ValueError('Unknown fitting mode: ' + self.deform_fitting_mode)
 
         # Combined loss
-        return self.output_loss + self.reg_loss
+        return self.output_loss
 
     def accuracy(self, outputs, labels):
         """

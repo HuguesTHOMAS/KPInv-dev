@@ -1,11 +1,6 @@
 
-from errno import ESTALE
-import imp
 import os
-import numpy as np
 import torch
-import pykeops
-from pykeops.torch import Vi, Vj
 
 
 # ----------------------------------------------------------------------------------------------------------------------

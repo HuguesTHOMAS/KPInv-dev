@@ -125,7 +125,7 @@ class GpuSceneSegDataset(Dataset):
             sub_ply_file = join(tree_path, '{:s}.ply'.format(cloud_name))
 
             # Check if inputs have already been computed
-            if False and exists(KDTree_file):
+            if exists(KDTree_file):
                 print('\nFound KDTree for cloud {:s}, subsampled at {:.3f}'.format(cloud_name, dl))
 
                 # read ply with data
@@ -412,7 +412,6 @@ class GpuSceneSegDataset(Dataset):
                                                                           on_gpu=False,
                                                                           return_inverse=True)
 
-
             # Stack batch
             p_list += [in_points]
             f_list += [in_features]
@@ -446,19 +445,8 @@ class GpuSceneSegDataset(Dataset):
         cloud_inds = np.array(ci_list, dtype=np.int32)
         input_inds = np.concatenate(pi_list, axis=0)
         input_invs = np.concatenate(pinv_list, axis=0)
-
-
-        print(stacked_points.shape)
-        print(stacked_features.shape)
-        print(stacked_labels.shape)
-        print(center_points.shape)
-        print(cloud_inds.shape)
-        print(input_inds.shape)
-        print(input_invs.shape)
-
-        a = 1/0
-
         stack_lengths = np.array([pp.shape[0] for pp in p_list], dtype=np.int32)
+        stack_lengths0 = np.array([pp.shape[0] for pp in pi_list], dtype=np.int32)
         scales = np.array(s_list, dtype=np.float32)
         rots = np.stack(R_list, axis=0)
 
@@ -474,7 +462,7 @@ class GpuSceneSegDataset(Dataset):
         # input_list = self.segmentation_inputs(stacked_points,
         #                                       stack_lengths)
 
-        input_list = [stacked_points, stacked_features, stacked_labels, stack_lengths]
+        input_list = [stacked_points, stacked_features, stacked_labels, stack_lengths, stack_lengths0]
 
         # Add scale and rotation for testing
         input_list += [scales, rots, cloud_inds, center_points, input_inds, input_invs]
@@ -791,298 +779,6 @@ class GpuSceneSegDataset(Dataset):
             return augmented_points, augmented_normals, scale, R
 
 
-    # Old functions
-
-
-    def rotate_batch(self, batch, rotation_mode='all'):
-
-        # create a copy of the batch
-        rotated_batch = copy.deepcopy(batch)
-        B = len(rotated_batch.lengths[0])
-        dim = rotated_batch.points[0].shape[1]
-
-        # Create random rotations
-        rots = []
-        for b_i in range(B):
-
-            R = np.eye(dim)
-
-            if dim == 3:
-                if rotation_mode == 'vertical':
-
-                    # Create random rotations
-                    theta = np.random.rand() * 2 * np.pi
-                    c, s = np.cos(theta), np.sin(theta)
-                    R = np.array([[c, -s, 0], [s, c, 0], [0, 0, 1]], dtype=np.float32)
-
-                elif rotation_mode == 'all':
-
-                    R = get_random_rotations(shape=None)
-
-            rots.append(torch.from_numpy(R.astype(np.float32)).to(batch.points[0].device))
-
-        # Deal with stacked points in batch
-        for l_i, lengths in enumerate(rotated_batch.lengths):
-
-            i0 = 0
-            for b_i, length in enumerate(lengths):
-
-                # Get points and rotate them
-                points = rotated_batch.points[l_i][i0:i0 + length]
-                rotated_batch.points[l_i][i0:i0 + length] = torch.matmul(points, rots[b_i])
-
-                # Same for normals if necessary
-                if l_i == 0 and hasattr(rotated_batch, 'normals'):
-                    normals = rotated_batch.normals[i0:i0 + length]
-                    rotated_batch.normals[l_i][i0:i0 + length] = torch.matmul(normals, rots[b_i])
-
-                # Same for lrf if necessary
-                if l_i == 0 and hasattr(rotated_batch, 'lrf'):
-                    lrf = (rotated_batch.lrf[i0:i0 + length]).transpose(-1, -2)
-                    rotated_batch.lrf[i0:i0 + length] = torch.matmul(lrf, rots[b_i]).transpose(-1, -2)
-
-                i0 += length
-
-        return rotated_batch, rots
-
-    def big_neighborhood_filter(self, neighbors, layer):
-        """
-        Filter neighborhoods with max number of neighbors. Limit is set to keep XX% of the neighborhoods untouched.
-        Limit is computed at initialization
-        """
-
-        # crop neighbors matrix
-        if len(self.neighborhood_limits) > 0:
-            return neighbors[:, :self.neighborhood_limits[layer]]
-        else:
-            return neighbors
-
-    def classification_inputs(self,
-                              stacked_points,
-                              stack_lengths):
-
-        # Starting radius of convolutions
-        r_normal = self.config.first_subsampling_dl * self.config.conv_radius
-
-        # Starting layer
-        layer_blocks = []
-
-        # Lists of inputs
-        input_points = []
-        input_neighbors = []
-        input_pools = []
-        input_stack_lengths = []
-        deform_layers = []
-
-        ######################
-        # Loop over the blocks
-        ######################
-
-        arch = self.config.architecture
-
-        for block_i, block in enumerate(arch):
-
-            # Get all blocks of the layer
-            if not ('pool' in block or 'strided' in block or 'global' in block or 'upsample' in block):
-                layer_blocks += [block]
-                continue
-
-            # Convolution neighbors indices
-            # *****************************
-
-            deform_layer = False
-            if layer_blocks:
-                # Convolutions are done in this layer, compute the neighbors with the good radius
-                if np.any(['deformable' in blck for blck in layer_blocks]):
-                    r = r_normal * self.config.deform_radius / self.config.conv_radius
-                    deform_layer = True
-                else:
-                    r = r_normal
-                conv_i = batch_neighbors(stacked_points, stacked_points, stack_lengths, stack_lengths, r)
-
-            else:
-                # This layer only perform pooling, no neighbors required
-                conv_i = np.zeros((0, 1), dtype=np.int32)
-
-            # Pooling neighbors indices
-            # *************************
-
-            # If end of layer is a pooling operation
-            if 'pool' in block or 'strided' in block:
-
-                # New subsampling length
-                dl = 2 * r_normal / self.config.conv_radius
-
-                # Subsampled points
-                pool_p, pool_b = batch_grid_subsampling(stacked_points, stack_lengths, sampleDl=dl)
-
-                # Radius of pooled neighbors
-                if 'deformable' in block:
-                    r = r_normal * self.config.deform_radius / self.config.conv_radius
-                    deform_layer = True
-                else:
-                    r = r_normal
-
-                # Subsample indices
-                pool_i = batch_neighbors(pool_p, stacked_points, pool_b, stack_lengths, r)
-
-            else:
-                # No pooling in the end of this layer, no pooling indices required
-                pool_i = np.zeros((0, 1), dtype=np.int32)
-                pool_p = np.zeros((0, 1), dtype=np.float32)
-                pool_b = np.zeros((0,), dtype=np.int32)
-
-            # Reduce size of neighbors matrices by eliminating furthest point
-            conv_i = self.big_neighborhood_filter(conv_i, len(input_points))
-            pool_i = self.big_neighborhood_filter(pool_i, len(input_points))
-
-            # Updating input lists
-            input_points += [stacked_points]
-            input_neighbors += [conv_i.astype(np.int64)]
-            input_pools += [pool_i.astype(np.int64)]
-            input_stack_lengths += [stack_lengths]
-            deform_layers += [deform_layer]
-
-            # New points for next layer
-            stacked_points = pool_p
-            stack_lengths = pool_b
-
-            # Update radius and reset blocks
-            r_normal *= 2
-            layer_blocks = []
-
-            # Stop when meeting a global pooling or upsampling
-            if 'global' in block or 'upsample' in block:
-                break
-
-        ###############
-        # Return inputs
-        ###############
-
-        # Save deform layers
-
-        # list of network inputs
-        li = input_points + input_neighbors + input_pools + input_stack_lengths
-
-        return li
-
-    def segmentation_inputs(self,
-                            stacked_points,
-                            stack_lengths):
-
-        # Starting radius of convolutions
-        r_normal = self.config.first_subsampling_dl * self.config.conv_radius
-
-        # Starting layer
-        layer_blocks = []
-
-        # Lists of inputs
-        input_points = []
-        input_neighbors = []
-        input_pools = []
-        input_upsamples = []
-        input_stack_lengths = []
-        deform_layers = []
-
-        ######################
-        # Loop over the blocks
-        ######################
-
-        arch = self.config.architecture
-
-        for block_i, block in enumerate(arch):
-
-            # Get all blocks of the layer
-            if not ('pool' in block or 'strided' in block or 'global' in block or 'upsample' in block):
-                layer_blocks += [block]
-                continue
-
-            # Convolution neighbors indices
-            # *****************************
-
-            deform_layer = False
-            if layer_blocks:
-                # Convolutions are done in this layer, compute the neighbors with the good radius
-                if np.any(['deformable' in blck for blck in layer_blocks]):
-                    r = r_normal * self.config.deform_radius / self.config.conv_radius
-                    deform_layer = True
-                else:
-                    r = r_normal
-                conv_i = batch_neighbors(stacked_points, stacked_points, stack_lengths, stack_lengths, r)
-
-            else:
-                # This layer only perform pooling, no neighbors required
-                conv_i = np.zeros((0, 1), dtype=np.int32)
-
-            # Pooling neighbors indices
-            # *************************
-
-            # If end of layer is a pooling operation
-            if 'pool' in block or 'strided' in block:
-
-                # New subsampling length
-                dl = 2 * r_normal / self.config.conv_radius
-
-                # Subsampled points
-                pool_p, pool_b = batch_grid_subsampling(stacked_points, stack_lengths, sampleDl=dl)
-
-                # Radius of pooled neighbors
-                if 'deformable' in block:
-                    r = r_normal * self.config.deform_radius / self.config.conv_radius
-                    deform_layer = True
-                else:
-                    r = r_normal
-
-                # Subsample indices
-                pool_i = batch_neighbors(pool_p, stacked_points, pool_b, stack_lengths, r)
-
-                # Upsample indices (with the radius of the next layer to keep wanted density)
-                up_i = batch_neighbors(stacked_points, pool_p, stack_lengths, pool_b, 2 * r)
-
-            else:
-                # No pooling in the end of this layer, no pooling indices required
-                pool_i = np.zeros((0, 1), dtype=np.int32)
-                pool_p = np.zeros((0, 3), dtype=np.float32)
-                pool_b = np.zeros((0,), dtype=np.int32)
-                up_i = np.zeros((0, 1), dtype=np.int32)
-
-            # Reduce size of neighbors matrices by eliminating furthest point
-            conv_i = self.big_neighborhood_filter(conv_i, len(input_points))
-            pool_i = self.big_neighborhood_filter(pool_i, len(input_points))
-            if up_i.shape[0] > 0:
-                up_i = self.big_neighborhood_filter(up_i, len(input_points)+1)
-
-            # Updating input lists
-            input_points += [stacked_points]
-            input_neighbors += [conv_i.astype(np.int64)]
-            input_pools += [pool_i.astype(np.int64)]
-            input_upsamples += [up_i.astype(np.int64)]
-            input_stack_lengths += [stack_lengths]
-            deform_layers += [deform_layer]
-
-            # New points for next layer
-            stacked_points = pool_p
-            stack_lengths = pool_b
-
-            # Update radius and reset blocks
-            r_normal *= 2
-            layer_blocks = []
-
-            # Stop when meeting a global pooling or upsampling
-            if 'global' in block or 'upsample' in block:
-                break
-
-        ###############
-        # Return inputs
-        ###############
-
-        # list of network inputs
-        li = input_points + input_neighbors + input_pools + input_upsamples + input_stack_lengths
-
-        return li
-
-
-
 # ----------------------------------------------------------------------------------------------------------------------
 #
 #           Utility classes definition
@@ -1136,8 +832,10 @@ class GpuSceneSegBatch:
 
         # List of attributes we set in this function
         attribute_list = ['points',
+                          'features',
                           'labels',
                           'lengths',
+                          'lengths0',
                           'scales',
                           'rots',
                           'cloud_inds',
@@ -1146,7 +844,7 @@ class GpuSceneSegBatch:
                           'input_invs']
 
         # All attributes are np arrays. MOdify this if you have types other values
-        for i, input_array in input_list:
+        for i, input_array in enumerate(input_list):
             setattr(self, attribute_list[i], torch.from_numpy(input_array))
 
         return

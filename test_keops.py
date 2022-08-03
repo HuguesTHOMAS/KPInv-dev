@@ -7,13 +7,10 @@
 
 
 # Common libs
-import signal
-import os
 import time
 
 import numpy as np
 import torch
-import pykeops
 
 from sklearn.neighbors import KDTree
 
@@ -288,6 +285,7 @@ def test_neighbors():
     points, colors, labels = load_S3DIS(crop_ratio=0.33)
 
     print('\nConvert points to GPU')
+    torch.cuda.synchronize()
     t1 = time.time()
 
     # To torch
@@ -303,6 +301,7 @@ def test_neighbors():
     point_gpu = point_tensor.clone()
     point_gpu = point_gpu.to(device)
 
+    torch.cuda.synchronize()
     t2 = time.time()
     print('Done in {:.3f}s'.format(t2 - t1))
 
@@ -314,8 +313,10 @@ def test_neighbors():
 
     # Subsample cloud
     print('\nGPU Pytorch subsampling')
+    torch.cuda.synchronize()
     t1 = time.time()
-    sub_points0, sub_lengths1 = grid_subsample_list_mode(point_gpu, [point_gpu.shape[0]], dl0)
+    sub_points0, sub_lengths1 = subsample_list_mode(point_gpu, [point_gpu.shape[0]], dl0, method='grid')
+    torch.cuda.synchronize()
     t2 = time.time()
     print('Done in {:.3f}s'.format(t2 - t1))
     print(points.shape, '=>', sub_points0.shape)
@@ -335,6 +336,7 @@ def test_neighbors():
     in_R = 2.0
     batch_num = 5
 
+    torch.cuda.synchronize()
     t1 = time.time()
     all_inputs_points = []
     all_gpu_pts = []
@@ -358,15 +360,20 @@ def test_neighbors():
     print('-------------------------')
     print()
 
+    all_cpu_batches = []
     all_gpu_batches = []
     batch_n = 0
     current_batch = []
+    current_batch_cpu = []
     for i, gpu_pts in enumerate(all_gpu_pts):
         if len(current_batch) > 0 and batch_n + int(gpu_pts.shape[0]) > batch_limit:
             all_gpu_batches.append(current_batch)
+            all_cpu_batches.append(current_batch_cpu)
             batch_n = 0
             current_batch = []
+            current_batch_cpu = []
         current_batch.append(gpu_pts)
+        current_batch_cpu.append(gpu_pts.cpu())
         batch_n += int(gpu_pts.shape[0])
 
     all_batch_n = []
@@ -386,6 +393,7 @@ def test_neighbors():
     print()
 
 
+    torch.cuda.synchronize()
     t2 = time.time()
     print('Done in {:.3f}s'.format(t2 - t1))
 
@@ -406,23 +414,40 @@ def test_neighbors():
 
 
     print('\nGPU Pytorch neighbors')
+    torch.cuda.synchronize()
     t1 = time.time()
     all_neighbors1 = []
     for i, gpu_batch in enumerate(all_gpu_batches):
         pack_tensor, lengths = list_to_pack(gpu_batch)
         conv_i = radius_search_list_mode(pack_tensor, pack_tensor, lengths, lengths, conv_r, neighbor_limit, shadow=True)
         all_neighbors1.append(conv_i)
+    torch.cuda.synchronize()
     t2 = time.time()
     print('Done in {:.3f}s'.format(t2 - t1))
     print('{:.3f}ms per batch'.format(1000 * (t2 - t1) / N))
 
     print('\nGPU Pytorch neighbors 2')
+    torch.cuda.synchronize()
     t1 = time.time()
     all_neighbors2 = []
     for i, gpu_batch in enumerate(all_gpu_batches):
         pack_tensor, lengths = list_to_pack(gpu_batch)
         conv_i = radius_search_pack_mode(pack_tensor, pack_tensor, lengths, lengths, conv_r, neighbor_limit)
         all_neighbors2.append(conv_i)
+    torch.cuda.synchronize()
+    t2 = time.time()
+    print('Done in {:.3f}s'.format(t2 - t1))
+    print('{:.3f}ms per batch'.format(1000 * (t2 - t1) / N))
+    
+    print('\nCPU Pytorch neighbors 2')
+    torch.cuda.synchronize()
+    t1 = time.time()
+    all_neighbors3 = []
+    for i, gpu_batch in enumerate(all_cpu_batches):
+        pack_tensor, lengths = list_to_pack(gpu_batch)
+        conv_i = radius_search_pack_mode(pack_tensor, pack_tensor, lengths, lengths, conv_r, neighbor_limit)
+        all_neighbors3.append(conv_i)
+    torch.cuda.synchronize()
     t2 = time.time()
     print('Done in {:.3f}s'.format(t2 - t1))
     print('{:.3f}ms per batch'.format(1000 * (t2 - t1) / N))
@@ -482,9 +507,9 @@ def test_neighbors():
 
 if __name__ == '__main__':
 
-    test_grid_subsample()
+    # test_grid_subsample()
 
-    # test_neighbors()
+    test_neighbors()
 
     # Conclusion:
     # Use grid subsampling list for fastest results

@@ -48,11 +48,12 @@ def my_config():
     # Network parameters
     # ------------------
 
-    cfg.model.layer_blocks = (2, 1, 1, 1, 1)    # KPConv paper architecture. Can be cahnged for a deeper network
+    # cfg.model.layer_blocks = (2, 1, 1, 1, 1)    # KPConv paper architecture. Can be changed for a deeper network
+    cfg.model.layer_blocks = (3, 4, 8, 8, 4)    
 
     cfg.model.kp_mode = 'kpconv'
     cfg.model.kernel_size = 15
-    cfg.model.kp_radius = 2.5
+    cfg.model.kp_radius = 1.9
     cfg.model.kp_sigma = 1.0
     cfg.model.kp_influence = 'linear'
     cfg.model.kp_aggregation = 'sum'
@@ -63,7 +64,7 @@ def my_config():
 
     cfg.model.input_channels = 5    # This value has to be compatible with one of the dataset input features definition
 
-    cfg.model.neighbor_limits = [30, 35, 40, 40]    # Use empty list to let calibration get the values
+    cfg.model.neighbor_limits = [25, 30, 35, 35, 40]    # Use empty list to let calibration get the values
 
 
     # Training parameters
@@ -244,6 +245,6 @@ if __name__ == '__main__':
     print('Forcing exit now')
     os.kill(os.getpid(), signal.SIGINT)
 
-    
+
 
 
