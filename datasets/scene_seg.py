@@ -85,7 +85,7 @@ class GpuSceneSegDataset(Dataset):
         self.input_trees = []
         self.input_features = []
         self.input_labels = []
-        self.val_proj = []
+        self.test_proj = []
         self.val_labels = []
         self.label_indices = []
         
@@ -98,6 +98,12 @@ class GpuSceneSegDataset(Dataset):
         self.reg_sample_clouds = None
 
         return
+
+    def load_evaluation_points(self, file_path):
+
+        # Get original points
+        data = read_ply(file_path)
+        return np.vstack((data['x'], data['y'], data['z'])).T
 
     def load_scenes_in_memory(self, label_property='label', f_properties=[], f_scales=[]):
 
@@ -161,6 +167,7 @@ class GpuSceneSegDataset(Dataset):
                                                                            features=features,
                                                                            labels=labels,
                                                                            method=self.cfg.model.sub_mode)
+
                     write_ply(sub_ply_file,
                             [sub_points, sub_features, sub_labels.astype(np.int32)],
                             ['x', 'y', 'z'] + f_properties + [label_property])
@@ -177,7 +184,7 @@ class GpuSceneSegDataset(Dataset):
             # Check data types and scale features
             sub_labels = sub_labels.astype(np.int32)
             sub_features = sub_features.astype(np.float32)
-            sub_features *= np.array(f_scales, dtype=np.float32)
+            # sub_features *= np.array(f_scales, dtype=np.float32)
 
             # Fill data containers
             self.input_trees += [search_tree]
@@ -226,7 +233,7 @@ class GpuSceneSegDataset(Dataset):
                     with open(proj_file, 'wb') as f:
                         pickle.dump([proj_inds, labels], f)
 
-                self.val_proj += [proj_inds]
+                self.test_proj += [proj_inds]
                 self.val_labels += [labels]
                 print('{:s} done in {:.1f}s'.format(self.scene_names[i], time.time() - t0))
 
@@ -788,6 +795,8 @@ class GpuSceneSegDataset(Dataset):
                 show_ModelNet_examples(test_p, test_n, test_l)
 
             return augmented_points, augmented_normals, scale, R
+
+
 
 
 # ----------------------------------------------------------------------------------------------------------------------

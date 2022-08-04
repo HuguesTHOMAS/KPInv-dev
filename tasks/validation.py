@@ -251,7 +251,7 @@ def cloud_segmentation_validation(epoch, net, val_loader, cfg, val_data, device,
         val_path = join(cfg.exp.log_dir, 'val_preds_{:d}'.format(epoch + 1))
         if not exists(val_path):
             makedirs(val_path)
-        files = val_loader.dataset.files
+        files = val_loader.dataset.scene_files
         for i, file_path in enumerate(files):
 
             # Get points
@@ -278,7 +278,7 @@ def cloud_segmentation_validation(epoch, net, val_loader, cfg, val_data, device,
             val_name = join(val_path, cloud_name)
 
             # Save file
-            labels = val_loader.dataset.validation_labels[i].astype(np.int32)
+            labels = val_loader.dataset.val_labels[i].astype(np.int32)
             write_ply(val_name,
                         [points, preds, labels, tt_prob],
                         ['x', 'y', 'z', 'preds', 'class', 'tt_prob'])

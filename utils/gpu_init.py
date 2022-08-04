@@ -2,6 +2,9 @@
 import os
 import torch
 
+global USED_GPU
+USED_GPU = ''
+
 
 # ----------------------------------------------------------------------------------------------------------------------
 #
@@ -12,18 +15,18 @@ import torch
 
 def init_gpu(gpu_id='auto'):
     """
-    Initialize the CUDA_VISIBLE_DEVICES environment variable to a unused GPU, or the demanded GPU.
+    Initialize the USED_GPU global variable to a free GPU, or retrieve its actual value.
     Args:
         gpu_id (str): Index of the wanted GPU or 'auto' to choose a free GPU automatically.
     """
 
-    if not 'CUDA_VISIBLE_DEVICES' in os.environ:
-
-        # Set which gpu is going to be used (auto for automatic choice)
-        gpu_id = 'auto'
-
-        # Automatic choice (need pynvml to be installed)
+    global USED_GPU
+    
+    if len(USED_GPU) == 0:
         if gpu_id == 'auto':
+            
+            # Automatic GPU choice, find a free GPU on the machine
+            # (need pynvml to be installed)
             print('\nSearching a free GPU:')
             for i in range(torch.cuda.device_count()):
                 a = torch.cuda.list_gpu_processes(i)
@@ -41,9 +44,9 @@ def init_gpu(gpu_id='auto'):
             print('\nUsing GPU:', gpu_id, '\n')
 
         # Set GPU visible device
-        os.environ['CUDA_VISIBLE_DEVICES'] = gpu_id
+        USED_GPU = gpu_id
 
-    return torch.device("cuda")
+    return torch.device("cuda:" + USED_GPU)
 
 
 def tensor_MB(a):

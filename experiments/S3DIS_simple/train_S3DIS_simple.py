@@ -46,8 +46,8 @@ def my_config():
     # Network parameters
     # ------------------
 
-    cfg.model.layer_blocks = (2, 1, 1, 1, 1)    # KPConv paper architecture. Can be changed for a deeper network
-    # cfg.model.layer_blocks = (3, 4, 8, 8, 4)    
+    # cfg.model.layer_blocks = (2, 1, 1, 1, 1)    # KPConv paper architecture. Can be changed for a deeper network
+    cfg.model.layer_blocks = (3, 4, 8, 8, 4)    
 
     cfg.model.kp_mode = 'kpconv'
     cfg.model.kernel_size = 15
@@ -69,13 +69,14 @@ def my_config():
     # Training parameters
     # -------------------
 
+    cfg.train.num_workers = 0
+
     cfg.train.in_radius = 2.0    # Adapt this with model.init_sub_size. Try to keep a ratio of ~50
     cfg.train.batch_size = 6     # Target batch size. If you don't want calibration, you can directly set train.batch_limit
 
     cfg.train.max_epoch = 300
     cfg.train.steps_per_epoch = 1000
     cfg.train.checkpoint_gap = 50
-    cfg.train.num_workers = 8
 
     cfg.train.optimizer = 'SGD'
     cfg.train.sgd_momentum = 0.98
@@ -226,6 +227,10 @@ if __name__ == '__main__':
     #           > Test subsampling ph
     #           > Number of parameters. USe groups, reduce some of the mlp operations
     #           > Test parrallel input pipeline subsampling on cpu/gpu
+    #           > See optimization here:
+    #               https://spell.ml/blog/pytorch-training-tricks-YAnJqBEAACkARhgD
+    #               https://efficientdl.com/faster-deep-learning-in-pytorch-a-guide/#2-use-multiple-workers-and-pinned-memory-in-dataloader
+    #
     #
     #       5. Explore
     #           > For benchmarking purpose, use multiscale dataset: introduce another scaling parameter

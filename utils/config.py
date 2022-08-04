@@ -14,6 +14,7 @@
 #      Hugues THOMAS - 11/06/2018
 #
 
+import os
 from os import makedirs, getcwd
 from os.path import join, basename, dirname, realpath, exists
 import numpy as np
@@ -169,7 +170,7 @@ def get_directories(cfg, date=None, seed=None):
     
     # Get date unless it is given
     if date is None:
-        cfg.exp.date = time.strftime('Log_%Y-%m-%d_%H-%M-%S', time.gmtime())
+        cfg.exp.date = time.strftime('Log_%Y-%m-%d_%H-%M-%S')
     else:
         cfg.exp.date = date
     cfg.exp.working_dir = getcwd() # dirname(realpath(__file__))

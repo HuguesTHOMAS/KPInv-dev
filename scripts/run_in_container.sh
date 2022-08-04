@@ -48,7 +48,9 @@ fi
 
 # Volumes (modify with your own path here)
 volumes="-v $PWD/..:/home/$USER/KPInv-dev \
--v $PWD/../../../Data:/home/$USER/Data"
+-v $PWD/../../../Data:/home/$USER/Data \
+-v /etc/timezone:/etc/timezone:ro \
+-v /etc/timezone:/etc/timezone:ro"
 
 # Additional arguments to be able to open GUI
 XSOCK=/tmp/.X11-unix
@@ -84,7 +86,7 @@ else
 
     # Adding detached folder as command argument if needed
     if [ "$detach" = true ] ; then
-        if [[ $command == *"python3 train_"* ]]; then
+        if [[ $command == *"python3"*"train_"* ]]; then
             command="$command Log_$now"
         fi
     fi
@@ -101,7 +103,7 @@ else
 
     # Attach a log parameters and log the detached docker
     if [ "$detach" = true ] ; then
-        docker logs -f "$USER-SOGM-$now" &> $RES_FOLDER/Log_"$now"/log.txt &
+        docker logs -f "$USER-KPInv-$now" &> $RES_FOLDER/Log_"$now"/log.txt &
     fi
 
 

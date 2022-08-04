@@ -408,7 +408,7 @@ def hexagonal_subsample(points, sub_size0, features=None, labels=None, return_in
     # #### DEBUG: central point instead of barycenter ####
 
     # #
-    # #   TODO: erase barycenters that are to far from cell center
+    # #   Next step erase barycenters that are to far from cell center
     # #
 
 
