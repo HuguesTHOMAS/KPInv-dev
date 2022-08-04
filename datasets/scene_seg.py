@@ -431,7 +431,7 @@ class GpuSceneSegDataset(Dataset):
             R_list += [R]
 
             # Update batch size
-            batch_n_pts += in_inds.shape[0]
+            batch_n_pts += in_points.shape[0]
 
             # In case batch is full, stop
             if batch_n_pts > int(self.b_lim):

@@ -45,6 +45,7 @@ def training_epoch(epoch, t0, net, optimizer, training_loader, cfg, PID_file, de
         if 'cuda' in device.type:
             batch.to(device)
 
+
         if 'cuda' in device.type:
             torch.cuda.synchronize(device)
         t += [time.time()]

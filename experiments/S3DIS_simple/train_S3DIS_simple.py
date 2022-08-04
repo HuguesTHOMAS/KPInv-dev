@@ -68,7 +68,7 @@ def my_config():
     # Training parameters
     # -------------------
 
-    cfg.train.in_radius = 1.0    # Adapt this with model.init_sub_size. Try to keep a ratio of ~50
+    cfg.train.in_radius = 2.0    # Adapt this with model.init_sub_size. Try to keep a ratio of ~50
     cfg.train.batch_size = 6     # Target batch size. If you don't want calibration, you can directly set train.batch_limit
 
     cfg.train.max_epoch = 300
