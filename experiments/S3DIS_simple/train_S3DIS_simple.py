@@ -62,7 +62,8 @@ def my_config():
 
     cfg.model.input_channels = 5    # This value has to be compatible with one of the dataset input features definition
 
-    cfg.model.neighbor_limits = [25, 30, 35, 35, 40]    # Use empty list to let calibration get the values
+    cfg.model.neighbor_limits = [35, 40, 50, 50, 50]    # Use empty list to let calibration get the values
+    # cfg.model.neighbor_limits = []
 
 
     # Training parameters
