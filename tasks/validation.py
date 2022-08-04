@@ -72,15 +72,11 @@ def cloud_segmentation_validation(epoch, net, val_loader, cfg, val_data, device,
     val_smooth = 0.95
     softmax = torch.nn.Softmax(1)
 
-    # Do not validate if dataset has no validation cloud
-    if val_loader.dataset.validation_split not in val_loader.dataset.all_splits:
-        return
-
     # Number of classes including ignored labels
-    nc_tot = val_loader.dataset.num_classes
+    nc_tot = cfg.data.num_classes
 
     # Number of classes predicted by the model
-    nc_model = cfg.data.num_classes
+    nc_model = net.num_logits
 
     # Initiate global prediction over validation clouds
     if 'probs' not in val_data:
@@ -91,7 +87,7 @@ def cloud_segmentation_validation(epoch, net, val_loader, cfg, val_data, device,
         for label_value in val_loader.dataset.label_values:
             if label_value not in val_loader.dataset.ignored_labels:
                 val_data.proportions[i] = np.sum([np.sum(labels == label_value)
-                                                    for labels in val_loader.dataset.validation_labels])
+                                                    for labels in val_loader.dataset.val_labels])
                 i += 1
 
     #####################
@@ -129,20 +125,23 @@ def cloud_segmentation_validation(epoch, net, val_loader, cfg, val_data, device,
         in_inds = batch.input_inds.cpu().numpy()
         in_invs = batch.input_invs.cpu().numpy()
         cloud_inds = batch.cloud_inds.cpu().numpy()
-        torch.cuda.synchronize(device)
+        
+        if 'cuda' in device.type:
+            torch.cuda.synchronize(device)
 
         # Get predictions and labels per instance
         # ***************************************
 
         i0 = 0
+        j0 = 0
         for b_i, length in enumerate(lengths):
 
             # Get prediction
             length0 = lengths0[b_i]
             target = labels[i0:i0 + length]
             probs = stacked_probs[i0:i0 + length]
-            inds = in_inds[i0:i0 + length0]
-            invs = in_invs[i0:i0 + length0]
+            inds = in_inds[j0:j0 + length0]
+            invs = in_invs[j0:j0 + length0]
             c_i = cloud_inds[b_i]
 
             # Update current probs in whole cloud
@@ -153,6 +152,7 @@ def cloud_segmentation_validation(epoch, net, val_loader, cfg, val_data, device,
             predictions.append(probs[invs])
             targets.append(target[invs])
             i0 += length
+            j0 += length0
 
         # Average timing
         t += [time.time()]
@@ -226,19 +226,19 @@ def cloud_segmentation_validation(epoch, net, val_loader, cfg, val_data, device,
             with open(test_file, "w") as text_file:
                 text_file.write(line)
 
-        # Save potentials
-        pot_path = join(cfg.exp.log_dir, 'potentials')
-        if not exists(pot_path):
-            makedirs(pot_path)
-        files = val_loader.dataset.files
-        for i, file_path in enumerate(files):
-            pot_points = np.array(val_loader.dataset.pot_trees[i].data, copy=False)
-            cloud_name = file_path.split('/')[-1]
-            pot_name = join(pot_path, cloud_name)
-            pots = val_loader.dataset.potentials[i].numpy().astype(np.float32)
-            write_ply(pot_name,
-                        [pot_points.astype(np.float32), pots],
-                        ['x', 'y', 'z', 'pots'])
+        # # Save potentials
+        # pot_path = join(cfg.exp.log_dir, 'potentials')
+        # if not exists(pot_path):
+        #     makedirs(pot_path)
+        # files = val_loader.dataset.scene_files
+        # for i, file_path in enumerate(files):
+        #     pot_points = np.array(val_loader.dataset.pot_trees[i].data, copy=False)
+        #     cloud_name = file_path.split('/')[-1]
+        #     pot_name = join(pot_path, cloud_name)
+        #     pots = val_loader.dataset.potentials[i].numpy().astype(np.float32)
+        #     write_ply(pot_name,
+        #                 [pot_points.astype(np.float32), pots],
+        #                 ['x', 'y', 'z', 'pots'])
 
     t6 = time.time()
 

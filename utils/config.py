@@ -95,8 +95,8 @@ def init_cfg():
     cfg.model.init_sub_size = 0.04      # Float, initial subampling size, (voxel size, lattice size of fps minimum distance)
     cfg.model.sub_mode = 'ph'           #   Str, subsampling mode ('grid', 'ph', 'fps')
 
-    cfg.model.input_channels = 5             #   Int, dimension of input feaures
-    cfg.model.init_channels = 64             #   Int, dimension of first network features
+    cfg.model.input_channels = 1        #   Int, dimension of input feaures
+    cfg.model.init_channels = 64        #   Int, dimension of first network features
     cfg.model.norm = 'batch'            #   Str, type of normalization in the network ('group', 'batch', 'none')
     cfg.model.bn_momentum = 0.98        # Float, Momentum for batch normalization.
 

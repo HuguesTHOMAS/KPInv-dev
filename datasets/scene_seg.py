@@ -12,11 +12,15 @@ import numpy as np
 import pickle
 from os import makedirs
 from os.path import join, exists
-from multiprocessing import Lock
-
 import torch
-from torch.utils.data import DataLoader, Dataset, Sampler
+from torch.utils.data import Dataset, Sampler
 from sklearn.neighbors import KDTree
+
+from torch.multiprocessing import Lock, set_start_method
+# try:
+#      set_start_method('spawn')
+# except RuntimeError:
+#     pass
 
 from kernels.kernel_points import create_3D_rotations, get_random_rotations
 from utils.ply import read_ply, write_ply
@@ -89,6 +93,7 @@ class GpuSceneSegDataset(Dataset):
         self.worker_lock = Lock()
         self.reg_sampling_i = torch.from_numpy(np.zeros((1,), dtype=np.int64))
         self.reg_sampling_i.share_memory_()
+
         self.reg_sample_pts = None
         self.reg_sample_clouds = None
 
@@ -248,39 +253,38 @@ class GpuSceneSegDataset(Dataset):
         return
 
     def new_reg_sampling_pts(self, subsample_ratio=1.0):
-        """
-        Function selecting points from the dataset to be used as sphere center.
-        Points are chosen with a regular subsampling so that the whole dataset get tested.
-        """
-
-        # Get gpu for faster calibration
-        device = init_gpu()
 
         # Subsampling size (subsample_ratio should be < sqrt(3)/2)
-        dl = self.in_radius * subsample_ratio
+        reg_dl = self.in_radius * subsample_ratio
 
+        # Get data        
         all_reg_pts = []
         all_reg_clouds = []
         for cloud_ind, tree in enumerate(self.input_trees):
 
+            # Random offset to vary the border effects
+            offset = torch.rand(1, self.dim) * reg_dl
+
             # Subsample scene clouds
             points = np.array(tree.data, copy=False).astype(np.float32)
-            gpu_points = torch.from_numpy(points).to(device)
-            sub_points, _ = subsample_list_mode(gpu_points,
-                                                [gpu_points.shape[0]],
-                                                dl,
-                                                method='hex')
+            cpu_points = torch.from_numpy(points)
+            sub_points, _ = subsample_list_mode(cpu_points + offset,
+                                                [cpu_points.shape[0]],
+                                                reg_dl,
+                                                method='grid')
             
             # Stack points and cloud indices
-            all_reg_pts.append(sub_points.cpu())
+            all_reg_pts.append(sub_points - offset)
             all_reg_clouds.append(torch.full((sub_points.shape[0],), cloud_ind, dtype=torch.long))
 
         # Shuffle
-        self.reg_sample_pts = torch.concat(all_reg_pts, dim=0)
-        self.reg_sample_clouds = torch.concat(all_reg_clouds, dim=0)
-        rand_shuffle = torch.randperm(self.reg_sample_clouds.shape[0])
-        self.reg_sample_pts = self.reg_sample_pts[rand_shuffle]
-        self.reg_sample_clouds = self.reg_sample_clouds[rand_shuffle]
+        all_reg_pts = torch.concat(all_reg_pts, dim=0)
+        all_reg_clouds = torch.concat(all_reg_clouds, dim=0)
+        rand_shuffle = torch.randperm(all_reg_clouds.shape[0])
+
+        # Put in queue. Memory is shared automatically
+        self.reg_sample_pts = all_reg_pts[rand_shuffle]
+        self.reg_sample_clouds = all_reg_clouds[rand_shuffle]
 
         # Share memory
         self.reg_sample_pts.share_memory_()
@@ -293,7 +297,7 @@ class GpuSceneSegDataset(Dataset):
         if self.regular_sampling:
             
             with self.worker_lock:
-
+                
                 # If first time, compute new regular sampling points
                 if self.reg_sample_pts is None:
                     self.new_reg_sampling_pts()
@@ -390,6 +394,9 @@ class GpuSceneSegDataset(Dataset):
             # Get the input sphere
             in_inds, in_points, in_features, in_labels = self.get_sphere(cloud_ind, c_point)
             
+            if in_points.shape[0] < 1:
+                continue
+            
             # Color augmentation
             if self.set == 'training' and np.random.rand() > self.cfg.train.augment_color:
                 in_features *= 0
@@ -430,13 +437,9 @@ class GpuSceneSegDataset(Dataset):
             if batch_n_pts > int(self.b_lim):
                 break
 
-
         ###################
         # Concatenate batch
         ###################
-
-
-
 
         stacked_points = np.concatenate(p_list, axis=0)
         stacked_features = np.concatenate(f_list, axis=0)
@@ -486,17 +489,18 @@ class GpuSceneSegDataset(Dataset):
                 cloud_ind, center_p = self.sample_random_sphere()
                 _, in_points, _, _ = self.get_sphere(cloud_ind, center_p)
                 in_points, _, _ = self.augmentation_transform(in_points)
-                gpu_points = torch.from_numpy(in_points).to(device)
-                sub_points, _ = subsample_list_mode(gpu_points,
-                                                    [gpu_points.shape[0]],
-                                                    self.cfg.model.init_sub_size,
-                                                    method=self.cfg.model.sub_mode)
-                batch_n_pts += sub_points.shape[0]
-                batch_n += 1
+                if in_points.shape[0] > 0:
+                    gpu_points = torch.from_numpy(in_points).to(device)
+                    sub_points, _ = subsample_list_mode(gpu_points,
+                                                        [gpu_points.shape[0]],
+                                                        self.cfg.model.init_sub_size,
+                                                        method=self.cfg.model.sub_mode)
+                    batch_n_pts += sub_points.shape[0]
+                    batch_n += 1
 
-                # In case batch is full, stop
-                if batch_n_pts > self.b_lim:
-                    break
+                    # In case batch is full, stop
+                    if batch_n_pts > self.b_lim:
+                        break
             all_batch_n.append(batch_n)
             all_batch_n_pts.append(batch_n_pts)
         t1 = time.time()
@@ -546,16 +550,19 @@ class GpuSceneSegDataset(Dataset):
         # First get a avg of the pts per point cloud
         all_cloud_n = []
         dt = np.zeros((1,))
-        for i in range(samples):
+        while len(all_cloud_n) < samples:
             cloud_ind, center_p = self.sample_random_sphere()
             _, in_points, _, _ = self.get_sphere(cloud_ind, center_p)
-            in_points, _, _ = self.augmentation_transform(in_points)
-            gpu_points = torch.from_numpy(in_points).to(device)
-            sub_points, _ = subsample_list_mode(gpu_points,
-                                                [gpu_points.shape[0]],
-                                                self.cfg.model.init_sub_size,
-                                                method=self.cfg.model.sub_mode)
-            all_cloud_n.append(sub_points.shape[0])
+
+            if in_points.shape[0] > 0:
+                in_points, _, _ = self.augmentation_transform(in_points)
+                gpu_points = torch.from_numpy(in_points).to(device)
+
+                sub_points, _ = subsample_list_mode(gpu_points,
+                                                    [gpu_points.shape[0]],
+                                                    self.cfg.model.init_sub_size,
+                                                    method=self.cfg.model.sub_mode)
+                all_cloud_n.append(sub_points.shape[0])
                 
             pi += 1
             print('', end='\r')
@@ -615,6 +622,7 @@ class GpuSceneSegDataset(Dataset):
         device = init_gpu()
         
         # Advanced display
+        pi = 0
         pN = samples
         progress_n = 30
         fmt_str = '[{:<' + str(progress_n) + '}] {:5.1f}%'
@@ -631,28 +639,31 @@ class GpuSceneSegDataset(Dataset):
         all_neighbor_counts = [[] for _ in range(num_layers)]
         truncated_n = [0 for _ in range(num_layers)]
         all_n = [0 for _ in range(num_layers)]
-        for pi in range(samples):
+        while len(all_neighbor_counts[0]) < samples:
             cloud_ind, center_p = self.sample_random_sphere()
             _, in_points, _, _ = self.get_sphere(cloud_ind, center_p)
-            in_points, _, _ = self.augmentation_transform(in_points)
-            gpu_points = torch.from_numpy(in_points).to(device)
-            sub_points, _ = subsample_list_mode(gpu_points,
-                                                [gpu_points.shape[0]],
-                                                cfg.model.init_sub_size,
-                                                method=cfg.model.sub_mode)
-            neighb_counts = pyramid_neighbor_stats(sub_points,
-                                                   num_layers,
-                                                   cfg.model.init_sub_size,
-                                                   cfg.model.init_sub_size * cfg.model.kp_radius,
-                                                   sub_mode=cfg.model.sub_mode)
+            
+            if in_points.shape[0] > 0:
+                in_points, _, _ = self.augmentation_transform(in_points)
+                gpu_points = torch.from_numpy(in_points).to(device)
+                sub_points, _ = subsample_list_mode(gpu_points,
+                                                    [gpu_points.shape[0]],
+                                                    cfg.model.init_sub_size,
+                                                    method=cfg.model.sub_mode)
+                neighb_counts = pyramid_neighbor_stats(sub_points,
+                                                    num_layers,
+                                                    cfg.model.init_sub_size,
+                                                    cfg.model.init_sub_size * cfg.model.kp_radius,
+                                                    sub_mode=cfg.model.sub_mode)
 
-            # Update number of trucated_neighbors
-            for j, neighb_c in enumerate(neighb_counts):
-                trucated_mask = neighb_c > cfg.model.neighbor_limits[j]
-                truncated_n[j] += int(torch.sum(trucated_mask.type(torch.long)))
-                all_n[j] += int(trucated_mask.shape[0])
-                all_neighbor_counts[j].append(neighb_c)
-                
+                # Update number of trucated_neighbors
+                for j, neighb_c in enumerate(neighb_counts):
+                    trucated_mask = neighb_c > cfg.model.neighbor_limits[j]
+                    truncated_n[j] += int(torch.sum(trucated_mask.type(torch.long)))
+                    all_n[j] += int(trucated_mask.shape[0])
+                    all_neighbor_counts[j].append(neighb_c)
+              
+            pi += 1  
             print('', end='\r')
             print(fmt_str.format('#' * ((pi * progress_n) // pN), 100 * pi / pN), end='', flush=True)
         

@@ -18,8 +18,6 @@ parent = os.path.dirname(os.path.dirname(current))
 sys.path.append(parent)
 
 from utils.config import init_cfg, save_cfg, load_cfg, get_directories
-from utils.gpu_neigbors import radius_search_pack_mode
-from utils.gpu_subsampling import init_gpu
 from utils.printing import frame_lines_1, underline
 
 from models.architectures import KPFCNN
@@ -48,12 +46,12 @@ def my_config():
     # Network parameters
     # ------------------
 
-    # cfg.model.layer_blocks = (2, 1, 1, 1, 1)    # KPConv paper architecture. Can be changed for a deeper network
-    cfg.model.layer_blocks = (3, 4, 8, 8, 4)    
+    cfg.model.layer_blocks = (2, 1, 1, 1, 1)    # KPConv paper architecture. Can be changed for a deeper network
+    # cfg.model.layer_blocks = (3, 4, 8, 8, 4)    
 
     cfg.model.kp_mode = 'kpconv'
     cfg.model.kernel_size = 15
-    cfg.model.kp_radius = 1.9
+    cfg.model.kp_radius = 2.5
     cfg.model.kp_sigma = 1.0
     cfg.model.kp_influence = 'linear'
     cfg.model.kp_aggregation = 'sum'
@@ -70,13 +68,13 @@ def my_config():
     # Training parameters
     # -------------------
 
-    cfg.train.in_radius = 2.0    # Adapt this with model.init_sub_size. Try to keep a ratio of ~50
+    cfg.train.in_radius = 1.0    # Adapt this with model.init_sub_size. Try to keep a ratio of ~50
     cfg.train.batch_size = 6     # Target batch size. If you don't want calibration, you can directly set train.batch_limit
 
     cfg.train.max_epoch = 300
     cfg.train.steps_per_epoch = 1000
     cfg.train.checkpoint_gap = 50
-    cfg.train.num_workers = 16
+    cfg.train.num_workers = 8
 
     cfg.train.optimizer = 'SGD'
     cfg.train.sgd_momentum = 0.98
@@ -141,7 +139,6 @@ if __name__ == '__main__':
     print('\n')
     frame_lines_1(['Data Preparation'])
 
-
     # Load dataset
     underline('Loading training dataset')
     training_dataset = S3DISDataset(cfg, chosen_set='training')
@@ -168,6 +165,7 @@ if __name__ == '__main__':
                              collate_fn=GpuSceneSegCollate,
                              num_workers=cfg.test.num_workers,
                              pin_memory=True)
+
 
     ###############
     # Build network
@@ -240,7 +238,8 @@ if __name__ == '__main__':
     print('\n')
     frame_lines_1(['Training and Validation'])
 
-    train_and_validate(net, training_loader, test_loader, cfg)
+    # Go
+    train_and_validate(net, training_loader, test_loader, cfg, on_gpu=True)
 
     print('Forcing exit now')
     os.kill(os.getpid(), signal.SIGINT)

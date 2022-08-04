@@ -38,13 +38,15 @@ def training_epoch(epoch, t0, net, optimizer, training_loader, cfg, PID_file, de
 
         # New time
         t = t[-1:]
-        torch.cuda.synchronize(device)
+        if 'cuda' in device.type:
+            torch.cuda.synchronize(device)
         t += [time.time()]
 
         if 'cuda' in device.type:
             batch.to(device)
 
-        torch.cuda.synchronize(device)
+        if 'cuda' in device.type:
+            torch.cuda.synchronize(device)
         t += [time.time()]
 
         # zero the parameter gradients
@@ -53,14 +55,16 @@ def training_epoch(epoch, t0, net, optimizer, training_loader, cfg, PID_file, de
         # Forward pass
         outputs = net(batch)
 
-        torch.cuda.synchronize(device)
+        if 'cuda' in device.type:
+            torch.cuda.synchronize(device)
         t += [time.time()]
 
         # Loss with equivar/invar
         loss = net.loss(outputs, batch.labels)
         #acc = net.accuracy(outputs, batch.labels)
 
-        torch.cuda.synchronize(device)
+        if 'cuda' in device.type:
+            torch.cuda.synchronize(device)
         t += [time.time()]
 
         # Backward gradients
@@ -73,8 +77,9 @@ def training_epoch(epoch, t0, net, optimizer, training_loader, cfg, PID_file, de
 
         # Optimizer step
         optimizer.step()
-        torch.cuda.synchronize(device)
 
+        if 'cuda' in device.type:
+            torch.cuda.synchronize(device)
         t += [time.time()]
 
         # Average timing

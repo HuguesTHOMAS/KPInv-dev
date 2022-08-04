@@ -196,6 +196,10 @@ class KPFCNN(nn.Module):
         self.first_sigma = self.subsample_size * self.kp_sigma
         self.layer_blocks = cfg.model.layer_blocks
         self.num_layers = len(self.layer_blocks)
+        
+        # List of valid labels (those not ignored in loss)
+        self.valid_labels = np.sort([c for c in cfg.data.label_values if c not in cfg.data.ignored_labels])
+        self.num_logits = len(self.valid_labels)
 
         # Varaibles
         in_C = cfg.model.input_channels
@@ -269,25 +273,22 @@ class KPFCNN(nn.Module):
         
         # New head
         self.head = nn.Sequential(self.get_unary_block(first_C * 2, first_C, cfg),
-                                  nn.Linear(first_C, cfg.data.num_classes))
+                                  nn.Linear(first_C, self.num_logits))
         # Easy KPConv Head
         # self.head = nn.Sequential(nn.Linear(first_C * 2, first_C),
         #                           nn.GroupNorm(8, first_C),
         #                           nn.ReLU(),
-        #                           nn.Linear(first_C, cfg.data.num_classes))
+        #                           nn.Linear(first_C, self.num_logits))
 
         # My old head
         # self.head = nn.Sequential(self.get_unary_block(first_C * 2, first_C, cfg, norm_type='none'),
-        #                           nn.Linear(first_C, cfg.data.num_classes))
+        #                           nn.Linear(first_C, self.num_logits))
 
 
 
         ################
         # Network Losses
         ################
-
-        # List of valid labels (those not ignored in loss)
-        self.valid_labels = np.sort([c for c in cfg.data.label_values if c not in cfg.data.ignored_labels])
 
         # Choose segmentation loss
         if len(cfg.train.class_w) > 0:
@@ -345,12 +346,13 @@ class KPFCNN(nn.Module):
                                norm_type=cfg.model.norm,
                                bn_momentum=cfg.model.bn_momentum)
 
-    def forward(self, batch):
+    def forward(self, batch, verbose=False):
 
         #  ------ Init ------
         
-        torch.cuda.synchronize(batch.points.device)
-        t = [time.time()]
+        if verbose:
+            torch.cuda.synchronize(batch.points.device)
+            t = [time.time()]
 
         # First prepare the pyramid graph structure
         pyramid = build_graph_pyramid(batch.points,
@@ -360,15 +362,17 @@ class KPFCNN(nn.Module):
                                       self.first_radius,
                                       self.neighbor_limits,
                                       sub_mode=self.sub_mode)
-           
-        torch.cuda.synchronize(batch.points.device)                           
-        t += [time.time()]
+          
+        if verbose: 
+            torch.cuda.synchronize(batch.points.device)                           
+            t += [time.time()]
 
         # Get input features
         feats = batch.features.clone().detach()
-              
-        torch.cuda.synchronize(batch.points.device)                        
-        t += [time.time()]
+        
+        if verbose:      
+            torch.cuda.synchronize(batch.points.device)                        
+            t += [time.time()]
 
 
         #  ------ Encoder ------
@@ -393,9 +397,10 @@ class KPFCNN(nn.Module):
                 layer_pool = getattr(self, 'pooling_{:d}'.format(layer))
                 feats = layer_pool(pyramid.points[l+1], pyramid.points[l], feats, pyramid.pools[l])
 
-             
-        torch.cuda.synchronize(batch.points.device)                         
-        t += [time.time()]
+         
+        if verbose:    
+            torch.cuda.synchronize(batch.points.device)                         
+            t += [time.time()]
 
         #  ------ Decoder ------
 
@@ -419,14 +424,15 @@ class KPFCNN(nn.Module):
 
         logits = self.head(feats)
                 
-        torch.cuda.synchronize(batch.points.device)                      
-        t += [time.time()]
 
-        mean_dt = 1000 * (np.array(t[1:]) - np.array(t[:-1]))
-        message = ' ' * 75 + 'net (ms):'
-        for dt in mean_dt:
-            message += ' {:5.1f}'.format(dt)
-        print(message)
+        if verbose:
+            torch.cuda.synchronize(batch.points.device)                      
+            t += [time.time()]
+            mean_dt = 1000 * (np.array(t[1:]) - np.array(t[:-1]))
+            message = ' ' * 75 + 'net (ms):'
+            for dt in mean_dt:
+                message += ' {:5.1f}'.format(dt)
+            print(message)
 
         return logits
 
@@ -480,13 +486,6 @@ class KPFCNN(nn.Module):
         correct = (predicted == target).sum().item()
 
         return correct / total
-
-
-
-
-
-
-
 
 
 

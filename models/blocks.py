@@ -196,9 +196,6 @@ def build_graph_pyramid(points: Tensor,
         > The upsampling indices (opposite of pooling indices).
     """
 
-    torch.cuda.synchronize(points.device)
-    t = [time.time()]
-
     # Results lists
     pyramid = EasyDict()
     pyramid.points = []
@@ -217,9 +214,6 @@ def build_graph_pyramid(points: Tensor,
             pyramid.points.append(sub_points)
             pyramid.lengths.append(sub_lengths)
         sub_size *= 2.0
-               
-    torch.cuda.synchronize(points.device)
-    t += [time.time()]
 
     # Find all neighbors
     for i in range(num_layers):
@@ -231,8 +225,6 @@ def build_graph_pyramid(points: Tensor,
         # Get convolution indices
         neighbors = radius_search_pack_mode(cur_points, cur_points, cur_lengths, cur_lengths, search_radius, neighbor_limits[i])
         pyramid.neighbors.append(neighbors)
-        torch.cuda.synchronize(points.device)
-        t += [time.time()]
 
         # Relation with next layer 
         if i < num_layers - 1:
@@ -242,22 +234,18 @@ def build_graph_pyramid(points: Tensor,
             # Get pooling indices
             subsampling_inds = radius_search_pack_mode(sub_points, cur_points, sub_lengths, cur_lengths, search_radius, neighbor_limits[i])
             pyramid.pools.append(subsampling_inds)
-            torch.cuda.synchronize(points.device)
-            t += [time.time()]
 
             upsampling_inds = radius_search_pack_mode(cur_points, sub_points, cur_lengths, sub_lengths, search_radius * 2, 1)
             pyramid.upsamples.append(upsampling_inds)
-            torch.cuda.synchronize(points.device)
-            t += [time.time()]
 
         # Increase radius for next layer
         search_radius *= 2
 
-    mean_dt = 1000 * (np.array(t[1:]) - np.array(t[:-1]))
-    message = ' ' * 2
-    for dt in mean_dt:
-        message += ' {:5.1f}'.format(dt)
-    print(message)
+    # mean_dt = 1000 * (np.array(t[1:]) - np.array(t[:-1]))
+    # message = ' ' * 2
+    # for dt in mean_dt:
+    #     message += ' {:5.1f}'.format(dt)
+    # print(message)
 
     return pyramid
 

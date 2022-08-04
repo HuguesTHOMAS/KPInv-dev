@@ -69,17 +69,14 @@ def S3DIS_cfg(cfg):
 
 
 class S3DISDataset(GpuSceneSegDataset):
-    """
-    Class to handle S3DIS dataset.
-    Simple implementation.
-        > Input only consist of the first cloud with features
-        > Neigborhood and subsamplings are computed on the fly in the network
-        > Sampling is done simply with random picking (X spheres per class)
-    """
 
     def __init__(self, cfg, chosen_set='training', regular_sampling=False, load_data=True):
         """
-        Init function where we load the data in memory.
+        Class to handle S3DIS dataset.
+        Simple implementation.
+            > Input only consist of the first cloud with features
+            > Neigborhood and subsamplings are computed on the fly in the network
+            > Sampling is done simply with random picking (X spheres per class)
         """
         GpuSceneSegDataset.__init__(self, cfg, chosen_set=chosen_set, regular_sampling=regular_sampling)
 
@@ -107,7 +104,7 @@ class S3DISDataset(GpuSceneSegDataset):
 
         # To pick points randomly per class, we need every point index from each class
         self.prepare_label_inds()
-        
+
 
         ###################
         # Quick calibration
