@@ -17,7 +17,7 @@ from sklearn.neighbors import KDTree
 from utils.ply import read_ply, write_ply
 from utils.cpp_funcs import grid_subsampling
 from utils.batch_conversion import list_to_pack
-from utils.gpu_subsampling import grid_subsample, subsample_list_mode, init_gpu
+from utils.gpu_subsampling import grid_subsample, subsample_pack_batch, init_gpu
 from utils.gpu_neigbors import radius_search_pack_mode, radius_search_list_mode
 
 import matplotlib.pyplot as plt
@@ -177,7 +177,7 @@ def test_grid_subsample():
     print('\nCPU Pytorch subsampling')
     t1 = time.time()
 
-    sub_points2, sub_lengths2 = subsample_list_mode(point_tensor, [point_tensor.shape[0]], 0.04)
+    sub_points2, sub_lengths2 = subsample_pack_batch(point_tensor, [point_tensor.shape[0]], 0.04)
 
     t2 = time.time()
     print('Done in {:.3f}s'.format(t2 - t1))
@@ -186,7 +186,7 @@ def test_grid_subsample():
     print('\nGPU Pytorch subsampling')
     t1 = time.time()
 
-    sub_points3, sub_lengths3 = subsample_list_mode(point_gpu, [point_gpu.shape[0]], 0.04)
+    sub_points3, sub_lengths3 = subsample_pack_batch(point_gpu, [point_gpu.shape[0]], 0.04)
 
     t2 = time.time()
     print('Done in {:.3f}s'.format(t2 - t1))
@@ -315,7 +315,7 @@ def test_neighbors():
     print('\nGPU Pytorch subsampling')
     torch.cuda.synchronize()
     t1 = time.time()
-    sub_points0, sub_lengths1 = subsample_list_mode(point_gpu, [point_gpu.shape[0]], dl0, method='grid')
+    sub_points0, sub_lengths1 = subsample_pack_batch(point_gpu, [point_gpu.shape[0]], dl0, method='grid')
     torch.cuda.synchronize()
     t2 = time.time()
     print('Done in {:.3f}s'.format(t2 - t1))

@@ -3,11 +3,10 @@ from typing import Tuple
 import torch
 from torch import Tensor
 import pykeops
-from pykeops.torch import LazyTensor
 pykeops.set_verbose(False)
 
 from utils.batch_conversion import batch_to_pack, pack_to_batch, pack_to_list, list_to_pack
-from utils.gpu_subsampling import subsample_list_mode
+from utils.gpu_subsampling import subsample_pack_batch
 
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -28,8 +27,8 @@ def keops_radius_count(q_points: Tensor, s_points: Tensor, radius: float) -> Ten
         radius_counts (Tensor): (*, N)
     """
     num_batch_dims = q_points.dim() - 2
-    xi = LazyTensor(q_points.unsqueeze(-2))  # (*, N, 1, C)
-    xj = LazyTensor(s_points.unsqueeze(-3))  # (*, 1, M, C)
+    xi = pykeops.torch.LazyTensor(q_points.unsqueeze(-2))  # (*, N, 1, C)
+    xj = pykeops.torch.LazyTensor(s_points.unsqueeze(-3))  # (*, 1, M, C)
     dij = (xi - xj).norm2()  # (*, N, M)
     vij = (radius - dij).relu().sign()  # (*, N, M)
     radius_counts = vij.sum(dim=num_batch_dims + 1)  # (*, N)
@@ -47,26 +46,8 @@ def keops_knn(q_points: Tensor, s_points: Tensor, k: int) -> Tuple[Tensor, Tenso
         knn_distance (Tensor): (*, N, k)
         knn_indices (LongTensor): (*, N, k)
     """
-    xi = LazyTensor(q_points.unsqueeze(-2))  # (*, N, 1, C)
-    xj = LazyTensor(s_points.unsqueeze(-3))  # (*, 1, M, C)
-    dij = (xi - xj).norm2()  # (*, N, M)
-    knn_distances, knn_indices = dij.Kmin_argKmin(k, dim=q_points.dim() - 1)  # (*, N, K)
-    return knn_distances, knn_indices
-
-@torch.no_grad()
-def torch_knn(q_points: Tensor, s_points: Tensor, k: int) -> Tuple[Tensor, Tensor]:
-    """
-    kNN with PyTorch. Only use this function for small point clouds
-    Args:
-        q_points (Tensor): (*, N, C)
-        s_points (Tensor): (*, M, C)
-        k (int)
-    Returns:
-        knn_distance (Tensor): (*, N, k)
-        knn_indices (LongTensor): (*, N, k)
-    """
-    xi = q_points.unsqueeze(-2)  # (*, N, 1, C)
-    xj = s_points.unsqueeze(-3)  # (*, 1, M, C)
+    xi = pykeops.torch.LazyTensor(q_points.unsqueeze(-2))  # (*, N, 1, C)
+    xj = pykeops.torch.LazyTensor(s_points.unsqueeze(-3))  # (*, 1, M, C)
     dij = (xi - xj).norm2()  # (*, N, M)
     knn_distances, knn_indices = dij.Kmin_argKmin(k, dim=q_points.dim() - 1)  # (*, N, K)
     return knn_distances, knn_indices
@@ -158,8 +139,8 @@ def radius_search_pack_mode(q_points, s_points, q_lengths, s_lengths, radius, ne
     batch_q_points, batch_q_masks = pack_to_batch(q_points, q_lengths, fill_value=inf)  # (B, M', 3)
     batch_s_points, batch_s_masks = pack_to_batch(s_points, s_lengths, fill_value=inf)  # (B, N', 3)
 
-    # knn
-    batch_knn_distances, batch_knn_indices = keops_knn(batch_q_points, batch_s_points, neighbor_limit)  # (B, M', K)
+    # knn  (B, M', K)
+    batch_knn_distances, batch_knn_indices = keops_knn(batch_q_points, batch_s_points, neighbor_limit)
 
     # accumulate index
     batch_start_index = torch.cumsum(s_lengths, dim=0) - s_lengths
@@ -223,32 +204,3 @@ def radius_search_list_mode(q_points, s_points, q_lengths, s_lengths, radius, ne
     return knn_indices
 
 
-@torch.no_grad()
-def pyramid_neighbor_stats(points: Tensor,
-                           num_layers: int,
-                           sub_size: float,
-                           search_radius: float,
-                           sub_mode: str = 'grid'):
-    """
-    Function used for neighbors calibration. Return the average number of neigbors at each layer.
-    Args:
-        points (Tensor): initial layer points (M, 3).
-        num_layers (int): number of layers.
-        sub_size (float): initial subsampling size
-        radius (float): search radius.
-        sub_mode (str): the subsampling method ('grid', 'ph', 'fps').
-    Returns:
-        counts_list (List[Tensor]): All neigbors counts at each layers
-    """
-
-    counts_list = []
-    lengths = [points.shape[0]]
-    for i in range(num_layers):
-        if i > 0:
-            points, lengths = subsample_list_mode(points, lengths, sub_size, method=sub_mode)
-        counts = keops_radius_count(points, points, search_radius)
-        # neighbors = radius_search_pack_mode(points, points, lengths, lengths, search_radius, neighbor_limits[i])
-        counts_list.append(counts)
-        sub_size *= 2
-        search_radius *= 2
-    return counts_list

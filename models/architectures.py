@@ -1,6 +1,13 @@
 
-from models.blocks import *
+import time
+import torch
+import torch.nn as nn
 import numpy as np
+
+from models.blocks import KPConv, NearestUpsampleBlock, UnaryBlock, KPConvBlock, KPResidualBlock, \
+    local_nearest_pool
+
+from utils.torch_pyramid import fill_pyramid
 
 
 def p2p_fitting_regularizer(net):
@@ -351,27 +358,27 @@ class KPFCNN(nn.Module):
         #  ------ Init ------
         
         if verbose:
-            torch.cuda.synchronize(batch.points.device)
+            torch.cuda.synchronize(batch.device())
             t = [time.time()]
 
-        # First prepare the pyramid graph structure
-        pyramid = build_graph_pyramid(batch.points,
-                                      batch.lengths,
-                                      self.num_layers,
-                                      self.subsample_size,
-                                      self.first_radius,
-                                      self.neighbor_limits,
-                                      sub_mode=self.sub_mode)
-          
+        # First complete the input pyramid if not already done
+        if len(batch.in_dict.neighbors) < 1:
+            fill_pyramid(batch.in_dict,
+                         self.num_layers,
+                         self.subsample_size,
+                         self.first_radius,
+                         self.neighbor_limits,
+                         sub_mode=self.sub_mode)
+
         if verbose: 
-            torch.cuda.synchronize(batch.points.device)                           
+            torch.cuda.synchronize(batch.device())                           
             t += [time.time()]
 
         # Get input features
-        feats = batch.features.clone().detach()
+        feats = batch.in_dict.features.clone().detach()
         
         if verbose:      
-            torch.cuda.synchronize(batch.points.device)                        
+            torch.cuda.synchronize(batch.device())                        
             t += [time.time()]
 
 
@@ -386,7 +393,7 @@ class KPFCNN(nn.Module):
 
             # Layer blocks
             for block in block_list:
-                feats = block(pyramid.points[l], pyramid.points[l], feats, pyramid.neighbors[l])
+                feats = block(batch.in_dict.points[l], batch.in_dict.points[l], feats, batch.in_dict.neighbors[l])
             
             if layer < self.num_layers:
 
@@ -395,11 +402,11 @@ class KPFCNN(nn.Module):
 
                 # Pooling
                 layer_pool = getattr(self, 'pooling_{:d}'.format(layer))
-                feats = layer_pool(pyramid.points[l+1], pyramid.points[l], feats, pyramid.pools[l])
+                feats = layer_pool(batch.in_dict.points[l+1], batch.in_dict.points[l], feats, batch.in_dict.pools[l])
 
          
         if verbose:    
-            torch.cuda.synchronize(batch.points.device)                         
+            torch.cuda.synchronize(batch.device())                         
             t += [time.time()]
 
         #  ------ Decoder ------
@@ -411,7 +418,7 @@ class KPFCNN(nn.Module):
             unary = getattr(self, 'decoder_{:d}'.format(layer))
 
             # Upsample
-            feats = local_nearest_pool(feats, pyramid.upsamples[l])
+            feats = local_nearest_pool(feats, batch.in_dict.upsamples[l])
 
             # Concat with skip features
             feats = torch.cat([feats, skip_feats[l]], dim=1)
@@ -426,7 +433,7 @@ class KPFCNN(nn.Module):
                 
 
         if verbose:
-            torch.cuda.synchronize(batch.points.device)                      
+            torch.cuda.synchronize(batch.device())                      
             t += [time.time()]
             mean_dt = 1000 * (np.array(t[1:]) - np.array(t[:-1]))
             message = ' ' * 75 + 'net (ms):'

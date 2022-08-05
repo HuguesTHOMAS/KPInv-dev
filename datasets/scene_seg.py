@@ -1,12 +1,31 @@
 
 # ----------------------------------------------------------------------------------------------------------------------
 #
+#           Script Intro
+#       \******************/
+#
+#
+#   This file contains the defintion of a point cloud segmentation dataset that can be specialize to any dataset like
+#   S3DIS/NPM3D/Semantic3D by creating a subclass.
+#
+#   This dataset is used as an input pipeline for a KPNet. 
+# 
+#   You can choose a simple pipeline version (precompute_pyramid=False) which does not precompute neighbors in advance. 
+#   Therefore the network will compute them on the fly on GPU. Overall this pipeline is simpler to use but slower than 
+#   the normal pipeline.
+#
+#   You can choose a complex pipeline version (precompute_pyramid=False) which does precomputes the neighbors/etc. for 
+#   all layers in advance. This is the fastest pipeline for training.
+#
+#
+
+# ----------------------------------------------------------------------------------------------------------------------
+#
 #           Imports and global variables
 #       \**********************************/
 #
 
 # Common libs
-import copy
 import time
 import numpy as np
 import pickle
@@ -16,19 +35,21 @@ import torch
 from torch.utils.data import Dataset, Sampler
 from sklearn.neighbors import KDTree
 
-from torch.multiprocessing import Lock, set_start_method
+from torch.multiprocessing import Lock
+# from torch.multiprocessing import set_start_method
 # try:
 #      set_start_method('spawn')
 # except RuntimeError:
 #     pass
 
-from kernels.kernel_points import create_3D_rotations, get_random_rotations
-from utils.ply import read_ply, write_ply
-from utils.cpp_funcs import grid_subsampling
-from utils.gpu_subsampling import grid_subsample as gpu_grid_subsample
-from utils.gpu_subsampling import init_gpu, subsample_numpy, subsample_list_mode
-from utils.gpu_neigbors import pyramid_neighbor_stats
+
+from kernels.kernel_points import get_random_rotations
+
 from utils.printing import frame_lines_1
+from utils.ply import read_ply, write_ply
+from utils.gpu_init import init_gpu
+from utils.gpu_subsampling import  subsample_numpy, subsample_pack_batch, subsample_cloud
+from utils.torch_pyramid import build_full_pyramid, pyramid_neighbor_stats, build_base_pyramid
 
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -37,10 +58,9 @@ from utils.printing import frame_lines_1
 #       \**********************/
 #
 
-class GpuSceneSegDataset(Dataset):
-    """Parent class for Scene Segmentation Datasets."""
+class SceneSegDataset(Dataset):
 
-    def __init__(self, cfg, chosen_set='training', regular_sampling=False):
+    def __init__(self, cfg, chosen_set='training', regular_sampling=False, precompute_pyramid=False):
         """
         Initialize parameters of the dataset here.
         """
@@ -54,6 +74,7 @@ class GpuSceneSegDataset(Dataset):
         # Training or test set
         self.set = chosen_set
         self.regular_sampling = regular_sampling
+        self.precompute_pyramid = precompute_pyramid
 
         # Parameters depending on training or test
         if self.set == 'training':
@@ -168,6 +189,7 @@ class GpuSceneSegDataset(Dataset):
                                                                            labels=labels,
                                                                            method=self.cfg.model.sub_mode)
 
+                    sub_features *= np.array(f_scales, dtype=np.float32)
                     write_ply(sub_ply_file,
                             [sub_points, sub_features, sub_labels.astype(np.int32)],
                             ['x', 'y', 'z'] + f_properties + [label_property])
@@ -275,7 +297,7 @@ class GpuSceneSegDataset(Dataset):
             # Subsample scene clouds
             points = np.array(tree.data, copy=False).astype(np.float32)
             cpu_points = torch.from_numpy(points)
-            sub_points, _ = subsample_list_mode(cpu_points + offset,
+            sub_points, _ = subsample_pack_batch(cpu_points + offset,
                                                 [cpu_points.shape[0]],
                                                 reg_dl,
                                                 method='grid')
@@ -359,7 +381,7 @@ class GpuSceneSegDataset(Dataset):
         input_points = (points[input_inds] - center_point).astype(np.float32)
         input_features = self.input_features[cloud_ind][input_inds]
         if self.set in ['test', 'ERF']:
-            input_labels = np.zeros(input_points.shape[0])
+            input_labels = np.zeros(input_points.shape[0], dtype=np.int64)
         else:
             input_labels = self.input_labels[cloud_ind][input_inds]
             # input_labels = np.array([self.label_to_idx[l] for l in input_labels])
@@ -417,28 +439,32 @@ class GpuSceneSegDataset(Dataset):
             # Data augmentation
             in_points, scale, R = self.augmentation_transform(in_points)
 
-            # Input subampling (on CPU to be parrallelizable)
-            in_points, in_features, in_labels, inv_inds = subsample_numpy(in_points,
+            # View the arrays as torch tensors
+            torch_points = torch.from_numpy(in_points)
+            torch_features = torch.from_numpy(in_features)
+            torch_labels = torch.from_numpy(in_labels).type(torch.long)
+
+            # Input subsampling (on CPU to be parrallelizable)
+            in_points, in_features, in_labels, inv_inds = subsample_cloud(torch_points,
                                                                           self.cfg.model.init_sub_size,
-                                                                          features=in_features,
-                                                                          labels=in_labels,
+                                                                          features=torch_features,
+                                                                          labels=torch_labels,
                                                                           method=self.cfg.model.sub_mode,
-                                                                          on_gpu=False,
                                                                           return_inverse=True)
 
             # Stack batch
             p_list += [in_points]
             f_list += [in_features]
             l_list += [in_labels]
-            pi_list += [in_inds]
+            pi_list += [torch.from_numpy(in_inds)]
             pinv_list += [inv_inds]
-            i_list += [c_point]
+            i_list += [torch.from_numpy(c_point)]
             ci_list += [cloud_ind]
-            s_list += [scale]
-            R_list += [R]
+            s_list += [torch.from_numpy(scale)]
+            R_list += [torch.from_numpy(R)]
 
             # Update batch size
-            batch_n_pts += in_points.shape[0]
+            batch_n_pts += int(in_points.shape[0])
 
             # In case batch is full, stop
             if batch_n_pts > int(self.b_lim):
@@ -447,18 +473,18 @@ class GpuSceneSegDataset(Dataset):
         ###################
         # Concatenate batch
         ###################
-
-        stacked_points = np.concatenate(p_list, axis=0)
-        stacked_features = np.concatenate(f_list, axis=0)
-        stacked_labels = np.concatenate(l_list, axis=0)
-        center_points = np.concatenate(i_list, axis=0)
-        cloud_inds = np.array(ci_list, dtype=np.int32)
-        input_inds = np.concatenate(pi_list, axis=0)
-        input_invs = np.concatenate(pinv_list, axis=0)
-        stack_lengths = np.array([pp.shape[0] for pp in p_list], dtype=np.int32)
-        stack_lengths0 = np.array([pp.shape[0] for pp in pi_list], dtype=np.int32)
-        scales = np.array(s_list, dtype=np.float32)
-        rots = np.stack(R_list, axis=0)
+        
+        stacked_points = torch.cat(p_list, dim=0)
+        stacked_features = torch.cat(f_list, dim=0)
+        stacked_labels = torch.cat(l_list, dim=0)
+        center_points = torch.cat(i_list, dim=0)
+        cloud_inds = torch.LongTensor(ci_list)
+        input_inds = torch.cat(pi_list, dim=0)
+        input_invs = torch.cat(pinv_list, dim=0)
+        stack_lengths = torch.LongTensor([int(pp.shape[0]) for pp in p_list])
+        stack_lengths0 = torch.LongTensor([int(pp.shape[0]) for pp in pi_list])
+        scales = torch.stack(s_list, dim=0)
+        rots = torch.stack(R_list, dim=0)
 
 
         #######################
@@ -468,16 +494,34 @@ class GpuSceneSegDataset(Dataset):
         #   Points, features, etc.
         #
 
-        # # Get the whole input list
-        # input_list = self.segmentation_inputs(stacked_points,
-        #                                       stack_lengths)
+        # Get the whole input list
+        if self.precompute_pyramid:
 
-        input_list = [stacked_points, stacked_features, stacked_labels, stack_lengths, stack_lengths0]
+            input_dict = build_full_pyramid(stacked_points,
+                                            stack_lengths,
+                                            len(self.cfg.model.layer_blocks),
+                                            self.cfg.model.init_sub_size,
+                                            self.cfg.model.init_sub_size * self.cfg.model.kp_radius,
+                                            self.cfg.model.neighbor_limits,
+                                            sub_mode=self.cfg.model.sub_mode)
 
-        # Add scale and rotation for testing
-        input_list += [scales, rots, cloud_inds, center_points, input_inds, input_invs]
+        else:
 
-        return input_list
+            input_dict = build_base_pyramid(stacked_points,
+                                            stack_lengths)
+
+        # Add other input to the pyramid dictionary
+        input_dict.features = stacked_features
+        input_dict.labels = stacked_labels
+        input_dict.lengths0 = stack_lengths0
+        input_dict.scales = scales
+        input_dict.rots = rots
+        input_dict.cloud_inds = cloud_inds
+        input_dict.center_points = center_points
+        input_dict.input_inds = input_inds
+        input_dict.input_invs = input_invs
+
+        return input_dict
 
     def calib_batch_size(self, samples=20, verbose=True):
 
@@ -498,7 +542,7 @@ class GpuSceneSegDataset(Dataset):
                 in_points, _, _ = self.augmentation_transform(in_points)
                 if in_points.shape[0] > 0:
                     gpu_points = torch.from_numpy(in_points).to(device)
-                    sub_points, _ = subsample_list_mode(gpu_points,
+                    sub_points, _ = subsample_pack_batch(gpu_points,
                                                         [gpu_points.shape[0]],
                                                         self.cfg.model.init_sub_size,
                                                         method=self.cfg.model.sub_mode)
@@ -565,7 +609,7 @@ class GpuSceneSegDataset(Dataset):
                 in_points, _, _ = self.augmentation_transform(in_points)
                 gpu_points = torch.from_numpy(in_points).to(device)
 
-                sub_points, _ = subsample_list_mode(gpu_points,
+                sub_points, _ = subsample_pack_batch(gpu_points,
                                                     [gpu_points.shape[0]],
                                                     self.cfg.model.init_sub_size,
                                                     method=self.cfg.model.sub_mode)
@@ -653,7 +697,7 @@ class GpuSceneSegDataset(Dataset):
             if in_points.shape[0] > 0:
                 in_points, _, _ = self.augmentation_transform(in_points)
                 gpu_points = torch.from_numpy(in_points).to(device)
-                sub_points, _ = subsample_list_mode(gpu_points,
+                sub_points, _ = subsample_pack_batch(gpu_points,
                                                     [gpu_points.shape[0]],
                                                     cfg.model.init_sub_size,
                                                     method=cfg.model.sub_mode)
@@ -722,7 +766,7 @@ class GpuSceneSegDataset(Dataset):
 
         return
 
-    def augmentation_transform(self, points, normals=None, verbose=False):
+    def augmentation_transform(self, points, normals=None):
         """Implementation of an augmentation transform for point clouds."""
 
         ##########
@@ -788,12 +832,6 @@ class GpuSceneSegDataset(Dataset):
             # Renormalise
             augmented_normals *= 1 / (np.linalg.norm(augmented_normals, axis=1, keepdims=True) + 1e-6)
 
-            if verbose:
-                test_p = [np.vstack([points, augmented_points])]
-                test_n = [np.vstack([normals, augmented_normals])]
-                test_l = [np.hstack([points[:, 2]*0, augmented_points[:, 2]*0+1])]
-                show_ModelNet_examples(test_p, test_n, test_l)
-
             return augmented_points, augmented_normals, scale, R
 
 
@@ -805,10 +843,10 @@ class GpuSceneSegDataset(Dataset):
 #       \********************************/
 
 
-class GpuSceneSegSampler(Sampler):
-    """Sampler for GpuSceneSegDataset"""
+class SceneSegSampler(Sampler):
+    """Sampler for SceneSegDataset"""
 
-    def __init__(self, dataset: GpuSceneSegDataset):
+    def __init__(self, dataset: SceneSegDataset):
         Sampler.__init__(self, dataset)
 
         # Dataset used by the sampler (no copy is made in memory)
@@ -838,34 +876,17 @@ class GpuSceneSegSampler(Sampler):
         return self.N
 
 
-class GpuSceneSegBatch:
-    """Custom batch definition with memory pinning for GpuSceneSegDataset"""
+class SceneSegBatch:
+    """Custom batch definition with memory pinning for SceneSegDataset"""
 
-    def __init__(self, input_list):
+    def __init__(self, input_dict):
         """
         Initialize a batch from the list of data returned by the dataset __get_item__ function.
         Here the data does not contain every subsampling/neighborhoods, and all arrays are in pack mode.
         """
 
         # Get rid of batch dimension
-        input_list = input_list[0]
-
-        # List of attributes we set in this function
-        attribute_list = ['points',
-                          'features',
-                          'labels',
-                          'lengths',
-                          'lengths0',
-                          'scales',
-                          'rots',
-                          'cloud_inds',
-                          'center_points',
-                          'input_inds',
-                          'input_invs']
-
-        # All attributes are np arrays. MOdify this if you have types other values
-        for i, input_array in enumerate(input_list):
-            setattr(self, attribute_list[i], torch.from_numpy(input_array))
+        self.in_dict = input_dict[0]
 
         return
 
@@ -873,20 +894,34 @@ class GpuSceneSegBatch:
         """
         Manual pinning of the memory
         """
-        for var_name, var_value in vars(self).items():
-            setattr(self, var_name, var_value.pin_memory())
+
+        for var_name, var_value in self.in_dict.items():
+            if isinstance(var_value, list):
+                self.in_dict[var_name] = [list_item.pin_memory() for list_item in var_value]
+            else:
+                self.in_dict[var_name] = var_value.pin_memory()
+
         return self
 
     def to(self, device):
         """
         Manual convertion to a different device.
         """
-        for var_name, var_value in vars(self).items():
-            setattr(self, var_name, var_value.to(device))
+
+        for var_name, var_value in self.in_dict.items():
+            if isinstance(var_value, list):
+                self.in_dict[var_name] = [list_item.to(device) for list_item in var_value]
+            else:
+                self.in_dict[var_name] = var_value.to(device)
+
         return self
 
+    def device(self):
+        return self.in_dict.points[0].device
 
-def GpuSceneSegCollate(batch_data):
-    return GpuSceneSegBatch(batch_data)
+
+
+def SceneSegCollate(batch_data):
+    return SceneSegBatch(batch_data)
 
 

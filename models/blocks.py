@@ -14,23 +14,14 @@
 #      Hugues THOMAS - 06/03/2020
 #
 
-import time
-import numpy as np
 import math
 import torch
 import torch.nn as nn
-from easydict import EasyDict
-
-from typing import List
 
 from torch import Tensor
 
 from torch.nn.init import kaiming_uniform_
 from kernels.kernel_points import load_kernels
-
-from utils.gpu_neigbors import radius_search_pack_mode
-from utils.gpu_subsampling import subsample_list_mode
-from utils.ply import write_ply
 
 # ----------------------------------------------------------------------------------------------------------------------
 #
@@ -178,76 +169,6 @@ def global_avgpool(x, lengths):
     # Average features in each batch
     return torch.stack(averaged_features)
 
-
-@torch.no_grad()
-def build_graph_pyramid(points: Tensor,
-                        lengths: Tensor,
-                        num_layers: int,
-                        sub_size: float,
-                        search_radius: float,
-                        neighbor_limits: List[int],
-                        sub_mode: str = 'grid'):
-    """
-    Build the graph pyramid, consisting of:
-        > The subampled points for each layer, in pack mode.
-        > The lengths of the pack.
-        > The neigbors indices for convolutions.
-        > The pooling indices (neighbors from one layer to another).
-        > The upsampling indices (opposite of pooling indices).
-    """
-
-    # Results lists
-    pyramid = EasyDict()
-    pyramid.points = []
-    pyramid.lengths = []
-    pyramid.neighbors = []
-    pyramid.pools = []
-    pyramid.upsamples = []
-
-    # Subsample all point clouds on GPU
-    for i in range(num_layers):
-        if i == 0:
-            pyramid.points.append(points)
-            pyramid.lengths.append(lengths)
-        else:
-            sub_points, sub_lengths = subsample_list_mode(points, lengths, sub_size, method=sub_mode)
-            pyramid.points.append(sub_points)
-            pyramid.lengths.append(sub_lengths)
-        sub_size *= 2.0
-
-    # Find all neighbors
-    for i in range(num_layers):
-
-        # Get current points
-        cur_points = pyramid.points[i]
-        cur_lengths = pyramid.lengths[i]
-
-        # Get convolution indices
-        neighbors = radius_search_pack_mode(cur_points, cur_points, cur_lengths, cur_lengths, search_radius, neighbor_limits[i])
-        pyramid.neighbors.append(neighbors)
-
-        # Relation with next layer 
-        if i < num_layers - 1:
-            sub_points = pyramid.points[i + 1]
-            sub_lengths = pyramid.lengths[i + 1]
-
-            # Get pooling indices
-            subsampling_inds = radius_search_pack_mode(sub_points, cur_points, sub_lengths, cur_lengths, search_radius, neighbor_limits[i])
-            pyramid.pools.append(subsampling_inds)
-
-            upsampling_inds = radius_search_pack_mode(cur_points, sub_points, cur_lengths, sub_lengths, search_radius * 2, 1)
-            pyramid.upsamples.append(upsampling_inds)
-
-        # Increase radius for next layer
-        search_radius *= 2
-
-    # mean_dt = 1000 * (np.array(t[1:]) - np.array(t[:-1]))
-    # message = ' ' * 2
-    # for dt in mean_dt:
-    #     message += ' {:5.1f}'.format(dt)
-    # print(message)
-
-    return pyramid
 
 # ----------------------------------------------------------------------------------------------------------------------
 #

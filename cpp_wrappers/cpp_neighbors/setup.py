@@ -11,7 +11,7 @@ SOURCES = ["../cpp_utils/cloud/cloud.cpp",
              "neighbors/neighbors.cpp",
              "wrapper.cpp"]
 
-module = Extension(name="radius_neighbors",
+module = Extension(name="cpp_neighbors",
                     sources=SOURCES,
                     extra_compile_args=['-std=c++11',
                                         '-D_GLIBCXX_USE_CXX11_ABI=0'])

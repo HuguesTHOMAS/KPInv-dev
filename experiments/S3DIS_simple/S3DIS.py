@@ -1,6 +1,17 @@
 
 # ----------------------------------------------------------------------------------------------------------------------
 #
+#           Script Intro
+#       \******************/
+#
+#
+#   Use this script to define the dataset specific configuration. YOu should be able to adapt this file for other dataset 
+#   that share the same file structure as S3DIS.
+#
+#
+
+# ----------------------------------------------------------------------------------------------------------------------
+#
 #           Imports and global variables
 #       \**********************************/
 #
@@ -10,7 +21,7 @@ import numpy as np
 from os.path import join
 
 from utils.config import init_cfg
-from datasets.scene_seg import GpuSceneSegDataset
+from datasets.scene_seg import SceneSegDataset
 
 
 
@@ -68,9 +79,9 @@ def S3DIS_cfg(cfg):
 #
 
 
-class S3DISDataset(GpuSceneSegDataset):
+class S3DISDataset(SceneSegDataset):
 
-    def __init__(self, cfg, chosen_set='training', regular_sampling=False, load_data=True):
+    def __init__(self, cfg, chosen_set='training', regular_sampling=False, precompute_pyramid=False, load_data=True):
         """
         Class to handle S3DIS dataset.
         Simple implementation.
@@ -78,7 +89,11 @@ class S3DISDataset(GpuSceneSegDataset):
             > Neigborhood and subsamplings are computed on the fly in the network
             > Sampling is done simply with random picking (X spheres per class)
         """
-        GpuSceneSegDataset.__init__(self, cfg, chosen_set=chosen_set, regular_sampling=regular_sampling)
+        SceneSegDataset.__init__(self,
+                                       cfg,
+                                       chosen_set=chosen_set,
+                                       regular_sampling=regular_sampling,
+                                       precompute_pyramid=precompute_pyramid)
 
         ############
         # S3DIS data

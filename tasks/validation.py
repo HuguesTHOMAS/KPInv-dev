@@ -119,12 +119,12 @@ def cloud_segmentation_validation(epoch, net, val_loader, cfg, val_data, device,
 
         # Get probs and labels
         stacked_probs = softmax(outputs).cpu().detach().numpy()
-        labels = batch.labels.cpu().numpy()
-        lengths = batch.lengths.cpu().numpy()
-        lengths0 = batch.lengths0.cpu().numpy()
-        in_inds = batch.input_inds.cpu().numpy()
-        in_invs = batch.input_invs.cpu().numpy()
-        cloud_inds = batch.cloud_inds.cpu().numpy()
+        labels = batch.in_dict.labels.cpu().numpy()
+        lengths = batch.in_dict.lengths[0].cpu().numpy()
+        lengths0 = batch.in_dict.lengths0.cpu().numpy()
+        in_inds = batch.in_dict.input_inds.cpu().numpy()
+        in_invs = batch.in_dict.input_invs.cpu().numpy()
+        cloud_inds = batch.in_dict.cloud_inds.cpu().numpy()
         
         if 'cuda' in device.type:
             torch.cuda.synchronize(device)

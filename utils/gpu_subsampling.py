@@ -506,7 +506,91 @@ def subsample_numpy(points, sub_size, features=None, labels=None, method='grid',
     return return_list
 
 
-def subsample_list_mode(points, lengths, sub_size, method='grid'):
+def subsample_cloud(points, sub_size, features=None, labels=None, method='grid', return_inverse=False):
+    """
+    Subsample torch point clouds with different method, handling features and labels as well.
+    Args:
+        points (Tensor): the original points (N, D).
+        sub_size (float): the voxel size.
+        features (Tensor): the original features (N, F).
+        labels (LongTensor): the original labels (N,).
+        method (str): the subsampling method ('grid', 'ph', 'fps').
+        return_inverse (bool): Do we return inverse indices.
+    Returns:
+        sampled_points (Tensor): the subsampled points (M, D).
+    """
+
+    # Get the right subsampling func
+    if method == 'grid':
+        subsampling_func = grid_subsample
+    elif method == 'ph':
+        subsampling_func = permutohedral_subsample
+    elif method == 'hex':
+        subsampling_func = hexagonal_subsample
+    else:
+        raise ValueError('Wrong Subsampling method: {:s}'.format(method))
+
+    # Subsample cloud
+    return_list = subsampling_func(points,
+                                   sub_size,
+                                   features=features,
+                                   labels=labels,
+                                   return_inverse=return_inverse)
+
+    return return_list
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    # Convert length to tensor
+    length_as_list = type(lengths) == list
+    if length_as_list:
+        lengths = torch.LongTensor(lengths).to(points.device)
+
+    # Parameters
+    batch_size = lengths.shape[0]
+    start_index = 0
+    sampled_points_list = []
+
+    # Looping on each batch point cloud
+    for i in range(batch_size):
+        length = lengths[i].item()
+        end_index = start_index + length
+        points0 = points[start_index:end_index]
+        sampled_points_list.append(subsampling_func(points0, sub_size))
+        start_index = end_index
+
+    # Packing the list of points
+    sampled_points = torch.cat(sampled_points_list, dim=0)
+    sampled_lengths = [x.shape[0] for x in sampled_points_list]
+    if not length_as_list:
+        sampled_lengths = torch.LongTensor(sampled_lengths).to(points.device)
+
+    return sampled_points, sampled_lengths
+
+
+def subsample_pack_batch(points, lengths, sub_size, method='grid'):
     """
     Subsample torch batch of point clouds with different method,
     separating the batch in a list of point clouds.

@@ -1,9 +1,10 @@
 
 import numpy as np
+import torch
 
 # Subsampling extension
 import cpp_wrappers.cpp_subsampling.grid_subsampling as cpp_subsampling
-import cpp_wrappers.cpp_neighbors.radius_neighbors as cpp_neighbors
+import cpp_wrappers.cpp_neighbors.cpp_neighbors as cpp_neighbors
 
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -154,7 +155,7 @@ def batch_grid_subsampling(points, batches_len, features=None, labels=None,
         return s_points, s_len, s_features, s_labels
 
 
-def batch_neighbors(queries, supports, q_batches, s_batches, radius):
+def batch_radius_neighbors(queries, supports, q_batches, s_batches, radius, neighbor_limit):
     """
     Computes neighbors for a batch of queries and supports
     :param queries: (N1, 3) the query points
@@ -165,5 +166,53 @@ def batch_neighbors(queries, supports, q_batches, s_batches, radius):
     :return: neighbors indices
     """
 
-    return cpp_neighbors.batch_query(queries, supports, q_batches, s_batches, radius=radius)
+    from_torch = False
+    if isinstance(queries, torch.Tensor):
+        queries = queries.numpy()
+        from_torch = True
+
+    if isinstance(supports, torch.Tensor):
+        supports = supports.numpy()
+
+    if isinstance(q_batches, torch.Tensor):
+        q_batches = q_batches.numpy().astype(np.int32)
+
+    if isinstance(s_batches, torch.Tensor):
+        s_batches = s_batches.numpy().astype(np.int32)
+
+    # Get radius neighbors
+    neighbors = cpp_neighbors.batch_radius_neighbors(queries, supports, q_batches, s_batches, radius=radius)
+
+    # Apply limit
+    neighbors = neighbors[:, :neighbor_limit]
+    
+    # Reconvert to tensor if needed
+    if from_torch:
+        neighbors = torch.from_numpy(neighbors).to(torch.long)
+
+    return neighbors
+
+
+def batch_knn_neighbors(queries, supports, q_batches, s_batches, radius, neighbor_limit):
+    """
+    Computes neighbors for a batch of queries and supports
+    :param queries: (N1, 3) the query points
+    :param supports: (N2, 3) the support points
+    :param q_batches: (B) the list of lengths of batch elements in queries
+    :param s_batches: (B)the list of lengths of batch elements in supports
+    :param radius: float32
+    :return: neighbors indices
+    """
+
+    # TODO: IMPLEMENT THIS AND COMAPRE WITH RADIUS
+
+    a = 1/0
+
+    # Get radius neighbors
+    neighbors = cpp_neighbors.batch_knn_neighbors(queries, supports, q_batches, s_batches, radius=radius)
+
+    # Apply limit
+    neighbors = neighbors[:, :neighbor_limit]
+
+    return neighbors
 

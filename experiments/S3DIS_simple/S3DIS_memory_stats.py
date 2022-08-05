@@ -5,8 +5,9 @@
 #       \******************/
 #
 #
-#   Use this script to train a network on S3DIS using the simple input pipeline 
-#   (no neighbors computation in the dataloader)
+#   Use this script to display CUDA memory consumption depending on the batch size (and thus nubmer of points)
+#   Adapt the configuration to match your experiment and this script will give you insight on the maximum value 
+#   of batch limit you should be able to use.
 #
 #
 
@@ -38,7 +39,7 @@ from datasets.scene_seg import SceneSegSampler, SceneSegCollate
 
 from experiments.S3DIS_simple.S3DIS import S3DIS_cfg, S3DISDataset
 
-from tasks.trainval import train_and_validate
+from tasks.trainval import train_and_debug_cuda
 
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -59,8 +60,7 @@ def my_config():
     # ------------------
 
     # cfg.model.layer_blocks = (2, 1, 1, 1, 1)    # KPConv paper architecture. Can be changed for a deeper network
-    cfg.model.layer_blocks = (2, 3, 4, 4, 3)
-    # cfg.model.layer_blocks = (3, 4, 8, 8, 4)
+    cfg.model.layer_blocks = (3, 4, 8, 8, 4)    
 
     cfg.model.kp_mode = 'kpconv'
     cfg.model.kernel_size = 15
@@ -82,13 +82,13 @@ def my_config():
     # Training parameters
     # -------------------
 
-    cfg.train.num_workers = 16
+    cfg.train.num_workers = 0
 
     cfg.train.in_radius = 2.0    # Adapt this with model.init_sub_size. Try to keep a ratio of ~50
     cfg.train.batch_size = 6     # Target batch size. If you don't want calibration, you can directly set train.batch_limit
 
     cfg.train.max_epoch = 300
-    cfg.train.steps_per_epoch = 1000
+    cfg.train.steps_per_epoch = 10000
     cfg.train.checkpoint_gap = 50
 
     cfg.train.optimizer = 'SGD'
@@ -156,9 +156,9 @@ if __name__ == '__main__':
 
     # Load dataset
     underline('Loading training dataset')
-    training_dataset = S3DISDataset(cfg, chosen_set='training', precompute_pyramid=True)
+    training_dataset = S3DISDataset(cfg, chosen_set='training')
     underline('Loading validation dataset')
-    test_dataset = S3DISDataset(cfg, chosen_set='test', regular_sampling=True, precompute_pyramid=True)
+    test_dataset = S3DISDataset(cfg, chosen_set='test', regular_sampling=True)
 
     # Save configuration now that it is complete
     save_cfg(cfg)
@@ -198,67 +198,12 @@ if __name__ == '__main__':
     print()
     print(net)
 
-    debug = False
-    if debug:
-        print('\n*************************************\n')
-        print(net.state_dict().keys())
-        print('\n*************************************\n')
-        print(net)
-        print('\n*************************************\n')
-        for param in net.parameters():
-            if param.requires_grad:
-                print(param.shape)
-        print('\n*************************************\n')
-        print("Model size %i" % sum(param.numel() for param in net.parameters() if param.requires_grad))
-        print('\n*************************************\n')
-
-    print()
-    
-    ################
-    # Start training
-    ################
-
-    # TODO:
-    #
-    #       1. Test speed with index_select 
-    #           > in place of maxpool
-    #           > in place of neigbors in KPConv
-    #
-    #       2. Test einsum vs matmul
-    #           > in normal conv
-    #           > in group conv
-    #
-    #       3. Optimize operation
-    #           > verify group conv results
-    #           > check the effect of normalization in conv
-    #           > use einsum for the whole conv
-    #           > use keops lazytensor
-    #
-    #       4. Optimize network
-    #           > Test heads
-    #           > Comapre deeper architectures
-    #           > Test subsampling ph
-    #           > Number of parameters. USe groups, reduce some of the mlp operations
-    #           > Test parrallel input pipeline subsampling on cpu/gpu
-    #           > See optimization here:
-    #               https://spell.ml/blog/pytorch-training-tricks-YAnJqBEAACkARhgD
-    #               https://efficientdl.com/faster-deep-learning-in-pytorch-a-guide/#2-use-multiple-workers-and-pinned-memory-in-dataloader
-    #
-    #
-    #       5. Explore
-    #           > For benchmarking purpose, use multiscale dataset: introduce another scaling parameter
-    #               in addtion to the anysotropic one, pick random value just before getting sphere and
-    #               pick a sphere with the according size. then scale the sphere so that we have spheres 
-    #               of the same scale eveytime, justthe object in it will be "zoomed" or "dezoomed"
-    #
-    #           > Use multidataset, multihead segmentation and test deeper and deeper networks
-    #
 
     print('\n')
     frame_lines_1(['Training and Validation'])
 
     # Go
-    train_and_validate(net, training_loader, test_loader, cfg, on_gpu=True)
+    train_and_debug_cuda(net, training_loader, cfg)
 
     print('Forcing exit now')
     os.kill(os.getpid(), signal.SIGINT)

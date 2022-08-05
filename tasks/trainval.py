@@ -12,10 +12,13 @@ import torch
 from os import makedirs, remove
 from os.path import exists, join
 from easydict import EasyDict
+import numpy as np
+
+import matplotlib.pyplot as plt
 
 from utils.gpu_init import init_gpu
 
-from tasks.training import training_epoch
+from tasks.training import training_epoch, training_epoch_debug
 from tasks.validation import validation_epoch
 
 
@@ -187,3 +190,136 @@ def train_and_validate(net, training_loader, val_loader, cfg, chkp_path=None, fi
     print('Finished Training')
     return
 
+
+# ----------------------------------------------------------------------------------------------------------------------
+#
+#           Debug CUDA Memory Function
+#       \********************************/
+#
+
+
+
+def train_and_debug_cuda(net, training_loader, cfg):
+    """
+    We start a training (without validation) and collect CUDA memory stats while increasing the batch size 
+    slowly until an OOM error occurs .    
+    Args:
+        net (Model): network object.
+        training_loader (DataLoader): the numbers of points in the batch (B,).
+        cfg (EasyDict): configuration dictionary.
+    """
+
+    ############
+    # Parameters
+    ############
+
+    # Epochs and steps
+    epoch = 0
+    device = init_gpu()
+        
+
+    ####################
+    # Initialize network
+    ####################
+
+    # Get the network to the device we chose
+    net.to(device)
+
+
+    ######################
+    # Initialize optimizer
+    ######################
+
+    # Define optimizer
+    if cfg.train.optimizer == 'SGD':
+        optimizer = torch.optim.SGD(net.parameters(),
+                                    lr=cfg.train.lr,
+                                    momentum=cfg.train.sgd_momentum,
+                                    weight_decay=cfg.train.weight_decay)
+    elif cfg.train.optimizer == 'Adam':
+        optimizer = torch.optim.Adam(net.parameters(),
+                                     lr=cfg.train.lr,
+                                     betas=cfg.train.adam_b,
+                                     eps=cfg.train.adam_eps,
+                                     weight_decay=cfg.train.weight_decay)
+    else:
+        raise ValueError('Optimizer \"{:s}\" unknown. Only \"Adam\" and \"SGD\" are accepted.'.format(cfg.train.optimizer))
+
+
+    ############################
+    # Prepare experiment folders
+    ############################
+
+    if cfg.exp.saving:
+
+        # File to signal that the folder is a debug one
+        PID_file = join(cfg.exp.log_dir, 'THIS_IS_A_DEBUG_EXP.txt')
+        if not exists(PID_file):
+            with open(PID_file, "w") as file:
+                file.write('THIS_IS_A_DEBUG_EXP')
+
+        # Killing file (simply delete this file when you want to stop the training)
+        PID_file = join(cfg.exp.log_dir, 'running_PID.txt')
+        if not exists(PID_file):
+            with open(PID_file, "w") as file:
+                file.write('Launched with PyCharm')
+    else:
+        PID_file = None
+
+
+    ##################
+    # Start experiment
+    ##################
+
+    # Perform one epoch of training, should be enough to get an OOM (increase blim_inc otherwise)
+    all_cuda_stats = training_epoch_debug(epoch, net, optimizer, training_loader, cfg, PID_file, device, blim_inc=1000)
+    
+
+    #################
+    # Show Cuda stats
+    #################
+
+    print('\n')
+    print('Now showing statistics')
+    print('\n')
+
+    steps = np.arange(all_cuda_stats.shape[0])
+    n_points = all_cuda_stats[:, 0]
+    batch_limit = all_cuda_stats[:, 1]
+    allocated_MB = all_cuda_stats[:, 2]
+    reserved_MB = all_cuda_stats[:, 3]
+
+    # Figure showing point statistics
+    fig1 = plt.figure()
+    plt.title('Points statistic')
+    plt.xlabel('steps')
+    plt.ylabel('Kpts')
+    plt.plot(steps, batch_limit / 1000, label='batch_limit')
+    plt.plot(steps, n_points / 1000, '.', label='batch_points')
+    plt.legend()
+    
+    # Figure showing memory statistics
+    fig2, (ax1, ax2) = plt.subplots(1, 2, figsize=[10.4, 4.8])
+
+    # Memory increasing
+    ax1.set_title('Memory statistics')
+    ax1.set_xlabel('steps')
+    ax1.set_ylabel('MB')
+    ax1.plot(steps, allocated_MB, '-', label='allocated')
+    ax1.plot(steps, reserved_MB, '--', label='reserved')
+    ax1.legend()
+
+    # Relatio nbetween Memory given the number of points
+    ax2.set_title('Memory given numer of points')
+    ax2.set_xlabel('Kpts')
+    ax2.set_ylabel('MB')
+    ax2.plot(n_points / 1000, allocated_MB, '.')
+
+    plt.show()
+
+    # Remove the temporary file used for kill signal
+    if exists(PID_file):
+        remove(PID_file)
+
+    print('Finished Training')
+    return
