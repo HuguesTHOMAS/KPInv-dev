@@ -179,7 +179,8 @@ def train_and_validate(net, training_loader, val_loader, cfg, chkp_path=None, fi
 
         # Validation
         net.eval()
-        validation_epoch(epoch, net, val_loader, cfg, val_data, device)
+        with torch.no_grad():
+            validation_epoch(epoch, net, val_loader, cfg, val_data, device)
         net.train()
 
 

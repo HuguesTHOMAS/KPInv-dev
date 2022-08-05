@@ -29,7 +29,7 @@ current = os.path.dirname(os.path.realpath(__file__))
 parent = os.path.dirname(os.path.dirname(current))
 sys.path.append(parent)
 
-from utils.config import init_cfg, save_cfg, load_cfg, get_directories
+from utils.config import init_cfg, save_cfg, get_directories
 from utils.printing import frame_lines_1, underline
 
 from models.architectures import KPFCNN
@@ -158,12 +158,12 @@ if __name__ == '__main__':
     underline('Loading training dataset')
     training_dataset = S3DISDataset(cfg,
                                     chosen_set='training',
-                                    precompute_pyramid=False)
+                                    precompute_pyramid=True)
     underline('Loading validation dataset')
     test_dataset = S3DISDataset(cfg,
-                                chosen_set='test',
+                                chosen_set='validation',
                                 regular_sampling=True,
-                                precompute_pyramid=False)
+                                precompute_pyramid=True)
 
     # Save configuration now that it is complete
     save_cfg(cfg)

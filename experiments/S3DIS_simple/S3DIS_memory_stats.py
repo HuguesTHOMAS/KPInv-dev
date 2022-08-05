@@ -30,7 +30,7 @@ current = os.path.dirname(os.path.realpath(__file__))
 parent = os.path.dirname(os.path.dirname(current))
 sys.path.append(parent)
 
-from utils.config import init_cfg, save_cfg, load_cfg, get_directories
+from utils.config import init_cfg, save_cfg, get_directories
 from utils.printing import frame_lines_1, underline
 
 from models.architectures import KPFCNN

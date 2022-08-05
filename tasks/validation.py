@@ -86,8 +86,8 @@ def cloud_segmentation_validation(epoch, net, val_loader, cfg, val_data, device,
         i = 0
         for label_value in val_loader.dataset.label_values:
             if label_value not in val_loader.dataset.ignored_labels:
-                val_data.proportions[i] = np.sum([np.sum(labels == label_value)
-                                                    for labels in val_loader.dataset.val_labels])
+                val_data.proportions[i] = np.sum([np.sum(val_lbls == label_value)
+                                                    for val_lbls in val_loader.dataset.val_labels])
                 i += 1
 
     #####################

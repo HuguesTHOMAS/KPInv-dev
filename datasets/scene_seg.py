@@ -380,6 +380,7 @@ class SceneSegDataset(Dataset):
         # Collect labels and colors
         input_points = (points[input_inds] - center_point).astype(np.float32)
         input_features = self.input_features[cloud_ind][input_inds]
+
         if self.set in ['test', 'ERF']:
             input_labels = np.zeros(input_points.shape[0], dtype=np.int64)
         else:
@@ -443,6 +444,7 @@ class SceneSegDataset(Dataset):
             torch_points = torch.from_numpy(in_points)
             torch_features = torch.from_numpy(in_features)
             torch_labels = torch.from_numpy(in_labels).type(torch.long)
+
 
             # Input subsampling (on CPU to be parrallelizable)
             in_points, in_features, in_labels, inv_inds = subsample_cloud(torch_points,

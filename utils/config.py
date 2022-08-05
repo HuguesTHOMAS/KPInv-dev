@@ -190,11 +190,16 @@ def save_cfg(cfg):
         json.dump(cfg, jsonfile, indent=4, sort_keys=False)
     return
 
-def load_cfg(cfg, log_path):
+def load_cfg(log_path):
+
+    # Create an empty cfg
+    cfg = init_cfg()
+
     # Read data from file:
     with open(join(log_path, 'parameters.json'), "r") as jsonfile:
         cfg.update(json.load(jsonfile))
-    return
+
+    return cfg
 
 
 
