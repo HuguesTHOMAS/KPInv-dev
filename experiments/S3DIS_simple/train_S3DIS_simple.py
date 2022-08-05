@@ -85,7 +85,7 @@ def my_config():
     cfg.train.num_workers = 16
 
     cfg.train.in_radius = 2.0    # Adapt this with model.init_sub_size. Try to keep a ratio of ~50
-    cfg.train.batch_size = 6     # Target batch size. If you don't want calibration, you can directly set train.batch_limit
+    cfg.train.batch_size = 10    # Target batch size. If you don't want calibration, you can directly set train.batch_limit
 
     cfg.train.max_epoch = 300
     cfg.train.steps_per_epoch = 1000
@@ -156,9 +156,14 @@ if __name__ == '__main__':
 
     # Load dataset
     underline('Loading training dataset')
-    training_dataset = S3DISDataset(cfg, chosen_set='training', precompute_pyramid=True)
+    training_dataset = S3DISDataset(cfg,
+                                    chosen_set='training',
+                                    precompute_pyramid=False)
     underline('Loading validation dataset')
-    test_dataset = S3DISDataset(cfg, chosen_set='test', regular_sampling=True, precompute_pyramid=True)
+    test_dataset = S3DISDataset(cfg,
+                                chosen_set='test',
+                                regular_sampling=True,
+                                precompute_pyramid=False)
 
     # Save configuration now that it is complete
     save_cfg(cfg)

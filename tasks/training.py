@@ -12,6 +12,8 @@ import numpy as np
 from os.path import exists, join
 import time
 
+from utils.printing import underline
+
 
 # ----------------------------------------------------------------------------------------------------------------------
 #
@@ -26,6 +28,13 @@ def training_epoch(epoch, t0, net, optimizer, training_loader, cfg, PID_file, de
     last_display = time.time()
     t = [time.time()]
 
+    underline('Training epoch {:d}'.format(epoch))
+    message =  '\n                                                                 Timings            '
+    message += '\nEpoch Step |   Loss   | GPU usage |      Speed      |   In   Batch  Forw  Back  End '
+    message += '\n-----------|----------|-----------|-----------------|-------------------------------'
+
+    print(message)
+
     for batch in training_loader:
 
         # Check kill signal (running_PID.txt deleted)
@@ -35,88 +44,108 @@ def training_epoch(epoch, t0, net, optimizer, training_loader, cfg, PID_file, de
         ##################
         # Processing batch
         ##################
+        
 
-        # New time
-        t = t[-1:]
-        if 'cuda' in device.type:
-            torch.cuda.synchronize(device)
-        t += [time.time()]
+        try:
 
-        # Move batch to GPU
-        if 'cuda' in device.type:
-            batch.to(device)
+            # New time
+            t = t[-1:]
+            if 'cuda' in device.type:
+                torch.cuda.synchronize(device)
+            t += [time.time()]
 
-        if 'cuda' in device.type:
-            torch.cuda.synchronize(device)
-        t += [time.time()]
+            # Move batch to GPU
+            if 'cuda' in device.type:
+                batch.to(device)
 
-        # zero the parameter gradients
-        optimizer.zero_grad()
+            if 'cuda' in device.type:
+                torch.cuda.synchronize(device)
+            t += [time.time()]
 
-        # Forward pass
-        outputs = net(batch)
+            # zero the parameter gradients
+            optimizer.zero_grad()
 
-        if 'cuda' in device.type:
-            torch.cuda.synchronize(device)
-        t += [time.time()]
+            # Forward pass
+            outputs = net(batch)
+            
+            # Loss with equivar/invar
+            loss = net.loss(outputs, batch.in_dict.labels)
+            #acc = net.accuracy(outputs, batch.in_dict.labels)
 
-        # Loss with equivar/invar
-        loss = net.loss(outputs, batch.in_dict.labels)
-        #acc = net.accuracy(outputs, batch.in_dict.labels)
+            if 'cuda' in device.type:
+                torch.cuda.synchronize(device)
+            t += [time.time()]
 
-        if 'cuda' in device.type:
-            torch.cuda.synchronize(device)
-        t += [time.time()]
+            # Backward gradients
+            loss.backward()
 
-        # Backward gradients
-        loss.backward()
+            # Clip gradient
+            if cfg.train.grad_clip > 0:
+                #torch.nn.utils.clip_grad_norm_(net.parameters(), cfg.train.grad_clip)
+                torch.nn.utils.clip_grad_value_(net.parameters(), cfg.train.grad_clip)
 
-        # Clip gradient
-        if cfg.train.grad_clip > 0:
-            #torch.nn.utils.clip_grad_norm_(net.parameters(), cfg.train.grad_clip)
-            torch.nn.utils.clip_grad_value_(net.parameters(), cfg.train.grad_clip)
+            # Optimizer step
+            optimizer.step()
 
-        # Optimizer step
-        optimizer.step()
+            if 'cuda' in device.type:
+                torch.cuda.synchronize(device)
+            t += [time.time()]
 
-        # # Empty GPU cache (helps avoiding OOM errors)
-        # # Loses ~10% of speed but allows batch 2 x bigger.
-        # torch.cuda.empty_cache()
-
-        if 'cuda' in device.type:
-            torch.cuda.synchronize(device)
-        t += [time.time()]
-
-        # Average timing
-        if step < 2:
-            mean_dt = np.array(t[1:]) - np.array(t[:-1])
-        else:
-            mean_dt = 0.9 * mean_dt + 0.1 * (np.array(t[1:]) - np.array(t[:-1]))
-
-        # Console display (only one per second)
-        if (t[-1] - last_display) > 1.0:
-            last_display = t[-1]
-            message = 'e{:03d}-i{:04d} => L={:.3f} / t(ms): {:5.1f} {:5.1f} {:5.1f} {:5.1f} {:5.1f})'
-            print(message.format(epoch, step,
-                                    loss.item(),
-                                    1000 * mean_dt[0],
-                                    1000 * mean_dt[1],
-                                    1000 * mean_dt[2],
-                                    1000 * mean_dt[3],
-                                    1000 * mean_dt[4]))
-
-        # Log file
-        if cfg.exp.saving:
-            with open(join(cfg.exp.log_dir, 'training.txt'), "a") as file:
-                message = '{:d} {:d} {:.3f} {:.3f} {:.3f}\n'
-                file.write(message.format(epoch,
-                                            step,
-                                            net.output_loss,
-                                            net.reg_loss,
-                                            t[-1] - t0))
+            # Get CUDA memory stat to see what space is used on GPU
+            cuda_stats = torch.cuda.memory_stats(device)
+            used_GPU_MB = cuda_stats["allocated_bytes.all.peak"]
+            _, tot_GPU_MB = torch.cuda.mem_get_info(device)
+            gpu_usage = 100 * used_GPU_MB / tot_GPU_MB
+            torch.cuda.reset_peak_memory_stats(device)
 
 
-        step += 1
+            # # Empty GPU cache (helps avoiding OOM errors)
+            # # Loses ~10% of speed but allows batch 2 x bigger.
+            # torch.cuda.empty_cache()
+
+            if 'cuda' in device.type:
+                torch.cuda.synchronize(device)
+            t += [time.time()]
+
+            # Average timing
+            if step < 5:
+                mean_dt = np.array(t[1:]) - np.array(t[:-1])
+            else:
+                mean_dt = 0.8 * mean_dt + 0.2 * (np.array(t[1:]) - np.array(t[:-1]))
+
+            # Console display (only one per second)
+            if (t[-1] - last_display) > 1.0:
+                last_display = t[-1]
+
+                message = '{:5d} {:4d} | {:8.3f} | {:7.1f} % | {:7.1f} stp/min | {:6.1f} {:5.1f} {:5.1f} {:5.1f} {:5.1f}'
+                print(message.format(epoch, step,
+                                        loss.item(),
+                                        gpu_usage,
+                                        60 / np.sum(mean_dt),
+                                        1000 * mean_dt[0],
+                                        1000 * mean_dt[1],
+                                        1000 * mean_dt[2],
+                                        1000 * mean_dt[3],
+                                        1000 * mean_dt[4]))
+
+            # Log file
+            if cfg.exp.saving:
+                with open(join(cfg.exp.log_dir, 'training.txt'), "a") as file:
+                    message = '{:d} {:d} {:.3f} {:.3f} {:.3f}\n'
+                    file.write(message.format(epoch,
+                                                step,
+                                                net.output_loss,
+                                                net.reg_loss,
+                                                t[-1] - t0))
+
+
+            step += 1
+                
+        except RuntimeError as err:
+            print("Caught a CUDA OOM Error:\n{0}".format(err))
+            print("Reduce batch limit and restart epoch")
+            training_loader.dataset.b_lim -= 5000
+            torch.cuda.empty_cache()
 
     return
 
@@ -209,7 +238,7 @@ def training_epoch_debug(epoch, net, optimizer, training_loader, cfg, PID_file, 
             training_loader.dataset.b_lim += blim_inc
 
             # Empty cache
-            # torch.cuda.empty_cache()
+            torch.cuda.empty_cache()
 
             # Reset peak so that the peak reflect the maximum memory usage during a step
             torch.cuda.reset_peak_memory_stats(device)

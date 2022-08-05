@@ -153,12 +153,17 @@ if __name__ == '__main__':
 
     print('\n')
     frame_lines_1(['Data Preparation'])
-
+    
     # Load dataset
     underline('Loading training dataset')
-    training_dataset = S3DISDataset(cfg, chosen_set='training')
+    training_dataset = S3DISDataset(cfg,
+                                    chosen_set='training',
+                                    precompute_pyramid=True)
     underline('Loading validation dataset')
-    test_dataset = S3DISDataset(cfg, chosen_set='test', regular_sampling=True)
+    test_dataset = S3DISDataset(cfg,
+                                chosen_set='test',
+                                regular_sampling=True,
+                                precompute_pyramid=True)
 
     # Save configuration now that it is complete
     save_cfg(cfg)
@@ -166,6 +171,7 @@ if __name__ == '__main__':
     # Initialize samplers
     training_sampler = SceneSegSampler(training_dataset)
     test_sampler = SceneSegSampler(test_dataset)
+
 
     # Initialize the dataloader
     training_loader = DataLoader(training_dataset,

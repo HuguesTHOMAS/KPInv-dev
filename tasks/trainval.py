@@ -272,7 +272,7 @@ def train_and_debug_cuda(net, training_loader, cfg):
     ##################
 
     # Perform one epoch of training, should be enough to get an OOM (increase blim_inc otherwise)
-    all_cuda_stats = training_epoch_debug(epoch, net, optimizer, training_loader, cfg, PID_file, device, blim_inc=1000)
+    all_cuda_stats = training_epoch_debug(epoch, net, optimizer, training_loader, cfg, PID_file, device, blim_inc=5000)
     
 
     #################
