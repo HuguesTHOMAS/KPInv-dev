@@ -17,6 +17,7 @@ import time
 from utils.ply import read_ply, write_ply
 from utils.metrics import IoU_from_confusions, fast_confusion
 
+from utils.printing import underline
 
 # ----------------------------------------------------------------------------------------------------------------------
 #
@@ -61,10 +62,16 @@ def cloud_segmentation_validation(epoch, net, val_loader, cfg, val_data, device,
     """
     Validation method for cloud segmentation models
     """
-
+    
     ############
     # Initialize
     ############
+    
+    underline('Validation epoch {:d}'.format(epoch))
+    message =  '\n                                                          Timings        '
+    message += '\n Steps |   Votes   | GPU usage |      Speed      |   In   Batch  Forw  End '
+    message += '\n-------|-----------|-----------|-----------------|-------------------------'
+    print(message)
 
     t0 = time.time()
 
@@ -105,17 +112,27 @@ def cloud_segmentation_validation(epoch, net, val_loader, cfg, val_data, device,
     t1 = time.time()
 
     # Start validation loop
-    for i, batch in enumerate(val_loader):
+    for step, batch in enumerate(val_loader):
 
         # New time
         t = t[-1:]
+        if 'cuda' in device.type:
+            torch.cuda.synchronize(device)
         t += [time.time()]
 
         if 'cuda' in device.type:
             batch.to(device)
 
+        if 'cuda' in device.type:
+            torch.cuda.synchronize(device)
+        t += [time.time()]
+
         # Forward pass
         outputs = net(batch)
+        
+        if 'cuda' in device.type:
+            torch.cuda.synchronize(device)
+        t += [time.time()]
 
         # Get probs and labels
         stacked_probs = softmax(outputs).cpu().detach().numpy()
@@ -125,9 +142,6 @@ def cloud_segmentation_validation(epoch, net, val_loader, cfg, val_data, device,
         in_inds = batch.in_dict.input_inds.cpu().numpy()
         in_invs = batch.in_dict.input_invs.cpu().numpy()
         cloud_inds = batch.in_dict.cloud_inds.cpu().numpy()
-        
-        if 'cuda' in device.type:
-            torch.cuda.synchronize(device)
 
         # Get predictions and labels per instance
         # ***************************************
@@ -154,17 +168,40 @@ def cloud_segmentation_validation(epoch, net, val_loader, cfg, val_data, device,
             i0 += length
             j0 += length0
 
-        # Average timing
+
+        # Get CUDA memory stat to see what space is used on GPU
+        cuda_stats = torch.cuda.memory_stats(device)
+        used_GPU_MB = cuda_stats["allocated_bytes.all.peak"]
+        _, tot_GPU_MB = torch.cuda.mem_get_info(device)
+        gpu_usage = 100 * used_GPU_MB / tot_GPU_MB
+        torch.cuda.reset_peak_memory_stats(device)
+
+        # # Empty GPU cache (helps avoiding OOM errors)
+        # # Loses ~10% of speed but allows batch 2 x bigger.
+        # torch.cuda.empty_cache()
+
+        if 'cuda' in device.type:
+            torch.cuda.synchronize(device)
         t += [time.time()]
-        mean_dt = 0.95 * mean_dt + 0.05 * (np.array(t[1:]) - np.array(t[:-1]))
+
+        # Average timing
+        if step < 5:
+            mean_dt = np.array(t[1:]) - np.array(t[:-1])
+        else:
+            mean_dt = 0.8 * mean_dt + 0.2 * (np.array(t[1:]) - np.array(t[:-1]))
 
         # Display
         if (t[-1] - last_display) > 1.0:
             last_display = t[-1]
-            message = 'Validation : {:.1f}% (timings : {:4.2f} {:4.2f})'
-            print(message.format(100 * i / cfg.test.steps_per_epoch,
-                                    1000 * (mean_dt[0]),
-                                    1000 * (mean_dt[1])))
+            message = ' {:5d} | {:9.2f} | {:7.1f} % | {:7.1f} stp/min | {:6.1f} {:5.1f} {:5.1f} {:5.1f}'
+            print(message.format(step,
+                                 val_loader.dataset.get_votes(),
+                                 gpu_usage,
+                                 60 / np.sum(mean_dt),
+                                 1000 * mean_dt[0],
+                                 1000 * mean_dt[1],
+                                 1000 * mean_dt[2],
+                                 1000 * mean_dt[3]))
 
     t2 = time.time()
 
@@ -187,22 +224,21 @@ def cloud_segmentation_validation(epoch, net, val_loader, cfg, val_data, device,
     t3 = time.time()
 
     # Sum all confusions
-    C = np.sum(Confs, axis=0).astype(np.float32)
+    sum_Confs = np.sum(Confs, axis=0).astype(np.float32)
 
     # Remove ignored labels from confusions
     for l_ind, label_value in reversed(list(enumerate(val_loader.dataset.label_values))):
         if label_value in val_loader.dataset.ignored_labels:
-            C = np.delete(C, l_ind, axis=0)
-            C = np.delete(C, l_ind, axis=1)
+            sum_Confs = np.delete(sum_Confs, l_ind, axis=0)
+            sum_Confs = np.delete(sum_Confs, l_ind, axis=1)
 
     # Balance with real validation proportions
-    C *= np.expand_dims(val_data.proportions / (np.sum(C, axis=1) + 1e-6), 1)
-
+    sum_Confs *= np.expand_dims(val_data.proportions / (np.sum(sum_Confs, axis=1) + 1e-6), 1)
 
     t4 = time.time()
 
     # Objects IoU
-    IoUs = IoU_from_confusions(C)
+    IoUs = IoU_from_confusions(sum_Confs)
 
     t5 = time.time()
 
@@ -244,7 +280,8 @@ def cloud_segmentation_validation(epoch, net, val_loader, cfg, val_data, device,
 
     # Print instance mean
     mIoU = 100 * np.mean(IoUs)
-    print('{:s} mean IoU = {:.1f}%'.format(cfg.data.name, mIoU))
+    print('\n{:s} mean IoU = {:.1f}%'.format(cfg.data.name, mIoU))
+    print()
 
     # Save predicted cloud occasionally
     if cfg.exp.saving and (epoch + 1) % cfg.train.checkpoint_gap == 0:

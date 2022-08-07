@@ -64,7 +64,7 @@ def my_config():
 
     cfg.model.kp_mode = 'kpconv'
     cfg.model.kernel_size = 15
-    cfg.model.kp_radius = 2.5
+    cfg.model.kp_radius = 1.9
     cfg.model.kp_sigma = 1.0
     cfg.model.kp_influence = 'linear'
     cfg.model.kp_aggregation = 'sum'
@@ -75,8 +75,8 @@ def my_config():
 
     cfg.model.input_channels = 5    # This value has to be compatible with one of the dataset input features definition
 
-    cfg.model.neighbor_limits = [35, 40, 50, 50, 50]    # Use empty list to let calibration get the values
-    # cfg.model.neighbor_limits = []
+    # cfg.model.neighbor_limits = [35, 40, 50, 50, 50]    # Use empty list to let calibration get the values
+    cfg.model.neighbor_limits = []
 
 
     # Training parameters
@@ -87,15 +87,15 @@ def my_config():
     cfg.train.in_radius = 2.0    # Adapt this with model.init_sub_size. Try to keep a ratio of ~50
     cfg.train.batch_size = 10    # Target batch size. If you don't want calibration, you can directly set train.batch_limit
 
-    cfg.train.max_epoch = 300
+    cfg.train.max_epoch = 200
     cfg.train.steps_per_epoch = 1000
-    cfg.train.checkpoint_gap = 50
+    cfg.train.checkpoint_gap = 25
 
     cfg.train.optimizer = 'SGD'
     cfg.train.sgd_momentum = 0.98
 
     cfg.train.lr = 1e-2
-    cfg.train.lr_decays = {str(i): 0.1**(1 / 50) for i in range(1, cfg.train.max_epoch)}
+    cfg.train.lr_decays = {str(i): 0.1**(1 / 80) for i in range(1, cfg.train.max_epoch)}
 
     cfg.train.class_w = []
 
@@ -111,8 +111,9 @@ def my_config():
     # Test parameters
     # ---------------
 
-    cfg.test.max_votes = 10
     cfg.test.steps_per_epoch = 50    # Size of one validation epoch (should be small)
+    
+    cfg.test.max_votes = 10
 
     cfg.test.in_radius = cfg.train.in_radius
     cfg.test.num_workers = cfg.train.num_workers
@@ -225,13 +226,14 @@ if __name__ == '__main__':
 
     # TODO:
     #
-    #       1. Test speed with index_select 
-    #           > in place of maxpool
-    #           > in place of neigbors in KPConv
+    #       0. Go implement KPInv
     #
-    #       2. Test einsum vs matmul
-    #           > in normal conv
-    #           > in group conv
+    #       1. Go implement other datasets (NPM3D, Semantic3D, Scannetv2)
+    #          Also other task: ModelNet40, ShapeNetPart, SemanticKitti
+    #          Add code for completely different tasks??? Invariance??
+    #           New classif dataset: ScanObjectNN
+    #           Revisiting point cloud classification: A new benchmark dataset 
+    #           and classification model on real-world data
     #
     #       3. Optimize operation
     #           > verify group conv results
@@ -241,13 +243,14 @@ if __name__ == '__main__':
     #
     #       4. Optimize network
     #           > Test heads
-    #           > Comapre deeper architectures
+    #           > Compare deeper architectures
     #           > Test subsampling ph
-    #           > Number of parameters. USe groups, reduce some of the mlp operations
-    #           > Test parrallel input pipeline subsampling on cpu/gpu
+    #           > Number of parameters. Use groups, reduce some of the mlp operations
     #           > See optimization here:
     #               https://spell.ml/blog/pytorch-training-tricks-YAnJqBEAACkARhgD
     #               https://efficientdl.com/faster-deep-learning-in-pytorch-a-guide/#2-use-multiple-workers-and-pinned-memory-in-dataloader
+    #               https://arxiv.org/pdf/2206.04670v1.pdf
+    #               https://arxiv.org/pdf/2205.05740v2.pdf
     #
     #
     #       5. Explore
@@ -257,6 +260,8 @@ if __name__ == '__main__':
     #               of the same scale eveytime, justthe object in it will be "zoomed" or "dezoomed"
     #
     #           > Use multidataset, multihead segmentation and test deeper and deeper networks
+    #
+    #           > New task instance seg: look at mask group and soft group
     #
 
     print('\n')

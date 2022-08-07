@@ -116,8 +116,8 @@ def local_nearest_pool(x, inds):
     x = torch.cat((x, torch.zeros_like(x[:1, :])), dim=0)
 
     # Get features for each pooling location
-    outputs = gather(x, inds[:, 0])
-    #outputs = index_select(x, inds[:, 0], dim=0)
+    # outputs = gather(x, inds[:, 0])
+    outputs = index_select(x, inds[:, 0], dim=0)
 
     return outputs
 
@@ -136,8 +136,8 @@ def local_maxpool(x, inds):
     x = torch.cat((x, torch.zeros_like(x[:1, :])), 0)
 
     # Get all features for each pooling location (M, K, C)
-    pool_features = gather(x, inds)
-    # pool_features = index_select(x, inds, dim=0)
+    # pool_features = gather(x, inds)
+    pool_features = index_select(x, inds, dim=0)
 
     # Pool the maximum (M, K)
     max_features, _ = torch.max(pool_features, 1)
@@ -275,8 +275,8 @@ class KPConv(nn.Module):
         s_pts = torch.cat((s_pts, torch.zeros_like(s_pts[:1, :]) + self.inf), 0)   # (N, 3) -> (N+1, 3)
 
         # Get neighbor points [n_points, n_neighbors, dim]
-        neighbors = s_pts[neighb_inds, :]  # (N+1, 3) -> (M, H, 3)
-        # neighbors = index_select(padded_s_points, neighb_inds, dim=0)  # (N+1, 3) -> (M, H, 3)
+        # neighbors = s_pts[neighb_inds, :]  # (N+1, 3) -> (M, H, 3)
+        neighbors = index_select(s_pts, neighb_inds, dim=0)  # (N+1, 3) -> (M, H, 3)
 
         # Center every neighborhood
         neighbors = neighbors - q_pts.unsqueeze(1)  # (M, H, 3)
@@ -315,8 +315,8 @@ class KPConv(nn.Module):
         padded_s_feats = torch.cat((s_feats, torch.zeros_like(s_feats[:1, :])), 0)  # (N, C) -> (N+1, C)
 
         # Get the features of each neighborhood
-        neighbor_feats = gather(padded_s_feats, neighb_inds)  # (N+1, C) -> (M, H, C)
-        # neighbor_feats = index_select(padded_s_feats, neighb_inds, dim=0) 
+        # neighbor_feats = gather(padded_s_feats, neighb_inds)  # (N+1, C) -> (M, H, C)
+        neighbor_feats = index_select(padded_s_feats, neighb_inds, dim=0) 
 
         # Apply distance weights
         weighted_feats = torch.matmul(neighbor_weights, neighbor_feats)  # (M, K, H) x (M, H, C) -> (M, K, C)
@@ -325,12 +325,12 @@ class KPConv(nn.Module):
         # apply convolutional weights
         if self.groups == 1:
 
-            # standard conv
-            weighted_feats = weighted_feats.permute((1, 0, 2))  # (M, K, C) -> (K, M, C)
-            kernel_outputs = torch.matmul(weighted_feats, self.weights)  # (K, M, C) x (K, C, O) -> (K, M, O)
-            output_feats = torch.sum(kernel_outputs, dim=0)  # (K, M, O) -> (M, O)
+            # # standard conv
+            # weighted_feats = weighted_feats.permute((1, 0, 2))  # (M, K, C) -> (K, M, C)
+            # kernel_outputs = torch.matmul(weighted_feats, self.weights)  # (K, M, C) x (K, C, O) -> (K, M, O)
+            # output_feats = torch.sum(kernel_outputs, dim=0)  # (K, M, O) -> (M, O)
 
-            # output_feats = torch.einsum("mkc,kcd->md", weighted_feats, self.weights)  # (M, K, C) x (K, C, O) -> (M, O)
+            output_feats = torch.einsum("mkc,kcd->md", weighted_feats, self.weights)  # (M, K, C) x (K, C, O) -> (M, O)
 
         else:
             # group conv

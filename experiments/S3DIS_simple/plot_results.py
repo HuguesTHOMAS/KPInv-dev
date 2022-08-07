@@ -126,12 +126,12 @@ def experiment_name_2():
 
 def test_input_pipeline():
     """
-    Compare two network with different input pipelines
+    Sort these runs
     """
 
     # Using the dates of the logs, you can easily gather consecutive ones. All logs should be of the same dataset.
     start = 'Log_2022-08-04_22-43-08'
-    end = 'Log_2022-08-04_23-43-08'
+    end = 'Log_2022-08-09_23-43-08'
 
     # Name of the result path
     res_path = 'results'
@@ -140,8 +140,13 @@ def test_input_pipeline():
     logs = np.sort([join(res_path, l) for l in listdir_str(res_path) if start <= l <= end])
 
     # Give names to the logs (for plot legends)
-    logs_names = ['complex_input',
-                  'simple_input',
+    logs_names = ['Full_neigh',
+                  'Less neighb',
+                  'Low neighb',
+                  'Very low neighb',
+                  'Small net',
+                  'Big net',
+                  'Big net / smaller conv',
                   'etc']
 
     # safe check log names

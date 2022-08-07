@@ -114,6 +114,8 @@ class SceneSegDataset(Dataset):
         self.worker_lock = Lock()
         self.reg_sampling_i = torch.from_numpy(np.zeros((1,), dtype=np.int64))
         self.reg_sampling_i.share_memory_()
+        self.reg_votes = torch.from_numpy(np.zeros((1,), dtype=np.int64))
+        self.reg_votes.share_memory_()
 
         self.reg_sample_pts = None
         self.reg_sample_clouds = None
@@ -320,8 +322,17 @@ class SceneSegDataset(Dataset):
         self.reg_sample_clouds.share_memory_()
 
         return
+
+    def get_votes(self):
+        v = 0
+        if self.regular_sampling:
+            with self.worker_lock:
+                reg_sampling_N = float(self.reg_sample_pts.shape[0])
+                v = float(self.reg_votes.item())
+                v += float(self.reg_sampling_i.item()) / reg_sampling_N
+        return v
     
-    def sample_random_sphere(self,  center_noise=0.1):
+    def sample_random_sphere(self, center_noise=0.1):
 
         if self.regular_sampling:
             
@@ -336,6 +347,7 @@ class SceneSegDataset(Dataset):
                 if self.reg_sampling_i >= reg_sampling_N:
                     self.reg_sampling_i -= reg_sampling_N
                     self.new_reg_sampling_pts()
+                    self.reg_votes += 1
 
                 # Get next regular sampling element
                 cloud_ind = int(self.reg_sample_clouds[self.reg_sampling_i])

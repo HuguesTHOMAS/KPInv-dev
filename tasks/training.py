@@ -98,7 +98,6 @@ def training_epoch(epoch, t0, net, optimizer, training_loader, cfg, PID_file, de
             gpu_usage = 100 * used_GPU_MB / tot_GPU_MB
             torch.cuda.reset_peak_memory_stats(device)
 
-
             # # Empty GPU cache (helps avoiding OOM errors)
             # # Loses ~10% of speed but allows batch 2 x bigger.
             # torch.cuda.empty_cache()
