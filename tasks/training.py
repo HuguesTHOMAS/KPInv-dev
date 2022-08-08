@@ -27,6 +27,7 @@ def training_epoch(epoch, t0, net, optimizer, training_loader, cfg, PID_file, de
     step = 0
     last_display = time.time()
     t = [time.time()]
+    finished = True
 
     underline('Training epoch {:d}'.format(epoch))
     message =  '\n                                                                 Timings            '
@@ -39,7 +40,7 @@ def training_epoch(epoch, t0, net, optimizer, training_loader, cfg, PID_file, de
 
         # Check kill signal (running_PID.txt deleted)
         if cfg.exp.saving and not exists(PID_file):
-            continue
+            raise ValueError('A user deleted the running_PID.txt file. Experiment is stopped.')
 
         ##################
         # Processing batch
@@ -142,11 +143,16 @@ def training_epoch(epoch, t0, net, optimizer, training_loader, cfg, PID_file, de
                 
         except RuntimeError as err:
             print("Caught a CUDA OOM Error:\n{0}".format(err))
-            print("Reduce batch limit and restart epoch")
-            training_loader.dataset.b_lim -= 5000
+            print("Reduce batch limit by 10% and restart epoch")
+            training_loader.dataset.b_lim -= int(training_loader.dataset.b_lim * 0.1)
+            for p in net.parameters():
+                if p.grad is not None:
+                    del p.grad  # free some memory
             torch.cuda.empty_cache()
+            finished = False
+            break
 
-    return
+    return finished
 
 
 def training_epoch_debug(epoch, net, optimizer, training_loader, cfg, PID_file, device, blim_inc=1000):
@@ -159,10 +165,10 @@ def training_epoch_debug(epoch, net, optimizer, training_loader, cfg, PID_file, 
     try:
 
         for batch in training_loader:
-
+                
             # Check kill signal (running_PID.txt deleted)
             if cfg.exp.saving and not exists(PID_file):
-                continue
+                raise ValueError('A user deleted the running_PID.txt file. Experiment is stopped.')
 
             ##################
             # Processing batch

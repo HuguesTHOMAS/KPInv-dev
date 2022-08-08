@@ -280,8 +280,7 @@ class KPInv(nn.Module):
 
         repr_str = 'KPInv'
         repr_str += '(K: {:d}'.format(self.kernel_size)
-        repr_str += ', in_C: {:d}'.format(self.in_channels)
-        repr_str += ', out_C: {:d}'.format(self.out_channels)
+        repr_str += ', in_C: {:d}'.format(self.channels)
         repr_str += ', r: {:.2f}'.format(self.radius)
         repr_str += ', sigma: {:d})'.format(self.sigma)
 
@@ -375,8 +374,7 @@ class KPInvBlock(nn.Module):
 
      
     def __repr__(self):
-        return 'KPInvBlock(in_C: {:d}, out_C: {:d}, r: {:.2f}, modes: {:s}+{:s})'.format(self.in_channels,
-                                                                                          self.out_channels,
+        return 'KPInvBlock(in_C: {:d}, r: {:.2f}, modes: {:s}+{:s})'.format(self.channels,
                                                                                           self.radius,
                                                                                           self.influence_mode,
                                                                                           self.aggregation_mode)

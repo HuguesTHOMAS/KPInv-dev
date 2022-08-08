@@ -146,7 +146,15 @@ def train_and_validate(net, training_loader, val_loader, cfg, chkp_path=None, fi
     for epoch in range(cfg.train.max_epoch):
 
         # Perform one epoch of training
-        training_epoch(epoch, t0, net, optimizer, training_loader, cfg, PID_file, device)
+        finished_epoch = False
+        epoch_tries = 0
+        while not finished_epoch:
+            epoch_tries += 1
+            if epoch_tries > 5:
+                raise ValueError('The network is too big for this GPU. Try changing parameters.')
+            finished_epoch = training_epoch(epoch, t0, net, optimizer, training_loader, cfg, PID_file, device)
+            torch.cuda.empty_cache()
+
 
         # Check kill signal (running_PID.txt deleted)
         if cfg.exp.saving and not exists(PID_file):

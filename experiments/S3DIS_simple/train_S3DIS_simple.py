@@ -32,7 +32,8 @@ sys.path.append(parent)
 from utils.config import init_cfg, save_cfg, get_directories
 from utils.printing import frame_lines_1, underline
 
-from models.KPConvNet import KPFCNN
+from models.KPConvNet import KPFCNN as KPConvFCNN
+from models.KPInvNet import KPFCNN as KPInvFCNN
 
 from datasets.scene_seg import SceneSegSampler, SceneSegCollate
 
@@ -59,11 +60,12 @@ def my_config():
     # ------------------
 
     # cfg.model.layer_blocks = (2, 1, 1, 1, 1)    # KPConv paper architecture. Can be changed for a deeper network
-    # cfg.model.layer_blocks = (2, 3, 4, 4, 3)
-    cfg.model.layer_blocks = (3, 4, 8, 8, 4)
-    # cfg.model.layer_blocks = (4, 8, 16, 16, 8)
+    # cfg.model.layer_blocks = (2, 2, 2, 4, 2)
+    # cfg.model.layer_blocks = (2, 3, 4, 8, 4)
+    cfg.model.layer_blocks = (2, 3, 4, 16, 4)
+    # cfg.model.layer_blocks = (2, 3, 8, 32, 4)
 
-    cfg.model.kp_mode = 'kpconv'
+    cfg.model.kp_mode = 'kpinv'
     cfg.model.kernel_size = 15
     cfg.model.kp_radius = 1.9
     cfg.model.kp_sigma = 1.0
@@ -78,6 +80,9 @@ def my_config():
 
     # cfg.model.neighbor_limits = [35, 40, 50, 50, 50]    # Use empty list to let calibration get the values
     cfg.model.neighbor_limits = []
+
+    cfg.model.kpinv_grp_ch = 16         #   Int, number of channels per group in involutions
+    cfg.model.kpinv_reduc = 4           #   Int, reduction ration for kpinv gen mlp
 
 
     # Training parameters
@@ -200,7 +205,11 @@ if __name__ == '__main__':
 
     # Define network model
     t1 = time.time()
-    net = KPFCNN(cfg)
+
+    if cfg.model.kp_mode == 'kpconv':
+        net = KPConvFCNN(cfg)
+    elif cfg.model.kp_mode == 'kpinv':
+        net = KPInvFCNN(cfg)
 
     print()
     print(net)
