@@ -89,6 +89,9 @@ def init_cfg():
     cfg.model.kp_fixed = 'center'       #   Str, Fixed points in the kernel ('none', 'center', 'verticals')
     cfg.model.conv_groups = 1           #   Int, number of groups for group conv
 
+    cfg.model.kpinv_grp_ch = 16         #   Int, number of channels per group in involutions
+    cfg.model.kpinv_reduc = 4           #   Int, reduction ration for kpinv gen mlp
+
     cfg.model.kp_deform_w = 1.0         # Float, multiplier for deformation the fitting/repulsive loss
     cfg.model.kp_deform_grad = 0.1      # Float, multiplier for deformation gradient
     cfg.model.kp_repulse_dist = 1.0     # Float, distance of repulsion for deformed kernel points
