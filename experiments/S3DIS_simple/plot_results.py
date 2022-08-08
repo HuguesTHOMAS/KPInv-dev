@@ -124,6 +124,100 @@ def experiment_name_2():
     return logs, logs_names
 
 
+def exp_neighbors_cropping():
+    """
+    This experiment is a study of the impact of cropping radius neighbors with neighbors limits.
+    It is not clear yet what gives the best score, we will need futher study. 
+    In any case, lower neighbor limits means faster network.
+    """
+
+    # Using the dates of the logs, you can easily gather consecutive ones. All logs should be of the same dataset.
+    start = 'Log_2022-08-04_22-43-08'
+    end = 'Log_2022-08-06_23-43-08'
+
+    # Name of the result path
+    res_path = 'results'
+
+    # Gather logs and sort by date
+    logs = np.sort([join(res_path, l) for l in listdir_str(res_path) if start <= l <= end])
+
+    # Give names to the logs (for plot legends)
+    logs_names = ['Full_neigh',
+                  'Less neighb',
+                  'Low neighb',
+                  'Very low neighb',
+                  'etc']
+
+    # safe check log names
+    logs_names = np.array(logs_names[:len(logs)])
+
+    return logs, logs_names
+
+
+def exp_architecture():
+    """
+    In this experiment we have a first try at deeper architectures.
+    They are clearly better. We will need to go further and see if we can duplicate resnet101 
+    and other very deep architectures.
+    """
+
+    # Using the dates of the logs, you can easily gather consecutive ones. All logs should be of the same dataset.
+    start = 'Log_2022-08-06_22-43-08'
+    end = 'Log_2022-08-07_03-43-08'
+
+    # Name of the result path
+    res_path = 'results'
+
+    # Gather logs and sort by date
+    logs = np.sort([join(res_path, l) for l in listdir_str(res_path) if start <= l <= end])
+
+    # Optionally add a specific log at a specific place in the log list
+    logs = logs.astype('<U50')
+    logs = np.insert(logs, 1, 'results/Log_2022-08-05_14-14-50')
+
+    # Give names to the logs (for plot legends)
+    logs_names = ['Small net',
+                  'Med net',
+                  'Big net',
+                  'etc']
+
+    # safe check log names
+    logs_names = np.array(logs_names[:len(logs)])
+
+    return logs, logs_names
+
+
+def exp_smaller_conv_radius():
+    """
+    Using a smaller convolution radius increases network speed but not in a direct manner.
+    It just means that the corresponding neighbors limits are smaller, which is the reason why the network is faster.
+    But convolution radius is crucial to control the alignment between conv points and subsample input neighbors.
+    We compare our medium conv size (roughly a 5x5 conv) to a smaller conv size more similar to 3x3 convolutions.
+    """
+
+    # Using the dates of the logs, you can easily gather consecutive ones. All logs should be of the same dataset.
+    start = 'Log_2022-08-07_00-27-37'
+    end = 'Log_2022-08-09_23-43-08'
+
+    # Name of the result path
+    res_path = 'results'
+
+    # Gather logs and sort by date
+    logs = np.sort([join(res_path, l) for l in listdir_str(res_path) if start <= l <= end])
+
+    # Give names to the logs (for plot legends)
+    logs_names = ['BigNet - conv=2.5',
+                  'MedNet - conv=1.9',
+                  'BigNet - conv=1.9',
+                  'MegaNet - conv=1.9',
+                  'etc']
+
+    # safe check log names
+    logs_names = np.array(logs_names[:len(logs)])
+
+    return logs, logs_names
+
+
 def test_input_pipeline():
     """
     Sort these runs
@@ -146,7 +240,9 @@ def test_input_pipeline():
                   'Very low neighb',
                   'Small net',
                   'Big net',
+                  'Med net / smaller conv',
                   'Big net / smaller conv',
+                  'Mega net / smaller conv',
                   'etc']
 
     # safe check log names
@@ -169,7 +265,7 @@ if __name__ == '__main__':
     ######################################################
 
     # My logs: choose the logs to show
-    logs, logs_names = test_input_pipeline()
+    logs, logs_names = exp_smaller_conv_radius()
 
     frame_lines_1(["Plot S3DIS experiments"])
 
@@ -189,8 +285,12 @@ if __name__ == '__main__':
             raise ValueError(err_mess.format(cfg.exp.date, cfg.data.name))
             
     # Print differences in a nice table
-    print_cfg_diffs(logs_names, all_cfgs, show_params=['model.init_sub_size',
-                                                       'train.in_radius'])
+    print_cfg_diffs(logs_names,
+                    all_cfgs,
+                    # show_params=['model.init_sub_size',
+                    #              'train.in_radius'],
+                    hide_params=['test.batch_limit',
+                                 'train.batch_limit'])
 
 
     ################

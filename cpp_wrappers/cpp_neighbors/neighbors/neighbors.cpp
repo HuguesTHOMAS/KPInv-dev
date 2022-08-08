@@ -331,3 +331,95 @@ void batch_nanoflann_neighbors(vector<PointXYZ>& queries,
 	return;
 }
 
+
+void batch_nanoflann_neighbors(vector<PointXYZ>& queries,
+                                vector<PointXYZ>& supports,
+                                vector<int>& q_batches,
+                                vector<int>& s_batches,
+                                vector<int>& neighbors_indices,
+                                size_t n_neighbors)
+{
+
+	// Initialize variables
+	// ******************
+
+	// indices
+	int i0 = 0;
+
+	// We already know the memory needed
+	neighbors_indices.resize(queries.size() * n_neighbors);
+	
+	// batch index
+	int b = 0;
+	int sum_qb = 0;
+	int sum_sb = 0;
+
+	// Nanoflann related variables
+	// ***************************
+
+	// CLoud variable
+	PointCloud current_cloud;
+
+	// Tree parameters
+	nanoflann::KDTreeSingleIndexAdaptorParams tree_params(10 /* max leaf */);
+
+	// KDTree type definition
+    typedef nanoflann::KDTreeSingleIndexAdaptor< nanoflann::L2_Simple_Adaptor<float, PointCloud > ,
+                                                        PointCloud,
+                                                        3 > my_kd_tree_t;
+
+    // Pointer to trees
+    my_kd_tree_t* index;
+
+    // Build KDTree for the first batch element
+    current_cloud.pts = vector<PointXYZ>(supports.begin() + sum_sb, supports.begin() + sum_sb + s_batches[b]);
+    index = new my_kd_tree_t(3, current_cloud, tree_params);
+    index->buildIndex();
+
+
+	// Search neigbors indices
+	// ***********************
+
+	for (auto& p0 : queries)
+	{
+
+	    // Check if we changed batch
+	    if (i0 == sum_qb + q_batches[b])
+	    {
+	        sum_qb += q_batches[b];
+	        sum_sb += s_batches[b];
+	        b++;
+
+	        // Change the points
+	        current_cloud.pts.clear();
+            current_cloud.pts = vector<PointXYZ>(supports.begin() + sum_sb, supports.begin() + sum_sb + s_batches[b]);
+
+	        // Build KDTree of the current element of the batch
+            delete index;
+            index = new my_kd_tree_t(3, current_cloud, tree_params);
+            index->buildIndex();
+	    }
+
+	    // Find neighbors
+	    float query_pt[3] = { p0.x, p0.y, p0.z};
+        std::vector<float> out_dist_sqr(n_neighbors);
+        std::vector<size_t> ret_index(n_neighbors);
+		size_t nMatches = index->knnSearch(query_pt, n_neighbors, &ret_index[0], &out_dist_sqr[0]);
+
+		// Directly fill the final neighbor matrix
+		for (int j = 0; j < nMatches; j++)
+			neighbors_indices[i0 * n_neighbors + j] = (int)ret_index[j] + sum_sb;
+
+		// Also fill the shadow matrix
+		for (int j = nMatches; j < n_neighbors; j++)
+			neighbors_indices[i0 * n_neighbors + j] = (int)supports.size();
+
+        // Increment query idx
+		i0++;
+	}
+
+	delete index;
+
+	return;
+}
+

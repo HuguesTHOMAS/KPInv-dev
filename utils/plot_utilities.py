@@ -208,7 +208,7 @@ def load_snap_clouds(path, cfg, only_last=False):
     return cloud_epochs, IoU_from_confusions(Confs)
 
     
-def print_cfg_diffs(logs_names, log_cfgs, show_params=[]):
+def print_cfg_diffs(logs_names, log_cfgs, show_params=[], hide_params=[]):
     """
     Print the differences in parameters between logs. Use show_params to force showing 
     some parameters even if no differences are seen.
@@ -231,7 +231,7 @@ def print_cfg_diffs(logs_names, log_cfgs, show_params=[]):
         k1, k2 = k_str.split('.')
 
         # skip some parameters that are always different
-        if k1 == 'exp':  # or k_str in ['test.batch_limit',  'train.batch_limit']:
+        if k1 == 'exp' or k_str in hide_params:
             continue
 
         # Get value for each config

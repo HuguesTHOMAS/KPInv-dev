@@ -59,8 +59,9 @@ def my_config():
     # ------------------
 
     # cfg.model.layer_blocks = (2, 1, 1, 1, 1)    # KPConv paper architecture. Can be changed for a deeper network
-    cfg.model.layer_blocks = (2, 3, 4, 4, 3)
-    # cfg.model.layer_blocks = (3, 4, 8, 8, 4)
+    # cfg.model.layer_blocks = (2, 3, 4, 4, 3)
+    cfg.model.layer_blocks = (3, 4, 8, 8, 4)
+    # cfg.model.layer_blocks = (4, 8, 16, 16, 8)
 
     cfg.model.kp_mode = 'kpconv'
     cfg.model.kernel_size = 15
@@ -82,7 +83,7 @@ def my_config():
     # Training parameters
     # -------------------
 
-    cfg.train.num_workers = 16
+    cfg.train.num_workers = 0
 
     cfg.train.in_radius = 2.0    # Adapt this with model.init_sub_size. Try to keep a ratio of ~50
     cfg.train.batch_size = 10    # Target batch size. If you don't want calibration, you can directly set train.batch_limit
@@ -227,6 +228,7 @@ if __name__ == '__main__':
     # TODO:
     #
     #       0. Go implement KPInv
+    #           > knn nanoflann for deformable version
     #
     #       1. Go implement other datasets (NPM3D, Semantic3D, Scannetv2)
     #          Also other task: ModelNet40, ShapeNetPart, SemanticKitti
@@ -251,6 +253,14 @@ if __name__ == '__main__':
     #               https://efficientdl.com/faster-deep-learning-in-pytorch-a-guide/#2-use-multiple-workers-and-pinned-memory-in-dataloader
     #               https://arxiv.org/pdf/2206.04670v1.pdf
     #               https://arxiv.org/pdf/2205.05740v2.pdf
+    #
+    #           > State of the art agmentation technique:
+    #               https://arxiv.org/pdf/2110.02210.pdf
+    #
+    #           > dont hesitate to train ensemble of models to score on Scannetv2
+    #
+    #           > Other state of the art technique to incorporate in code: border learning
+    #               https://openaccess.thecvf.com/content/CVPR2022/papers/Tang_Contrastive_Boundary_Learning_for_Point_Cloud_Segmentation_CVPR_2022_paper.pdf
     #
     #
     #       5. Explore

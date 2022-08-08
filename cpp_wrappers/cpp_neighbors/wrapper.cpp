@@ -258,11 +258,11 @@ static PyObject* batch_knn_neighbors(PyObject* self, PyObject* args, PyObject* k
 	PyObject* s_batches_obj = NULL;
 
 	// Keywords containers
-	static char* kwlist[] = { "queries", "supports", "q_batches", "s_batches", "radius", NULL };
-	float radius = 0.1;
+	static char* kwlist[] = { "queries", "supports", "q_batches", "s_batches", "n_neighbors", NULL };
+	int n_neighbors = 10;
 
 	// Parse the input  
-	if (!PyArg_ParseTupleAndKeywords(args, keywds, "OOOO|$f", kwlist, &queries_obj, &supports_obj, &q_batches_obj, &s_batches_obj, &radius))
+	if (!PyArg_ParseTupleAndKeywords(args, keywds, "OOOO|$i", kwlist, &queries_obj, &supports_obj, &q_batches_obj, &s_batches_obj, &n_neighbors))
 	{
 		PyErr_SetString(PyExc_RuntimeError, "Error parsing arguments");
 		return NULL;
@@ -362,7 +362,7 @@ static PyObject* batch_knn_neighbors(PyObject* self, PyObject* args, PyObject* k
 
 	// Number of points
 	int Nq = (int)PyArray_DIM(queries_array, 0);
-	int Ns= (int)PyArray_DIM(supports_array, 0);
+	int Ns = (int)PyArray_DIM(supports_array, 0);
 
 	// Number of batches
 	int Nb = (int)PyArray_DIM(q_batches_array, 0);
@@ -385,32 +385,29 @@ static PyObject* batch_knn_neighbors(PyObject* self, PyObject* args, PyObject* k
 
 	// Compute results
 	//batch_ordered_neighbors(queries, supports, q_batches, s_batches, neighbors_indices, radius);
-	batch_nanoflann_neighbors(queries, supports, q_batches, s_batches, neighbors_indices, radius);
+	batch_nanoflann_neighbors(queries, supports, q_batches, s_batches, neighbors_indices, (size_t)n_neighbors);
 
 	// Check result
 	if (neighbors_indices.size() < 1)
 	{
-		PyErr_SetString(PyExc_RuntimeError, "Error");
+		PyErr_SetString(PyExc_RuntimeError, "Error: no neighbors found");
 		return NULL;
 	}
 
 	// Manage outputs
 	// **************
 
-	// Maximal number of neighbors
-	int max_neighbors = neighbors_indices.size() / Nq;
-
 	// Dimension of output containers
 	npy_intp* neighbors_dims = new npy_intp[2];
 	neighbors_dims[0] = Nq;
-	neighbors_dims[1] = max_neighbors;
+	neighbors_dims[1] = n_neighbors;
 
 	// Create output array
 	PyObject* res_obj = PyArray_SimpleNew(2, neighbors_dims, NPY_INT);
 	PyObject* ret = NULL;
 
 	// Fill output array with values
-	size_t size_in_bytes = Nq * max_neighbors * sizeof(int);
+	size_t size_in_bytes = Nq * n_neighbors * sizeof(int);
 	memcpy(PyArray_DATA(res_obj), neighbors_indices.data(), size_in_bytes);
 
 	// Merge results

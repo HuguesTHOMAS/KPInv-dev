@@ -8,7 +8,7 @@ from utils.batch_conversion import batch_to_pack, pack_to_batch, pack_to_list, l
 from utils.gpu_subsampling import subsample_pack_batch
 
 from utils.gpu_neigbors import radius_search_pack_mode, keops_radius_count
-from utils.cpp_funcs import batch_radius_neighbors
+from utils.cpp_funcs import batch_radius_neighbors, batch_knn_neighbors
 
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -79,7 +79,8 @@ def fill_pyramid(pyramid: EasyDict,
     if 'cuda' in pyramid.points[0].device.type:
         neighb_func = radius_search_pack_mode
     else:
-        neighb_func = batch_radius_neighbors
+        # neighb_func = batch_radius_neighbors
+        neighb_func = batch_knn_neighbors
 
     # Subsample all point clouds on GPU
     for i in range(num_layers):

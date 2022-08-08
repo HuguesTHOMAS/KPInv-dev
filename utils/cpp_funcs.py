@@ -204,15 +204,24 @@ def batch_knn_neighbors(queries, supports, q_batches, s_batches, radius, neighbo
     :return: neighbors indices
     """
 
-    # TODO: IMPLEMENT THIS AND COMAPRE WITH RADIUS
+    from_torch = False
+    if isinstance(queries, torch.Tensor):
+        queries = queries.numpy()
+        supports = supports.numpy()
+        from_torch = True
 
-    a = 1/0
+    if isinstance(q_batches, torch.Tensor):
+        q_batches = q_batches.numpy().astype(np.int32)
+        s_batches = s_batches.numpy().astype(np.int32)
 
     # Get radius neighbors
-    neighbors = cpp_neighbors.batch_knn_neighbors(queries, supports, q_batches, s_batches, radius=radius)
-
-    # Apply limit
-    neighbors = neighbors[:, :neighbor_limit]
+    neighbors = cpp_neighbors.batch_knn_neighbors(queries, supports, q_batches, s_batches, n_neighbors=neighbor_limit)
+    
+    # Reconvert to tensor if needed
+    if from_torch:
+        neighbors = torch.from_numpy(neighbors).to(torch.long)
 
     return neighbors
+
+
 
