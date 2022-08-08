@@ -4,8 +4,9 @@ import torch
 import torch.nn as nn
 import numpy as np
 
-from models.blocks import KPConv, NearestUpsampleBlock, UnaryBlock, KPConvBlock, KPResidualBlock, \
-    local_nearest_pool
+from models.generic_blocks import NearestUpsampleBlock, UnaryBlock, local_nearest_pool
+from models.kpinv_blocks import KPInvResidualBlock
+from models.kpconv_blocks import KPConvBlock
 
 from utils.torch_pyramid import fill_pyramid
 
@@ -338,25 +339,28 @@ class KPFCNN(nn.Module):
                            norm_type=cfg.model.norm,
                            bn_momentum=cfg.model.bn_momentum)
 
+
     def get_residual_block(self, in_C, out_C, radius, sigma, cfg, strided=False):
 
-        return KPResidualBlock(in_C,
-                               out_C,
-                               cfg.model.kernel_size,
-                               radius,
-                               sigma,
-                               influence_mode=cfg.model.kp_influence,
-                               aggregation_mode=cfg.model.kp_aggregation,
-                               dimension=cfg.data.dim,
-                               groups=cfg.model.conv_groups,
-                               strided=strided,
-                               norm_type=cfg.model.norm,
-                               bn_momentum=cfg.model.bn_momentum)
+        return KPInvResidualBlock(in_C,
+                                  out_C,
+                                  cfg.model.kernel_size,
+                                  radius,
+                                  sigma,
+                                  channels_per_group=cfg.model.kpinv_group_channels,
+                                  reduction_ratio=cfg.model.kpinv_reduction,
+                                  influence_mode=cfg.model.kp_influence,
+                                  aggregation_mode=cfg.model.kp_aggregation,
+                                  dimension=cfg.data.dim,
+                                  groups=cfg.model.conv_groups,
+                                  strided=strided,
+                                  norm_type=cfg.model.norm,
+                                  bn_momentum=cfg.model.bn_momentum)
 
     def forward(self, batch, verbose=False):
 
         #  ------ Init ------
-        
+
         if verbose:
             torch.cuda.synchronize(batch.device())
             t = [time.time()]
@@ -493,6 +497,70 @@ class KPFCNN(nn.Module):
         correct = (predicted == target).sum().item()
 
         return correct / total
+
+
+class KPResNet(nn.Module):
+
+    def __init__(self, cfg):
+        """
+        Class defining KPResNet similar to resnet-xxx architectures.
+
+        stem (first two layers):
+        ************************
+        
+                Resnet                    LR-ResNet                   Involution
+        7x7conv - 64 - stride2           1x1mlp - 64            3x3conv - 32 - stride2
+        3x3maxp - 64 - stride2      7x7conv - 64 - stride2            7x7inv - 32 
+                                       3x3maxp - stride2              3x3conv - 64
+                                                                3x3maxp - 64 - stride2
+
+        following:
+        **********
+
+        D = 64, 128, 256, 512
+
+            Resnet                LR-ResNet              Involution
+         1x1 mlp - D             1x1 mlp - D             1x1 mlp - D
+         3x3 conv - D            7x7 conv - D            7x7 inv - D
+        1x1 mlp - D*4           1x1 mlp - D*4           1x1 mlp - D*4
+
+        Depths:
+        *******
+
+        Resnet-26:  (Bottleneck, (1,  2,  4,  1)),
+        Resnet-38:  (Bottleneck, (2,  3,  5,  2)),
+        Resnet-50:  (Bottleneck, (3,  4,  6,  3)),
+        Resnet-101: (Bottleneck, (3,  4, 23,  3)),
+        Resnet-152: (Bottleneck, (3,  8, 36,  3))
+
+
+
+
+        Args:
+            cfg (EasyDict): configuration dictionary
+        """
+        super(KPFCNN, self).__init__()
+
+        ############
+        # Parameters
+        ############
+
+        # Parameters
+        self.subsample_size = cfg.model.init_sub_size
+        self.sub_mode = cfg.model.sub_mode
+        self.kp_radius = cfg.model.kp_radius
+        self.kp_sigma = cfg.model.kp_sigma
+        self.neighbor_limits = cfg.model.neighbor_limits
+        self.first_radius = self.subsample_size * self.kp_radius
+        self.first_sigma = self.subsample_size * self.kp_sigma
+        self.layer_blocks = cfg.model.layer_blocks
+        self.num_layers = len(self.layer_blocks)
+
+        return
+
+    def forward(self, batch, verbose=False):
+
+        return
 
 
 

@@ -385,7 +385,7 @@ static PyObject* batch_knn_neighbors(PyObject* self, PyObject* args, PyObject* k
 
 	// Compute results
 	//batch_ordered_neighbors(queries, supports, q_batches, s_batches, neighbors_indices, radius);
-	batch_nanoflann_neighbors(queries, supports, q_batches, s_batches, neighbors_indices, (size_t)n_neighbors);
+	batch_nanoflann_knns(queries, supports, q_batches, s_batches, neighbors_indices, (size_t)n_neighbors);
 
 	// Check result
 	if (neighbors_indices.size() < 1)

@@ -332,7 +332,7 @@ void batch_nanoflann_neighbors(vector<PointXYZ>& queries,
 }
 
 
-void batch_nanoflann_neighbors(vector<PointXYZ>& queries,
+void batch_nanoflann_knns(vector<PointXYZ>& queries,
                                 vector<PointXYZ>& supports,
                                 vector<int>& q_batches,
                                 vector<int>& s_batches,
@@ -404,6 +404,7 @@ void batch_nanoflann_neighbors(vector<PointXYZ>& queries,
 	    float query_pt[3] = { p0.x, p0.y, p0.z};
         std::vector<float> out_dist_sqr(n_neighbors);
         std::vector<size_t> ret_index(n_neighbors);
+		
 		size_t nMatches = index->knnSearch(query_pt, n_neighbors, &ret_index[0], &out_dist_sqr[0]);
 
 		// Directly fill the final neighbor matrix

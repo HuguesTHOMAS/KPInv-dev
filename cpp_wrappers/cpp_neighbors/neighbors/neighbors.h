@@ -27,3 +27,10 @@ void batch_nanoflann_neighbors(vector<PointXYZ>& queries,
                                 vector<int>& s_batches,
                                 vector<int>& neighbors_indices,
                                 float radius);
+                                
+void batch_nanoflann_knns(vector<PointXYZ>& queries,
+                                vector<PointXYZ>& supports,
+                                vector<int>& q_batches,
+                                vector<int>& s_batches,
+                                vector<int>& neighbors_indices,
+                                size_t n_neighbors);

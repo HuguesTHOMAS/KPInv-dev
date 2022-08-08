@@ -33,7 +33,7 @@ sys.path.append(parent)
 from utils.config import init_cfg, save_cfg, get_directories
 from utils.printing import frame_lines_1, underline
 
-from models.architectures import KPFCNN
+from models.KPConvNet import KPFCNN
 
 from datasets.scene_seg import SceneSegSampler, SceneSegCollate
 

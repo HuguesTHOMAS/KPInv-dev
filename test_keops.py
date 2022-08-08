@@ -19,6 +19,8 @@ from utils.cpp_funcs import grid_subsampling
 from utils.batch_conversion import list_to_pack
 from utils.gpu_subsampling import grid_subsample, subsample_pack_batch, init_gpu
 from utils.gpu_neigbors import radius_search_pack_mode, radius_search_list_mode
+from utils.cpp_funcs import batch_radius_neighbors, batch_knn_neighbors
+from utils.config import bcolors
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -333,15 +335,15 @@ def test_neighbors():
     # Get an input sphere
     print('\nSpheres in batches')
 
-    in_R = 2.0
-    batch_num = 5
+    in_R = 1.0
+    batch_num = 4
 
     torch.cuda.synchronize()
     t1 = time.time()
     all_inputs_points = []
     all_gpu_pts = []
     all_N = []
-    for i in range(0, sub_points1.shape[0] - 1, 1000):
+    for i in range(0, sub_points1.shape[0] - 1, 2000):
 
         center_point = sub_points1[i:i + 1, :]
         input_inds = search_tree.query_radius(center_point, r=in_R)[0]
@@ -406,11 +408,37 @@ def test_neighbors():
     ################
 
     conv_r = dl0 * 2.5
-    neighbor_limit = 30
+    neighbor_limit = 15
 
     
     print()
     print()
+
+    print('\nCPU cpp_radius')
+    torch.cuda.synchronize()
+    t1 = time.time()
+    all_neighborscpp1 = []
+    for i, cpu_batch in enumerate(all_cpu_batches):
+        pack_tensor, lengths = list_to_pack(cpu_batch)
+        conv_i = batch_radius_neighbors(pack_tensor, pack_tensor, lengths, lengths, conv_r, neighbor_limit)
+        all_neighborscpp1.append(conv_i)
+    torch.cuda.synchronize()
+    t2 = time.time()
+    print('Done in {:.3f}s'.format(t2 - t1))
+    print('{:.3f}ms per batch'.format(1000 * (t2 - t1) / N))
+
+    print('\nCPU cpp_knn')
+    torch.cuda.synchronize()
+    t1 = time.time()
+    all_neighborscpp2 = []
+    for i, cpu_batch in enumerate(all_cpu_batches):
+        pack_tensor, lengths = list_to_pack(cpu_batch)
+        conv_i = batch_knn_neighbors(pack_tensor, pack_tensor, lengths, lengths, conv_r, neighbor_limit)
+        all_neighborscpp2.append(conv_i)
+    torch.cuda.synchronize()
+    t2 = time.time()
+    print('Done in {:.3f}s'.format(t2 - t1))
+    print('{:.3f}ms per batch'.format(1000 * (t2 - t1) / N))
 
 
     print('\nGPU Pytorch neighbors')
@@ -419,7 +447,7 @@ def test_neighbors():
     all_neighbors1 = []
     for i, gpu_batch in enumerate(all_gpu_batches):
         pack_tensor, lengths = list_to_pack(gpu_batch)
-        conv_i = radius_search_list_mode(pack_tensor, pack_tensor, lengths, lengths, conv_r, neighbor_limit, shadow=True)
+        conv_i = radius_search_list_mode(pack_tensor, pack_tensor, lengths, lengths, conv_r, neighbor_limit, shadow=False)
         all_neighbors1.append(conv_i)
     torch.cuda.synchronize()
     t2 = time.time()
@@ -432,28 +460,19 @@ def test_neighbors():
     all_neighbors2 = []
     for i, gpu_batch in enumerate(all_gpu_batches):
         pack_tensor, lengths = list_to_pack(gpu_batch)
-        conv_i = radius_search_pack_mode(pack_tensor, pack_tensor, lengths, lengths, conv_r, neighbor_limit)
+        conv_i = radius_search_pack_mode(pack_tensor, pack_tensor, lengths, lengths, conv_r, neighbor_limit, shadow=False)
         all_neighbors2.append(conv_i)
     torch.cuda.synchronize()
     t2 = time.time()
     print('Done in {:.3f}s'.format(t2 - t1))
     print('{:.3f}ms per batch'.format(1000 * (t2 - t1) / N))
     
-    print('\nCPU Pytorch neighbors 2')
-    torch.cuda.synchronize()
-    t1 = time.time()
-    all_neighbors3 = []
-    for i, gpu_batch in enumerate(all_cpu_batches):
-        pack_tensor, lengths = list_to_pack(gpu_batch)
-        conv_i = radius_search_pack_mode(pack_tensor, pack_tensor, lengths, lengths, conv_r, neighbor_limit)
-        all_neighbors3.append(conv_i)
-    torch.cuda.synchronize()
-    t2 = time.time()
-    print('Done in {:.3f}s'.format(t2 - t1))
-    print('{:.3f}ms per batch'.format(1000 * (t2 - t1) / N))
+    print('\nPytorch neighbors cannot work on CPU as it uses keops')
 
     print()
     print()
+
+    print('Verify that the two torch neighbors implem returns the same result')
 
     all_good = []
     for i, neighb2 in enumerate(all_neighbors2):
@@ -468,9 +487,70 @@ def test_neighbors():
     print()
     print()
 
+    print('Verify that the cpp knn returns the same as torch knn (ordered neighbors)')
+
+    # Verify that cpp neighbors are ordered as well
+    for i, cpu_batch in enumerate(all_cpu_batches):
+        s = ''
+        for test1 in [all_neighborscpp1[i], all_neighborscpp2[i], all_neighbors1[i], all_neighbors2[i]]:
+            for test2 in [all_neighborscpp1[i], all_neighborscpp2[i], all_neighbors1[i], all_neighbors2[i]]:
+                test_bool = torch.all(test1.cpu() == test2.cpu()).item()
+                if test_bool:
+                    s += ' {:}{:s}{:}'.format(bcolors.OKBLUE, u'\u2713', bcolors.ENDC)
+                else:
+                    s += ' {:}{:s}{:}'.format(bcolors.FAIL, u'\u2718', bcolors.ENDC)
+            s += '\n'
+        print('-----------------')
+        print(s)
+
+
+
+        if not (torch.all(all_neighborscpp2[i].cpu() == all_neighbors1[i].cpu()).item()):
+
+            # get lines that are differents
+            cpp_neighs = all_neighborscpp2[i].cpu().numpy()
+            torch_neighs = all_neighbors1[i].cpu().numpy()
+            mask = cpp_neighs == torch_neighs  # (N, K)
+
+            bad_lines = np.where(np.logical_not(np.all(mask, axis=1)))[0]
+
+            for l in bad_lines:
+
+                s = 'L={:6d} : '.format(l)
+                for k in range(neighbor_limit):
+                    if mask[l, k]:
+                        s += ' {:6d}'.format(cpp_neighs[l, k])
+                    else:
+                        s += ' {:}{:6d}{:}'.format(bcolors.FAIL, cpp_neighs[l, k], bcolors.ENDC)
+                s += '\n'
+                s += '           '
+                
+                for k in range(neighbor_limit):
+                    if mask[l, k]:
+                        s += '       '
+                    else:
+                        s += ' {:}{:6d}{:}'.format(bcolors.OKBLUE, torch_neighs[l, k], bcolors.ENDC)
+                s += '\n'
+                
+                print(s)
+
+            break
+
+
+    print('-----------------')
+
+    print()
+    print()
+
+    print('There are only some intervertion due to float approximation. SO OK!')
+
+    print()
+    print()
+    
+
     all_n_valid = []
     all_trucated = []
-    for i, neighb1 in enumerate(all_neighbors1):
+    for i, neighb1 in enumerate(all_neighborscpp1):
 
         shadow_mask = neighb1 == int(neighb1.shape[0])
         n_shadows = torch.sum(shadow_mask.type(torch.long), dim=1)

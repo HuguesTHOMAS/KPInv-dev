@@ -32,7 +32,7 @@ sys.path.append(parent)
 from utils.config import init_cfg, save_cfg, get_directories
 from utils.printing import frame_lines_1, underline
 
-from models.architectures import KPFCNN
+from models.KPConvNet import KPFCNN
 
 from datasets.scene_seg import SceneSegSampler, SceneSegCollate
 
@@ -83,7 +83,7 @@ def my_config():
     # Training parameters
     # -------------------
 
-    cfg.train.num_workers = 0
+    cfg.train.num_workers = 16
 
     cfg.train.in_radius = 2.0    # Adapt this with model.init_sub_size. Try to keep a ratio of ~50
     cfg.train.batch_size = 10    # Target batch size. If you don't want calibration, you can directly set train.batch_limit
@@ -227,9 +227,6 @@ if __name__ == '__main__':
 
     # TODO:
     #
-    #       0. Go implement KPInv
-    #           > knn nanoflann for deformable version
-    #
     #       1. Go implement other datasets (NPM3D, Semantic3D, Scannetv2)
     #          Also other task: ModelNet40, ShapeNetPart, SemanticKitti
     #          Add code for completely different tasks??? Invariance??
@@ -272,6 +269,8 @@ if __name__ == '__main__':
     #           > Use multidataset, multihead segmentation and test deeper and deeper networks
     #
     #           > New task instance seg: look at mask group and soft group
+    #
+    #           > Study stronger downsampling at first layer like stems in RedNet101
     #
 
     print('\n')
