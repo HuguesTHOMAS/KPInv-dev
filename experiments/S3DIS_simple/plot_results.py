@@ -197,7 +197,7 @@ def exp_smaller_conv_radius():
 
     # Using the dates of the logs, you can easily gather consecutive ones. All logs should be of the same dataset.
     start = 'Log_2022-08-07_00-27-37'
-    end = 'Log_2022-08-09_23-43-08'
+    end = 'Log_2022-08-08_17-53-42'
 
     # Name of the result path
     res_path = 'results'
@@ -209,7 +209,34 @@ def exp_smaller_conv_radius():
     logs_names = ['BigNet - conv=2.5',
                   'MedNet - conv=1.9',
                   'BigNet - conv=1.9',
-                  'MegaNet - conv=1.9',
+                  'etc']
+
+    # safe check log names
+    logs_names = np.array(logs_names[:len(logs)])
+
+    return logs, logs_names
+
+def exp_kpinv():
+    """
+    Using a smaller convolution radius increases network speed but not in a direct manner.
+    It just means that the corresponding neighbors limits are smaller, which is the reason why the network is faster.
+    But convolution radius is crucial to control the alignment between conv points and subsample input neighbors.
+    We compare our medium conv size (roughly a 5x5 conv) to a smaller conv size more similar to 3x3 convolutions.
+    """
+
+    # Using the dates of the logs, you can easily gather consecutive ones. All logs should be of the same dataset.
+    start = 'Log_2022-08-08_17-53-43'
+    end = 'Log_2022-08-09_23-43-08'
+
+    # Name of the result path
+    res_path = 'results'
+
+    # Gather logs and sort by date
+    logs = np.sort([join(res_path, l) for l in listdir_str(res_path) if start <= l <= end])
+
+    # Give names to the logs (for plot legends)
+    logs_names = ['kpconv',
+                  'kpinv',
                   'etc']
 
     # safe check log names
@@ -265,7 +292,7 @@ if __name__ == '__main__':
     ######################################################
 
     # My logs: choose the logs to show
-    logs, logs_names = exp_smaller_conv_radius()
+    logs, logs_names = exp_kpinv()
 
     frame_lines_1(["Plot S3DIS experiments"])
 
