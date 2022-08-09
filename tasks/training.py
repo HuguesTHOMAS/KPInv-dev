@@ -24,6 +24,7 @@ from utils.printing import underline
 
 def training_epoch(epoch, t0, net, optimizer, training_loader, cfg, PID_file, device):
 
+    mini_step = 0
     step = 0
     last_display = time.time()
     t = [time.time()]
@@ -52,7 +53,7 @@ def training_epoch(epoch, t0, net, optimizer, training_loader, cfg, PID_file, de
 
 
             # New time at first accumulation step
-            if step % cfg.train.accum_batch == 0:
+            if mini_step % cfg.train.accum_batch == 0:
                 t = t[-1:]
 
 
@@ -90,7 +91,7 @@ def training_epoch(epoch, t0, net, optimizer, training_loader, cfg, PID_file, de
             t += [time.time()]
 
             # Only perform an optimization step when we have accumulated enough gradients
-            if (step + 1) % cfg.train.accum_batch == 0:
+            if (mini_step + 1) % cfg.train.accum_batch == 0:
 
                 # Clip gradient
                 if cfg.train.grad_clip > 0:
@@ -158,6 +159,8 @@ def training_epoch(epoch, t0, net, optimizer, training_loader, cfg, PID_file, de
 
 
                 step += 1
+
+            mini_step += 1
                 
         except RuntimeError as err:
             print("Caught a CUDA OOM Error:\n{0}".format(err))
