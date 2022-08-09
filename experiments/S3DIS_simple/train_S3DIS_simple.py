@@ -97,7 +97,7 @@ def my_config():
     cfg.train.num_workers = 16
 
     cfg.train.in_radius = 1.8       # Adapt this with model.init_sub_size. Try to keep a ratio of ~50
-    cfg.train.batch_size = 10       # Target batch size. If you don't want calibration, you can directly set train.batch_limit
+    cfg.train.batch_size = 8        # Target batch size. If you don't want calibration, you can directly set train.batch_limit
     cfg.train.accum_batch = 5       # Accumulate batches for an effective batch size of batch_size * accum_batch.
 
     cfg.train.max_epoch = 200
