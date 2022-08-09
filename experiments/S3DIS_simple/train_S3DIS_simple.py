@@ -71,12 +71,14 @@ def my_config():
     # cfg.model.layer_blocks = (4,  6,  8,  8,  6)
     cfg.model.layer_blocks = (4,  6,  8, 12,  6)
 
-    cfg.model.kp_mode = 'kpinv'
+    cfg.model.kp_mode = 'kpconv'
     cfg.model.kernel_size = 15
     cfg.model.kp_radius = 2.9
     cfg.model.kp_sigma = 1.7
-    cfg.model.kp_influence = 'linear'
-    cfg.model.kp_aggregation = 'sum'
+    # cfg.model.kp_influence = 'linear'
+    # cfg.model.kp_aggregation = 'sum'
+    cfg.model.kp_influence = 'constant'
+    cfg.model.kp_aggregation = 'nearest'
 
     cfg.data.sub_size = 0.02          # -1.0 so that dataset point clouds are not initially subsampled
     cfg.model.init_sub_size = 0.04    # Adapt this with train.in_radius. Try to keep a ratio of ~50
@@ -242,6 +244,11 @@ if __name__ == '__main__':
 
     # TODO:
     #
+    #       0. KPInv does not work why??? Do we need specific learning rate for it?
+    #           > Investigate why kpInv does not work
+    #           > In plot consider the accumulation of batch. Search other places where we need to take care of that
+    #           > Validation save only yhe susampled cloud, do reproj when testing the score
+    #
     #       1. Go implement other datasets (NPM3D, Semantic3D, Scannetv2)
     #          Also other task: ModelNet40, ShapeNetPart, SemanticKitti
     #          Add code for completely different tasks??? Invariance??
@@ -287,6 +294,9 @@ if __name__ == '__main__':
     #           > New task instance seg: look at mask group and soft group
     #
     #           > Study stronger downsampling at first layer like stems in RedNet101
+    #
+    #           > Study the batch size accumulation
+    #
     #
 
     print('\n')

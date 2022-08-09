@@ -867,7 +867,7 @@ class SceneSegSampler(Sampler):
 
         # Number of step per epoch
         if dataset.set == 'training':
-            self.N = dataset.cfg.train.steps_per_epoch
+            self.N = dataset.cfg.train.steps_per_epoch * dataset.cfg.train.accum_batch
         else:
             self.N = dataset.cfg.test.steps_per_epoch
         return

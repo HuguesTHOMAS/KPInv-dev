@@ -228,7 +228,7 @@ def exp_kpinv():
 
     # Using the dates of the logs, you can easily gather consecutive ones. All logs should be of the same dataset.
     start = 'Log_2022-08-08_17-53-43'
-    end = 'Log_2022-08-09_23-43-08'
+    end = 'Log_2022-08-19_23-43-08'
 
     # Name of the result path
     res_path = 'results'
@@ -237,7 +237,8 @@ def exp_kpinv():
     logs = np.sort([join(res_path, l) for l in listdir_str(res_path) if start <= l <= end])
 
     # Give names to the logs (for plot legends)
-    logs_names = ['kpconv',
+    logs_names = ['kpconv-sum-lin',
+                  'kpconv-nearest',
                   'kpinv',
                   'etc']
 
