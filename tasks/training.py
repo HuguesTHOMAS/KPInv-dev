@@ -157,7 +157,7 @@ def training_epoch(epoch, t0, net, optimizer, training_loader, cfg, PID_file, de
                                                     t[-1] - t0))
 
 
-            step += 1
+                step += 1
                 
         except RuntimeError as err:
             print("Caught a CUDA OOM Error:\n{0}".format(err))
