@@ -71,7 +71,7 @@ def my_config():
     # cfg.model.layer_blocks = (4,  6,  8,  8,  6)
     cfg.model.layer_blocks = (4,  6,  8, 12,  6)
 
-    cfg.model.kp_mode = 'kpconv'
+    cfg.model.kp_mode = 'kpinv'
     cfg.model.kernel_size = 15
     cfg.model.kp_radius = 2.9
     cfg.model.kp_sigma = 1.7
