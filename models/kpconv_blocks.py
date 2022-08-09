@@ -133,45 +133,49 @@ class KPConv(nn.Module):
             neighbor_weights (Tensor): the influence weight of each kernel point on each neighbors point (M, K, H).
         """
 
-        # Add a fake point in the last row for shadow neighbors
-        s_pts = torch.cat((s_pts, torch.zeros_like(s_pts[:1, :]) + self.inf), 0)   # (N, 3) -> (N+1, 3)
+        # TODO share neighbor_weights between convolutions at same layer (need to share kernel point location as well)
 
-        # Get neighbor points [n_points, n_neighbors, dim]
-        # neighbors = s_pts[neighb_inds, :]  # (N+1, 3) -> (M, H, 3)
-        neighbors = index_select(s_pts, neighb_inds, dim=0)  # (N+1, 3) -> (M, H, 3)
+        with torch.no_grad():
 
-        # Center every neighborhood
-        neighbors = neighbors - q_pts.unsqueeze(1)  # (M, H, 3)
-     
-        # Get Kernel point distances to neigbors
-        neighbors = neighbors.unsqueeze(2)  # (M, H, 3) -> (M, H, 1, 3)
-        differences = neighbors - self.kernel_points  # (M, H, 1, 3) x (K, 3) -> (M, H, K, 3)
-        sq_distances = torch.sum(differences ** 2, dim=3)  # (M, H, K)
+            # Add a fake point in the last row for shadow neighbors
+            s_pts = torch.cat((s_pts, torch.zeros_like(s_pts[:1, :]) + self.inf), 0)   # (N, 3) -> (N+1, 3)
 
-        # Get Kernel point influences
-        if self.influence_mode == 'constant':
-            # Every point get an influence of 1.
-            neighbor_weights = torch.ones_like(sq_distances)
+            # Get neighbor points [n_points, n_neighbors, dim]
+            # neighbors = s_pts[neighb_inds, :]  # (N+1, 3) -> (M, H, 3)
+            neighbors = index_select(s_pts, neighb_inds, dim=0)  # (N+1, 3) -> (M, H, 3)
 
-        elif self.influence_mode == 'linear':
-            # Influence decrease linearly with the distance, and get to zero when d = sigma.
-            neighbor_weights = torch.clamp(1 - torch.sqrt(sq_distances) / self.sigma, min=0.0)  # (M, H, K)
+            # Center every neighborhood
+            neighbors = neighbors - q_pts.unsqueeze(1)  # (M, H, 3)
+        
+            # Get Kernel point distances to neigbors
+            neighbors = neighbors.unsqueeze(2)  # (M, H, 3) -> (M, H, 1, 3)
+            differences = neighbors - self.kernel_points  # (M, H, 1, 3) x (K, 3) -> (M, H, K, 3)
+            sq_distances = torch.sum(differences ** 2, dim=3)  # (M, H, K)
 
-        elif self.influence_mode == 'gaussian':
-            # Influence in gaussian of the distance.
-            gaussian_sigma = self.sigma * 0.3
-            neighbor_weights = radius_gaussian(sq_distances, gaussian_sigma)
-        else:
-            raise ValueError("Unknown influence mode: : '{:s}'.  Should be 'constant', 'linear', or 'gaussian'".format(self.aggregation_mode))
-        neighbor_weights = torch.transpose(neighbor_weights, 1, 2)  # (M, H, K) -> (M, K, H)
+            # Get Kernel point influences
+            if self.influence_mode == 'constant':
+                # Every point get an influence of 1.
+                neighbor_weights = torch.ones_like(sq_distances)
 
-        # In case of nearest mode, only the nearest KP can influence each point
-        if self.aggregation_mode == 'nearest':
-            neighbors_1nn = torch.argmin(sq_distances, dim=2)
-            neighbor_weights *= torch.transpose(nn.functional.one_hot(neighbors_1nn, self.kernel_size), 1, 2)
+            elif self.influence_mode == 'linear':
+                # Influence decrease linearly with the distance, and get to zero when d = sigma.
+                neighbor_weights = torch.clamp(1 - torch.sqrt(sq_distances) / self.sigma, min=0.0)  # (M, H, K)
 
-        elif self.aggregation_mode != 'sum':
-            raise ValueError("Unknown aggregation mode: '{:s}'. Should be 'nearest' or 'sum'".format(self.aggregation_mode))
+            elif self.influence_mode == 'gaussian':
+                # Influence in gaussian of the distance.
+                gaussian_sigma = self.sigma * 0.3
+                neighbor_weights = radius_gaussian(sq_distances, gaussian_sigma)
+            else:
+                raise ValueError("Unknown influence mode: : '{:s}'.  Should be 'constant', 'linear', or 'gaussian'".format(self.aggregation_mode))
+            neighbor_weights = torch.transpose(neighbor_weights, 1, 2)  # (M, H, K) -> (M, K, H)
+
+            # In case of nearest mode, only the nearest KP can influence each point
+            if self.aggregation_mode == 'nearest':
+                neighbors_1nn = torch.argmin(sq_distances, dim=2)
+                neighbor_weights *= torch.transpose(nn.functional.one_hot(neighbors_1nn, self.kernel_size), 1, 2)
+
+            elif self.aggregation_mode != 'sum':
+                raise ValueError("Unknown aggregation mode: '{:s}'. Should be 'nearest' or 'sum'".format(self.aggregation_mode))
 
         return neighbor_weights
 
@@ -215,9 +219,16 @@ class KPConv(nn.Module):
 
         else:
             # group conv
-            weighted_feats = weighted_feats.view(-1, self.kernel_size, self.groups, self.in_channels_per_group)  # (M, K, C) -> (M/G, K, G, C)
-            output_feats = torch.einsum("mkgc,kgcd->mgd", weighted_feats, self.weights)  # (M/G, K, G, C) -> (M/G, G, O)
-            output_feats = output_feats.view(-1, self.out_channels)  # (M/G, G, O) -> (M, O)
+            weighted_feats = weighted_feats.view(-1, self.kernel_size, self.groups, self.in_channels_per_group)  # (M, K, C) -> (M, K, G, C//G)
+            output_feats = torch.einsum("mkgc,kgcd->mgd", weighted_feats, self.weights)  # (M, K, G, C//G) * (K, G, C//G, O//G) -> (M, G, O//G)
+            output_feats = output_feats.view(-1, self.out_channels)  # (M, G, O//G) -> (M, O)
+
+            # weighted_feats = weighted_feats.view(-1, self.kernel_size, self.groups, self.in_channels_per_group)  # (M, K, C) -> (M, K, G, C//G)
+            # weighted_feats = weighted_feats.permute((1, 2, 0, 3))  # (M, K, G, C//G) -> (K, G, M, C//G)
+            # kernel_outputs = torch.matmul(weighted_feats, self.weights)  # (K, G, M, C//G) x (K, G, C//G, O//G) -> (K, G, M, O//G)
+            # kernel_outputs = torch.sum(kernel_outputs, dim=0)  # (K, G, M, O//G) -> (G, M, O//G)
+            # kernel_outputs = kernel_outputs.permute((1, 0, 2))  # (G, M, O//G) -> (M, G, O//G)
+            # kernel_outputs = kernel_outputs.view(-1, self.out_channels)  # (M, G, O//G) -> (M, O)
 
         # # density normalization (divide output features by the sum of neighbor positive features)
         # neighbor_feats_sum = torch.sum(neighbor_feats, dim=-1)  # (M, H)

@@ -548,11 +548,13 @@ def compare_convergences_segment(list_of_cfg, list_of_paths, list_of_names=None)
         all_snap_epochs += [snap_epochs]
         all_snap_IoUs += [snap_IoUs]
 
+
     print(10*'-' + '|' + 10*num_classes*'-')
     for snap_IoUs in all_snap_IoUs:
         if len(snap_IoUs) > 0:
-            s = '{:^10.1f}|'.format(100*np.mean(snap_IoUs[-1]))
-            for IoU in snap_IoUs[-1]:
+            best_snap = np.argmax(np.mean(snap_IoUs, axis=1))
+            s = '{:^10.1f}|'.format(100*np.mean(snap_IoUs[best_snap]))
+            for IoU in snap_IoUs[best_snap]:
                 s += '{:^10.1f}'.format(100*IoU)
         else:
             s = '{:^10s}'.format('-')

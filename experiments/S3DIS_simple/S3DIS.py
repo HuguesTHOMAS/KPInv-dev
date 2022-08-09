@@ -131,7 +131,7 @@ class S3DISDataset(SceneSegDataset):
             self.calib_batch_size()
         else:
             # If the batch limit is not set, use batch size to find it
-            self.calib_batch_limit()
+            self.b_lim = self.calib_batch_limit(self.b_n)
 
         # Update configuration
         if self.set == 'training':

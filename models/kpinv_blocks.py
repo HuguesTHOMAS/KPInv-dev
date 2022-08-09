@@ -125,45 +125,47 @@ class KPInv(nn.Module):
             neighbor_weights (Tensor): the influence weight of each kernel point on each neighbors point (M, K, H).
         """
 
-        # Add a fake point in the last row for shadow neighbors
-        s_pts = torch.cat((s_pts, torch.zeros_like(s_pts[:1, :]) + self.inf), 0)   # (N, 3) -> (N+1, 3)
+        with torch.no_grad():
 
-        # Get neighbor points [n_points, n_neighbors, dim]
-        # neighbors = s_pts[neighb_inds, :]  # (N+1, 3) -> (M, H, 3)
-        neighbors = index_select(s_pts, neighb_inds, dim=0)  # (N+1, 3) -> (M, H, 3)
+            # Add a fake point in the last row for shadow neighbors
+            s_pts = torch.cat((s_pts, torch.zeros_like(s_pts[:1, :]) + self.inf), 0)   # (N, 3) -> (N+1, 3)
 
-        # Center every neighborhood
-        neighbors = neighbors - q_pts.unsqueeze(1)  # (M, H, 3)
-     
-        # Get Kernel point distances to neigbors
-        neighbors = neighbors.unsqueeze(2)  # (M, H, 3) -> (M, H, 1, 3)
-        differences = neighbors - self.kernel_points  # (M, H, 1, 3) x (K, 3) -> (M, H, K, 3)
-        sq_distances = torch.sum(differences ** 2, dim=3)  # (M, H, K)
+            # Get neighbor points [n_points, n_neighbors, dim]
+            # neighbors = s_pts[neighb_inds, :]  # (N+1, 3) -> (M, H, 3)
+            neighbors = index_select(s_pts, neighb_inds, dim=0)  # (N+1, 3) -> (M, H, 3)
 
-        # Get Kernel point influences
-        if self.influence_mode == 'constant':
-            # Every point get an influence of 1.
-            neighbor_weights = torch.ones_like(sq_distances)
+            # Center every neighborhood
+            neighbors = neighbors - q_pts.unsqueeze(1)  # (M, H, 3)
+        
+            # Get Kernel point distances to neigbors
+            neighbors = neighbors.unsqueeze(2)  # (M, H, 3) -> (M, H, 1, 3)
+            differences = neighbors - self.kernel_points  # (M, H, 1, 3) x (K, 3) -> (M, H, K, 3)
+            sq_distances = torch.sum(differences ** 2, dim=3)  # (M, H, K)
 
-        elif self.influence_mode == 'linear':
-            # Influence decrease linearly with the distance, and get to zero when d = sigma.
-            neighbor_weights = torch.clamp(1 - torch.sqrt(sq_distances) / self.sigma, min=0.0)  # (M, H, K)
+            # Get Kernel point influences
+            if self.influence_mode == 'constant':
+                # Every point get an influence of 1.
+                neighbor_weights = torch.ones_like(sq_distances)
 
-        elif self.influence_mode == 'gaussian':
-            # Influence in gaussian of the distance.
-            gaussian_sigma = self.sigma * 0.3
-            neighbor_weights = radius_gaussian(sq_distances, gaussian_sigma)
-        else:
-            raise ValueError("Unknown influence mode: : '{:s}'.  Should be 'constant', 'linear', or 'gaussian'".format(self.aggregation_mode))
-        neighbor_weights = torch.transpose(neighbor_weights, 1, 2)  # (M, H, K) -> (M, K, H)
+            elif self.influence_mode == 'linear':
+                # Influence decrease linearly with the distance, and get to zero when d = sigma.
+                neighbor_weights = torch.clamp(1 - torch.sqrt(sq_distances) / self.sigma, min=0.0)  # (M, H, K)
 
-        # In case of nearest mode, only the nearest KP can influence each point
-        if self.aggregation_mode == 'nearest':
-            neighbors_1nn = torch.argmin(sq_distances, dim=2)
-            neighbor_weights *= torch.transpose(nn.functional.one_hot(neighbors_1nn, self.kernel_size), 1, 2)
+            elif self.influence_mode == 'gaussian':
+                # Influence in gaussian of the distance.
+                gaussian_sigma = self.sigma * 0.3
+                neighbor_weights = radius_gaussian(sq_distances, gaussian_sigma)
+            else:
+                raise ValueError("Unknown influence mode: : '{:s}'.  Should be 'constant', 'linear', or 'gaussian'".format(self.aggregation_mode))
+            neighbor_weights = torch.transpose(neighbor_weights, 1, 2)  # (M, H, K) -> (M, K, H)
 
-        elif self.aggregation_mode != 'sum':
-            raise ValueError("Unknown aggregation mode: '{:s}'. Should be 'nearest' or 'sum'".format(self.aggregation_mode))
+            # In case of nearest mode, only the nearest KP can influence each point
+            if self.aggregation_mode == 'nearest':
+                neighbors_1nn = torch.argmin(sq_distances, dim=2)
+                neighbor_weights *= torch.transpose(nn.functional.one_hot(neighbors_1nn, self.kernel_size), 1, 2)
+
+            elif self.aggregation_mode != 'sum':
+                raise ValueError("Unknown aggregation mode: '{:s}'. Should be 'nearest' or 'sum'".format(self.aggregation_mode))
 
         return neighbor_weights
 
@@ -180,29 +182,6 @@ class KPInv(nn.Module):
             neighb_inds (LongTensor): neighbor indices of query points among support points (M, H).
         Returns:
             q_feats (Tensor): output features carried by query points (M, C_out).
-
-
-        # B: batch size, H: height, W: width
-        # C: channel number, G: group number
-        # K: kernel size, s: stride, r: reduction ratio
-        ################### initialization ###################
-        o = nn.AvgPool2d(s, s) if s > 1 else nn.Identity()
-        reduce = nn.Conv2d(C, C//r, 1)
-        span = nn.Conv2d(C//r, K*K*G, 1)
-        unfold = nn.Unfold(K, dilation, padding, s)
-        #################### forward pass ####################
-        x_unfolded = unfold(x) # B,CxKxK,HxW
-        x_unfolded = x_unfolded.view(B, G, C//G, K*K, H, W)
-        # kernel generation, Eqn.(6)
-        kernel = span(reduce(o(x))) # B,KxKxG,H,W
-        kernel = kernel.view(B, G, K*K, H, W).unsqueeze(2)
-        # Multiply-Add operation, Eqn.(4)
-        out = mul(kernel, x_unfolded).sum(dim=3) # B,G,C/G,H,W
-        out = out.view(B, C, H, W)
-        return out
-
-
-
         """
 
         # Get features for each neighbor
@@ -223,9 +202,9 @@ class KPInv(nn.Module):
         if q_pts.shape[0] == s_pts.shape[0]:
             conv_weights = self.gen_mlp(self.reduce_mlp(s_feats)) # (M, C) -> (M, C//r) -> (M, K*G)
         else:
-            # pooled_feats = neighbor_feats[:, 0, :]  # nearest pool (M, H, C) -> (M, C)
+            pooled_feats = neighbor_feats[:, 0, :]  # nearest pool (M, H, C) -> (M, C)
             # pooled_feats = torch.max(neighbor_feats, dim=1)  # max pool (M, H, C) -> (M, C)
-            pooled_feats = torch.mean(neighbor_feats, dim=1)  # avg pool (M, H, C) -> (M, C)
+            # pooled_feats = torch.mean(neighbor_feats, dim=1)  # avg pool (M, H, C) -> (M, C)
             conv_weights = self.gen_mlp(self.reduce_mlp(pooled_feats)) # (M, C) -> (M, C//r) -> (M, K*G)
 
 
@@ -241,32 +220,15 @@ class KPInv(nn.Module):
 
         # Apply convolutional weights
         # ***************************
+        
+        # Separate features in groups
+        weighted_feats2 = weighted_feats.view(-1, self.kernel_size, self.groups, self.channels_per_group)  # (M, K, C) -> (M, K, G, C//G)
+        conv_weights2 = conv_weights.view(-1, self.kernel_size, self.groups)  # (M, K*G) -> (M, K, G)
 
-        if self.groups == 1:
-
-            # if groups = 1,  we only have one kernel for the whole feature vector
-            # (M, K, C) x (M, K) -> (M, C)
-            output_feats = torch.sum(weighted_feats * conv_weights.unsqueeze(-1), dim=1)
-            # output_feats = torch.einsum("mkc,mk->mc", weighted_feats, conv_weights)
-
-        elif self.channels_per_group == 1:
-
-            # if channels_per_group = 1,  we have one kernel for each channel 
-            # (M, K, C) x (M, K, C) -> (M, C)
-            output_feats = torch.sum(weighted_feats * conv_weights, dim=1)
-            output_feats = torch.einsum("mkc,mkc->mc", weighted_feats, conv_weights)
-
-        else:
-
-            # otherwise
-            weighted_feats = weighted_feats.view(-1, self.kernel_size, self.groups, self.channels_per_group)  # (M, K, C) -> (M, K, G, C//G)
-            conv_weights = conv_weights.view(-1, self.kernel_size, self.groups)  # (M, K*G) -> (M, K, G)
-
-            # (M, K, G, C//G) x (M, K, G) -> (M, G, C//G)
-            output_feats = torch.sum(weighted_feats * conv_weights.unsqueeze(-1), dim=1)
-            output_feats = torch.einsum("mkgc,mkg->mgc", weighted_feats, conv_weights)
-
-            output_feats = output_feats.view(-1, self.channels)  # (M, G, O//G) -> (M, O)
+        # (M, K, G, C//G) x (M, K, G) -> (M, G, C//G)
+        output_feats = torch.sum(weighted_feats2 * conv_weights2.unsqueeze(-1), dim=1)
+        # test_einsum = torch.einsum("mkgc,mkg->mgc", weighted_feats, conv_weights)
+        output_feats = output_feats.view(-1, self.channels)  # (M, G, O//G) -> (M, O)
 
         # # density normalization (divide output features by the sum of neighbor positive features)
         # neighbor_feats_sum = torch.sum(neighbor_feats, dim=-1)  # (M, H)
@@ -280,7 +242,7 @@ class KPInv(nn.Module):
 
         repr_str = 'KPInv'
         repr_str += '(K: {:d}'.format(self.kernel_size)
-        repr_str += ', in_C: {:d}'.format(self.channels)
+        repr_str += ', C: {:d}'.format(self.channels)
         repr_str += ', r: {:.2f}'.format(self.radius)
         repr_str += ', sigma: {:d})'.format(self.sigma)
 
@@ -374,10 +336,10 @@ class KPInvBlock(nn.Module):
 
      
     def __repr__(self):
-        return 'KPInvBlock(in_C: {:d}, r: {:.2f}, modes: {:s}+{:s})'.format(self.channels,
-                                                                                          self.radius,
-                                                                                          self.influence_mode,
-                                                                                          self.aggregation_mode)
+        return 'KPInvBlock(C: {:d}, r: {:.2f}, modes: {:s}+{:s})'.format(self.channels,
+                                                                         self.radius,
+                                                                         self.influence_mode,
+                                                                         self.aggregation_mode)
 
 
 class KPInvResidualBlock(nn.Module):

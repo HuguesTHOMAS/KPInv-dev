@@ -62,14 +62,19 @@ def my_config():
     # cfg.model.layer_blocks = (2, 1, 1, 1, 1)    # KPConv paper architecture. Can be changed for a deeper network
     # cfg.model.layer_blocks = (2, 2, 2, 4, 2)
     # cfg.model.layer_blocks = (2, 3, 4, 8, 4)
-    cfg.model.layer_blocks = (2, 3, 4, 16, 4)
+    # cfg.model.layer_blocks = (2, 3, 4, 16, 4)
     # cfg.model.layer_blocks = (2, 3, 8, 32, 4)
 
-    # cfg.model.kp_mode = 'kpconv'
-    cfg.model.kp_mode = 'kpinv'
+    
+    # cfg.model.layer_blocks = (2,  3,  4,  6,  3)
+    # cfg.model.layer_blocks = (3,  4,  6,  8,  4)
+    # cfg.model.layer_blocks = (4,  6,  8,  8,  6)
+    cfg.model.layer_blocks = (4,  6,  8, 12,  6)
+
+    cfg.model.kp_mode = 'kpconv'
     cfg.model.kernel_size = 15
-    cfg.model.kp_radius = 1.9
-    cfg.model.kp_sigma = 1.0
+    cfg.model.kp_radius = 2.9
+    cfg.model.kp_sigma = 1.7
     cfg.model.kp_influence = 'linear'
     cfg.model.kp_aggregation = 'sum'
 
@@ -91,18 +96,19 @@ def my_config():
 
     cfg.train.num_workers = 16
 
-    cfg.train.in_radius = 2.0    # Adapt this with model.init_sub_size. Try to keep a ratio of ~50
-    cfg.train.batch_size = 10    # Target batch size. If you don't want calibration, you can directly set train.batch_limit
+    cfg.train.in_radius = 1.8       # Adapt this with model.init_sub_size. Try to keep a ratio of ~50
+    cfg.train.batch_size = 10       # Target batch size. If you don't want calibration, you can directly set train.batch_limit
+    cfg.train.accum_batch = 5       # Accumulate batches for an effective batch size of batch_size * accum_batch.
 
     cfg.train.max_epoch = 200
     cfg.train.steps_per_epoch = 1000
     cfg.train.checkpoint_gap = 25
 
     cfg.train.optimizer = 'SGD'
-    cfg.train.sgd_momentum = 0.98
+    cfg.train.sgd_momentum = 0.9
 
     cfg.train.lr = 1e-2
-    cfg.train.lr_decays = {str(i): 0.1**(1 / 80) for i in range(1, cfg.train.max_epoch)}
+    cfg.train.lr_decays = {str(i): 0.1**(1 / 50) for i in range(1, cfg.train.max_epoch)}
 
     cfg.train.class_w = []
 
@@ -212,6 +218,7 @@ if __name__ == '__main__':
     elif cfg.model.kp_mode == 'kpinv':
         net = KPInvFCNN(cfg)
 
+
     print()
     print(net)
 
@@ -219,8 +226,6 @@ if __name__ == '__main__':
     if debug:
         print('\n*************************************\n')
         print(net.state_dict().keys())
-        print('\n*************************************\n')
-        print(net)
         print('\n*************************************\n')
         for param in net.parameters():
             if param.requires_grad:
@@ -256,10 +261,11 @@ if __name__ == '__main__':
     #           > Test subsampling ph
     #           > Number of parameters. Use groups, reduce some of the mlp operations
     #           > See optimization here:
-    #               https://spell.ml/blog/pytorch-training-tricks-YAnJqBEAACkARhgD
-    #               https://efficientdl.com/faster-deep-learning-in-pytorch-a-guide/#2-use-multiple-workers-and-pinned-memory-in-dataloader
-    #               https://arxiv.org/pdf/2206.04670v1.pdf
-    #               https://arxiv.org/pdf/2205.05740v2.pdf
+    #                 OK - https://spell.ml/blog/pytorch-training-tricks-YAnJqBEAACkARhgD
+    #               TODO - https://efficientdl.com/faster-deep-learning-in-pytorch-a-guide/#2-use-multiple-workers-and-pinned-memory-in-dataloader
+    #               TODO - https://www.fast.ai/2018/07/02/adam-weight-decay/
+    #               TODO - https://arxiv.org/pdf/2206.04670v1.pdf
+    #               TODO - https://arxiv.org/pdf/2205.05740v2.pdf
     #
     #           > State of the art agmentation technique:
     #               https://arxiv.org/pdf/2110.02210.pdf

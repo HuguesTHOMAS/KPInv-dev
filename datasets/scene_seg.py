@@ -592,7 +592,7 @@ class SceneSegDataset(Dataset):
 
         return
 
-    def calib_batch_limit(self, samples=100, verbose=True):
+    def calib_batch_limit(self, batch_size, samples=100, verbose=True):
         """
         Find the batch_limit given the target batch_size. 
         The batch size varies randomly so we prefer a quick calibration to find 
@@ -614,7 +614,6 @@ class SceneSegDataset(Dataset):
 
         # First get a avg of the pts per point cloud
         all_cloud_n = []
-        dt = np.zeros((1,))
         while len(all_cloud_n) < samples:
             cloud_ind, center_p = self.sample_random_sphere()
             _, in_points, _, _ = self.get_sphere(cloud_ind, center_p)
@@ -639,7 +638,7 @@ class SceneSegDataset(Dataset):
 
         # Initial batch limit thanks to average points per batch
         mean_cloud_n = np.mean(all_cloud_n)
-        self.b_lim = mean_cloud_n *self.b_n
+        new_b_lim = mean_cloud_n * batch_size
 
         # Verify the batch size 
         all_batch_n = []
@@ -651,7 +650,7 @@ class SceneSegDataset(Dataset):
                 rand_i = np.random.choice(samples)
                 batch_n_pts += all_cloud_n[rand_i]
                 batch_n += 1
-                if batch_n_pts > self.b_lim:
+                if batch_n_pts > new_b_lim:
                     break
             all_batch_n.append(batch_n)
             all_batch_n_pts.append(batch_n_pts)
@@ -666,7 +665,7 @@ class SceneSegDataset(Dataset):
             report_lines += ['{:d} batches tested in {:.1f}s'.format(samples, t1 - t0)]
             report_lines += ['']
             report_lines += ['Batch limit stats:']
-            report_lines += ['     batch limit = {:.3f}'.format(self.b_lim)]
+            report_lines += ['     batch limit = {:.3f}'.format(new_b_lim)]
             report_lines += ['avg batch points = {:.3f}'.format(np.mean(all_batch_n_pts))]
             report_lines += ['std batch points = {:.3f}'.format(np.std(all_batch_n_pts))]
             report_lines += ['']
@@ -677,7 +676,7 @@ class SceneSegDataset(Dataset):
             frame_lines_1(report_lines)
 
 
-        return
+        return new_b_lim
 
     def calib_neighbors(self, cfg, samples=100, verbose=True):
 

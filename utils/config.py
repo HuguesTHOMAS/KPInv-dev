@@ -123,7 +123,8 @@ def init_cfg():
     cfg.train.steps_per_epoch = 1000    #   Int, number of steps per epoch
 
     cfg.train.in_radius = 1.0           # Float, radius of the input sphere
-    cfg.train.batch_size = 8            #   Int, number of input point cloud per batch
+    cfg.train.batch_size = 16           #   Int, number of input point cloud per batch
+    cfg.train.accum_batch = 4           #   Int, number of batches accumulated before performing an optimizer step batch size.
     cfg.train.batch_limit = -1          #   Int, maximum number of points in total in a batch
     cfg.train.max_points = -1           #   Int, maximum number of points per element (randomly drop the excedent)
     

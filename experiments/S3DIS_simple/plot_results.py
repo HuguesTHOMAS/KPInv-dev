@@ -197,7 +197,7 @@ def exp_smaller_conv_radius():
 
     # Using the dates of the logs, you can easily gather consecutive ones. All logs should be of the same dataset.
     start = 'Log_2022-08-07_00-27-37'
-    end = 'Log_2022-08-08_17-53-42'
+    end = 'Log_2022-08-08_17-53-44'
 
     # Name of the result path
     res_path = 'results'
@@ -209,12 +209,14 @@ def exp_smaller_conv_radius():
     logs_names = ['BigNet - conv=2.5',
                   'MedNet - conv=1.9',
                   'BigNet - conv=1.9',
+                  'CustomNet - conv=1.9',
                   'etc']
 
     # safe check log names
     logs_names = np.array(logs_names[:len(logs)])
 
     return logs, logs_names
+
 
 def exp_kpinv():
     """
@@ -324,10 +326,14 @@ if __name__ == '__main__':
     # Plot functions
     ################
 
-    underline("Parameter differences in your logs")
+    print()
+    underline("Ploting training info")
 
     # Plot the training loss and accuracy
     compare_trainings(all_cfgs, logs, logs_names)
+
+    print()
+    underline("Ploting validation info")
 
     # Plot the validation
     compare_convergences_segment(all_cfgs, logs, logs_names)
