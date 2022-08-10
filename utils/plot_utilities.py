@@ -70,10 +70,14 @@ def listdir_str(path):
 
 def running_mean(signal, n, axis=0, stride=1):
     signal = np.array(signal)
-    torch_conv = torch.nn.Conv1d(1, 1, kernel_size=2*n+1, stride=stride, bias=False)
+    torch_conv = torch.nn.Conv1d(1, 1, kernel_size=2 * n + 1,
+                                 stride=stride,
+                                 padding='same',
+                                 padding_mode='replicate',
+                                 bias=False)
     torch_conv.weight.requires_grad_(False)
     torch_conv.weight *= 0
-    torch_conv.weight += 1 / (2*n+1)
+    torch_conv.weight += 1 / (2 * n + 1)
     if signal.ndim == 1:
         torch_signal = torch.from_numpy(signal.reshape([1, 1, -1]).astype(np.float32))
         return torch_conv(torch_signal).squeeze().numpy()
@@ -332,7 +336,6 @@ def compare_trainings(list_of_cfg, list_of_paths, list_of_labels=None):
 
     plot_lr = False
     smooth_epochs = 0.5
-    stride = 2
 
     if list_of_labels is None:
         list_of_labels = [str(i) for i in range(len(list_of_paths))]
@@ -340,16 +343,22 @@ def compare_trainings(list_of_cfg, list_of_paths, list_of_labels=None):
     # Read Training Logs
     # ******************
 
+    print('\nCollecting log info')
+    t0 = time.time()
+
     all_epochs = []
     all_loss = []
     all_lr = []
     all_times = []
     all_mean_epoch_n = []
     all_batch_num = []
+    all_ins_per_s = []
+    all_stp_per_s = []
+    all_epoch_dt = []
+    all_val_dt = []
 
     for path, cfg in zip(list_of_paths, list_of_cfg):
-
-        print(path)
+        
 
         if not (('val_IoUs.txt' in [f for f in listdir_str(path)]) or ('val_confs.txt' in [f for f in listdir_str(path)])):
             continue
@@ -365,17 +374,18 @@ def compare_trainings(list_of_cfg, list_of_paths, list_of_labels=None):
         max_e = np.max(epochs)
         first_e = np.min(epochs)
         epoch_n = []
-        for i in range(first_e, max_e):
+        for i in range(first_e, max_e+1):
             bool0 = epochs == i
             e_n = np.sum(bool0)
-            epoch_n.append(e_n)
             epochs_d[bool0] += steps[bool0] / e_n
+            if i < max_e:
+                epoch_n.append(e_n)
         mean_epoch_n = np.mean(epoch_n)
         smooth_n = int(mean_epoch_n * smooth_epochs)
-        smooth_loss = running_mean(L_out, smooth_n, stride=stride)
+        smooth_loss = running_mean(L_out, smooth_n)
         all_loss += [smooth_loss]
-        all_epochs += [epochs_d[smooth_n:-smooth_n:stride]]
-        all_times += [t[smooth_n:-smooth_n:stride]]
+        all_epochs += [epochs_d]
+        all_times += [t]
         all_mean_epoch_n += [mean_epoch_n]
         all_batch_num += [cfg.train.batch_size * cfg.train.accum_batch]
 
@@ -389,6 +399,93 @@ def compare_trainings(list_of_cfg, list_of_paths, list_of_labels=None):
             lr_decays[lr_decay_e] = lr_decay_v
             lr = np.cumprod(lr_decays)
             all_lr += [lr[np.floor(all_epochs[-1]).astype(np.int32)]]
+
+        # Timing report
+        epoch_t0 = []
+        epoch_t1 = []
+        ins_per_s = []
+        step_per_s = []
+        for i in range(first_e, max_e):
+
+            # Get epoch times
+            epoch_t = t[epochs == i]
+            epoch_t0.append(np.min(epoch_t))
+            epoch_t1.append(np.max(epoch_t))
+
+            # Get full speed running time at the middle of the epoch
+            margin = int(epoch_n[i] * 0.2)
+            dt = epoch_t[margin+1:-margin] - epoch_t[margin:-margin-1]
+            step_per_s.append(1/dt)
+            ins_per_s.append(cfg.train.batch_size * cfg.train.accum_batch * step_per_s[-1])
+
+        epoch_t0 = np.array(epoch_t0)
+        epoch_t1 = np.array(epoch_t1)
+        epoch_dt = epoch_t1 - epoch_t0
+        val_dt = epoch_t0[1:] - epoch_t1[:-1]
+        
+        all_stp_per_s.append(np.concatenate(step_per_s, axis=0))
+        all_ins_per_s.append(np.concatenate(ins_per_s, axis=0))
+        all_epoch_dt.append(epoch_dt)
+        all_val_dt.append(val_dt)
+
+    print('Done in {:.3f} s'.format(time.time() - t0))
+
+
+    # Timing report
+    # *************
+
+    # Figure
+    print('\nInit matplotlib')
+    t0 = time.time()
+    _, axs = plt.subplots(1, 2, figsize=(9, 4), gridspec_kw={'width_ratios': [1, 2]})
+    print('Done in {:.3f} s'.format(time.time() - t0))
+    print('\nPlotting training information')
+
+    # Throughput (ins/sec) as boxplot
+    axs[0].yaxis.grid(True, linestyle='-', which='major', color='lightgrey', alpha=0.5)
+    axs[0].set_axisbelow(True)
+    y_data = []
+    x_data = []
+    colors = []
+    for log_i, box_data in enumerate(all_ins_per_s):
+        y_data.append(box_data)
+        x_data.append('')
+        colors.append('C'+ str(log_i))
+    bp = axs[0].boxplot(y_data, 
+                        labels=x_data,
+                        patch_artist=True,
+                        showfliers=False,
+                        widths=0.4)
+    plt.setp(bp['medians'], color='k')
+    for patch, color in zip(bp['boxes'], colors):
+        patch.set_facecolor(color)
+    blim, tlim = axs[0].get_ylim()
+    tlim += 0.3 * (tlim - blim)
+    axs[0].set_ylim(bottom=blim, top=tlim)
+    axs[0].set_title('Throughput')
+    axs[0].set_ylabel('ins/sec')
+    axs[0].legend(np.array(bp['boxes']), tuple(list_of_labels), fontsize='small', loc=1)
+
+    # Epoch times as horizontal bars
+    axs[1].xaxis.grid(True, linestyle='-', which='major', color='lightgrey', alpha=0.5)
+    axs[1].set_axisbelow(True)
+    y_pos = np.arange(len(list_of_labels))
+    mean_epoch_dt = [np.mean(edt) for edt in all_epoch_dt]
+    mean_val_dt = [np.mean(edt) for edt in all_val_dt]
+    width = 0.4
+    axs[1].barh(y_pos, mean_epoch_dt, width, label = 'Train')
+    axs[1].barh(y_pos, mean_val_dt, width, left=mean_epoch_dt, label = 'Val')
+    axs[1].invert_yaxis()  # labels read top-to-bottom
+    axs[1].set_xlabel('Time (seconds)')
+    axs[1].set_title('Epoch Timings => |Train|Val|')
+    axs[1].tick_params(axis='y', which='both', right=False, left=False, labelleft=False) 
+    for l_i, label in enumerate(list_of_labels):
+        axs[1].text(10, y_pos[l_i], label,
+                       ha='left', 
+                       va='center',
+                       fontsize='medium',
+                       weight='roman',
+                       color='k')
 
 
     # Plots learning rate
@@ -417,7 +514,8 @@ def compare_trainings(list_of_cfg, list_of_paths, list_of_labels=None):
     # **********
 
     # Figure
-    fig = plt.figure('loss', figsize=(8, 6))
+    
+    fig, ax0 = plt.subplots(1, 1, figsize=(8, 6))
     plots = []
     for i, label in enumerate(list_of_labels):
         plots.append(plt.plot(all_epochs[i], all_loss[i], linewidth=1, label=label))
@@ -431,9 +529,7 @@ def compare_trainings(list_of_cfg, list_of_paths, list_of_labels=None):
     plt.legend(loc=1)
 
     # Customize the graph
-    ax0 = fig.gca()
     ax0.grid(linestyle='-.', which='both')
-    # ax.set_yticks(np.arange(0.8, 1.02, 0.02))
 
     # X-axis controller
     plt.subplots_adjust(right=0.82)
@@ -450,7 +546,6 @@ def compare_trainings(list_of_cfg, list_of_paths, list_of_labels=None):
             ax0.set_xlabel('steps (input batch seen)')
             for i, label in enumerate(list_of_labels):
                 for pl in plots[i]:
-                    all_mean_epoch_n
                     pl.set_xdata(all_epochs[i] * all_mean_epoch_n[i])
         if label == 'examples':
             ax0.set_xlabel('input spheres seen')
@@ -468,27 +563,6 @@ def compare_trainings(list_of_cfg, list_of_paths, list_of_labels=None):
         plt.draw()
 
     radio.on_clicked(x_func)
-
-    # Plot Times
-    # **********
-
-    # Figure
-    fig = plt.figure('time')
-    for i, label in enumerate(list_of_labels):
-        plt.plot(all_epochs[i], np.array(all_times[i]) / 3600, linewidth=1, label=label)
-
-    # Set names for axes
-    plt.xlabel('epochs')
-    plt.ylabel('time')
-    # plt.yscale('log')
-
-    # Display legends and title
-    plt.legend(loc=0)
-
-    # Customize the graph
-    ax = fig.gca()
-    ax.grid(linestyle='-.', which='both')
-    # ax.set_yticks(np.arange(0.8, 1.02, 0.02))
 
     # Show all
     plt.show()
@@ -547,6 +621,59 @@ def compare_convergences_segment(list_of_cfg, list_of_paths, list_of_names=None)
         snap_epochs, snap_IoUs = load_snap_clouds(path, cfg)
         all_snap_epochs += [snap_epochs]
         all_snap_IoUs += [snap_IoUs]
+
+
+
+        
+        
+            # Get points
+            points = val_loader.dataset.load_evaluation_points(file_path)
+
+            # Get probs on our own ply points
+            sub_probs = val_data.probs[i]
+
+            # Insert false columns for ignored labels
+            for l_ind, label_value in enumerate(val_loader.dataset.label_values):
+                if label_value in val_loader.dataset.ignored_labels:
+                    sub_probs = np.insert(sub_probs, l_ind, 0, axis=1)
+
+            # Get the predicted labels
+            sub_preds = val_loader.dataset.label_values[np.argmax(sub_probs, axis=1).astype(np.int32)]
+
+            tt_prob = (sub_probs[val_loader.dataset.test_proj[i], 0]).astype(np.float32)
+
+            # Reproject preds on the evaluations points
+            preds = (sub_preds[val_loader.dataset.test_proj[i]]).astype(np.int32)
+
+            # Path of saved validation file
+            cloud_name = file_path.split('/')[-1]
+            val_name = join(val_path, cloud_name)
+
+            # Save file
+            labels = val_loader.dataset.val_labels[i].astype(np.int32)
+            write_ply(val_name,
+                        [points, preds, labels, tt_prob],
+                        ['x', 'y', 'z', 'preds', 'class', 'tt_prob'])
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
     print(10*'-' + '|' + 10*num_classes*'-')

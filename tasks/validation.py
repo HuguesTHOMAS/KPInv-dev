@@ -9,9 +9,10 @@
 # Basic libs
 import torch
 import numpy as np
-from os import makedirs
+from os import makedirs, listdir
 from os.path import exists, join
 import time
+import pickle
 
 # PLY reader
 from utils.ply import read_ply, write_ply
@@ -284,18 +285,34 @@ def cloud_segmentation_validation(epoch, net, val_loader, cfg, val_data, device,
     print()
 
     # Save predicted cloud occasionally
-    if cfg.exp.saving and (epoch + 1) % cfg.train.checkpoint_gap == 0:
-        val_path = join(cfg.exp.log_dir, 'val_preds_{:d}'.format(epoch + 1))
-        if not exists(val_path):
-            makedirs(val_path)
-        files = val_loader.dataset.scene_files
-        for i, file_path in enumerate(files):
+    # *********************************
 
-            # Get points
-            points = val_loader.dataset.load_evaluation_points(file_path)
+    # Create validation folder
+    val_path = join(cfg.exp.log_dir, 'validation')
+    if not exists(val_path):
+        makedirs(val_path)
+    current_votes = val_loader.dataset.get_votes()
+    last_vote = int(np.floor(current_votes))
+
+    # Check if vote has already been saved
+    saved_votes = np.sort([int(l.split('_')[1]) for l in listdir(val_path) if  l.startswith('preds_')])
+    if last_vote not in saved_votes:
+
+        preds_path = join(val_path, 'preds_{:d}_{:d}.pkl'.format(last_vote, epoch + 1))
+
+        # Save the vote predictions as pickle obj
+        with open(preds_path, 'wb') as f:
+            pickle.dump(val_data.probs, f)
+
+        # Save the subsampled input clouds with latest predictions
+        files = val_loader.dataset.scene_files
+        for c_i, file_path in enumerate(files):
+
+            # Get subsampled points from tree structure
+            points = np.array(val_loader.dataset.input_trees[c_i].data, copy=False)
 
             # Get probs on our own ply points
-            sub_probs = val_data.probs[i]
+            sub_probs = val_data.probs[c_i]
 
             # Insert false columns for ignored labels
             for l_ind, label_value in enumerate(val_loader.dataset.label_values):
@@ -305,20 +322,17 @@ def cloud_segmentation_validation(epoch, net, val_loader, cfg, val_data, device,
             # Get the predicted labels
             sub_preds = val_loader.dataset.label_values[np.argmax(sub_probs, axis=1).astype(np.int32)]
 
-            tt_prob = (sub_probs[val_loader.dataset.test_proj[i], 0]).astype(np.float32)
-
-            # Reproject preds on the evaluations points
-            preds = (sub_preds[val_loader.dataset.test_proj[i]]).astype(np.int32)
-
             # Path of saved validation file
             cloud_name = file_path.split('/')[-1]
             val_name = join(val_path, cloud_name)
 
             # Save file
-            labels = val_loader.dataset.val_labels[i].astype(np.int32)
+            labels = val_loader.dataset.input_labels[c_i]
             write_ply(val_name,
-                        [points, preds, labels, tt_prob],
-                        ['x', 'y', 'z', 'preds', 'class', 'tt_prob'])
+                      [points, sub_preds.astype(np.int32), labels.astype(np.int32)],
+                      ['x', 'y', 'z', 'preds', 'class'])
+
+
 
     # Display timings
     t7 = time.time()

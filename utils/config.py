@@ -206,8 +206,6 @@ def load_cfg(log_path):
     for k, v in cfg.items():
         cfg[k].update(cfg2[k])
 
-    print(cfg.train.accum_batch)
-
     return cfg
 
 

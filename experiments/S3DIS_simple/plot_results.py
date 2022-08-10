@@ -209,7 +209,6 @@ def exp_smaller_conv_radius():
     logs_names = ['BigNet - conv=2.5',
                   'MedNet - conv=1.9',
                   'BigNet - conv=1.9',
-                  'CustomNet - conv=1.9',
                   'etc']
 
     # safe check log names
@@ -241,6 +240,7 @@ def exp_batch_accumulation():
     # Give names to the logs (for plot legends)
     logs_names = ['B=10_Accum=1',
                   'B=8_Accum=5',
+                  'B=8_Accum=5_fast',
                   'etc']
 
     # safe check log names
