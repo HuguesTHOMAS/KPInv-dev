@@ -377,7 +377,7 @@ def compare_trainings(list_of_cfg, list_of_paths, list_of_labels=None):
         all_epochs += [epochs_d[smooth_n:-smooth_n:stride]]
         all_times += [t[smooth_n:-smooth_n:stride]]
         all_mean_epoch_n += [mean_epoch_n]
-        all_batch_num += [cfg.train.batch_size]
+        all_batch_num += [cfg.train.batch_size * cfg.train.accum_batch]
 
         # Learning rate
         if plot_lr:

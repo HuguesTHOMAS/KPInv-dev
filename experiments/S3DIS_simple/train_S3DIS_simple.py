@@ -75,10 +75,8 @@ def my_config():
     cfg.model.kernel_size = 15
     cfg.model.kp_radius = 2.9
     cfg.model.kp_sigma = 1.7
-    # cfg.model.kp_influence = 'linear'
-    # cfg.model.kp_aggregation = 'sum'
-    cfg.model.kp_influence = 'constant'
-    cfg.model.kp_aggregation = 'nearest'
+    cfg.model.kp_influence = 'linear'
+    cfg.model.kp_aggregation = 'sum'
 
     cfg.data.sub_size = 0.02          # -1.0 so that dataset point clouds are not initially subsampled
     cfg.model.init_sub_size = 0.04    # Adapt this with train.in_radius. Try to keep a ratio of ~50
@@ -102,15 +100,15 @@ def my_config():
     cfg.train.batch_size = 8        # Target batch size. If you don't want calibration, you can directly set train.batch_limit
     cfg.train.accum_batch = 5       # Accumulate batches for an effective batch size of batch_size * accum_batch.
 
-    cfg.train.max_epoch = 200
-    cfg.train.steps_per_epoch = 1000
-    cfg.train.checkpoint_gap = 25
+    cfg.train.max_epoch = 100
+    cfg.train.steps_per_epoch = 500
+    cfg.train.checkpoint_gap = 10
 
     cfg.train.optimizer = 'SGD'
-    cfg.train.sgd_momentum = 0.9
+    cfg.train.sgd_momentum = 0.95
 
     cfg.train.lr = 1e-2
-    cfg.train.lr_decays = {str(i): 0.1**(1 / 50) for i in range(1, cfg.train.max_epoch)}
+    cfg.train.lr_decays = {str(i): 0.1**(1 / 20) for i in range(1, cfg.train.max_epoch)}
 
     cfg.train.class_w = []
 

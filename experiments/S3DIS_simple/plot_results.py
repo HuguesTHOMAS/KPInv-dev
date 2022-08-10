@@ -218,12 +218,9 @@ def exp_smaller_conv_radius():
     return logs, logs_names
 
 
-def exp_kpinv():
+def exp_batch_accumulation():
     """
-    Using a smaller convolution radius increases network speed but not in a direct manner.
-    It just means that the corresponding neighbors limits are smaller, which is the reason why the network is faster.
-    But convolution radius is crucial to control the alignment between conv points and subsample input neighbors.
-    We compare our medium conv size (roughly a 5x5 conv) to a smaller conv size more similar to 3x3 convolutions.
+    
     """
 
     # Using the dates of the logs, you can easily gather consecutive ones. All logs should be of the same dataset.
@@ -236,10 +233,14 @@ def exp_kpinv():
     # Gather logs and sort by date
     logs = np.sort([join(res_path, l) for l in listdir_str(res_path) if start <= l <= end])
 
+
+    # Optionally add a specific log at a specific place in the log list
+    logs = logs.astype('<U50')
+    logs = np.insert(logs, 0, 'results/Log_2022-08-07_00-27-37')
+    
     # Give names to the logs (for plot legends)
-    logs_names = ['kpconv-sum-lin',
-                  'kpconv-nearest',
-                  'kpinv',
+    logs_names = ['B=10_Accum=1',
+                  'B=8_Accum=5',
                   'etc']
 
     # safe check log names
@@ -295,7 +296,7 @@ if __name__ == '__main__':
     ######################################################
 
     # My logs: choose the logs to show
-    logs, logs_names = exp_kpinv()
+    logs, logs_names = exp_batch_accumulation()
 
     frame_lines_1(["Plot S3DIS experiments"])
 

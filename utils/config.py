@@ -124,7 +124,7 @@ def init_cfg():
 
     cfg.train.in_radius = 1.0           # Float, radius of the input sphere
     cfg.train.batch_size = 16           #   Int, number of input point cloud per batch
-    cfg.train.accum_batch = 4           #   Int, number of batches accumulated before performing an optimizer step batch size.
+    cfg.train.accum_batch = 1           #   Int, number of batches accumulated before performing an optimizer step batch size.
     cfg.train.batch_limit = -1          #   Int, maximum number of points in total in a batch
     cfg.train.max_points = -1           #   Int, maximum number of points per element (randomly drop the excedent)
     
@@ -201,7 +201,12 @@ def load_cfg(log_path):
 
     # Read data from file:
     with open(join(log_path, 'parameters.json'), "r") as jsonfile:
-        cfg.update(json.load(jsonfile))
+        cfg2 =json.load(jsonfile)
+
+    for k, v in cfg.items():
+        cfg[k].update(cfg2[k])
+
+    print(cfg.train.accum_batch)
 
     return cfg
 
