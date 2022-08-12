@@ -188,6 +188,9 @@ if __name__ == '__main__':
     # Define parameters
     ###################
 
+    # TODO: finish run_multiple exp
+    # TODO: finish run_multiple exp
+
     parser = argparse.ArgumentParser()
     parser.add_argument('--log_path', type=str)
     parser.add_argument('--layer_blocks', nargs='+', type=int)
