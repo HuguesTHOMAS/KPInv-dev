@@ -217,13 +217,15 @@ def exp_smaller_conv_radius():
     return logs, logs_names
 
 
-def exp_batch_accumulation():
+def exp_training_strat():
     """
-    
+    Here we look at what Cyclic learning rate and AdamW can bring to the table.
+    Also what happens if we use accumulation to simulate very large batch (but keep 
+    the same amount of data seen by reducing the number of epoch steps).
     """
 
     # Using the dates of the logs, you can easily gather consecutive ones. All logs should be of the same dataset.
-    start = 'Log_2022-08-08_17-53-43'
+    start = 'Log_2022-08-10_16-59-52'
     end = 'Log_2022-08-19_23-43-08'
 
     # Name of the result path
@@ -232,31 +234,61 @@ def exp_batch_accumulation():
     # Gather logs and sort by date
     logs = np.sort([join(res_path, l) for l in listdir_str(res_path) if start <= l <= end])
 
-
     # Optionally add a specific log at a specific place in the log list
     logs = logs.astype('<U50')
     logs = np.insert(logs, 0, 'results/Log_2022-08-07_00-27-37')
     
     # Give names to the logs (for plot legends)
-    logs_names = ['B=10_Accum=1',
-                  'B=8_Accum=5',
-                  'B=8_Accum=5_fast',
-                  'etc']
+    logs_names = ['B=10_Accum=1_SGD',
+                  'B=10_Accum=1_Cyclic_AdamW',
+                  'B=10_Accum=5_Cyclic_AdamW',]
 
     # safe check log names
+    if len(logs) > len(logs_names):
+        logs = logs[:len(logs_names)]
     logs_names = np.array(logs_names[:len(logs)])
 
     return logs, logs_names
 
 
-def test_input_pipeline():
+def exp_LR_range_test():
     """
-    Sort these runs
+    Here we fo a LR range test. REsult the biggest lr should be 1e-2
     """
 
     # Using the dates of the logs, you can easily gather consecutive ones. All logs should be of the same dataset.
-    start = 'Log_2022-08-04_22-43-08'
-    end = 'Log_2022-08-09_23-43-08'
+    start = 'Log_2022-08-11_15-10-04'
+    end = 'Log_2022-08-19_23-43-08'
+
+    # Name of the result path
+    res_path = 'results'
+
+    # Gather logs and sort by date
+    logs = np.sort([join(res_path, l) for l in listdir_str(res_path) if start <= l <= end])
+    
+    # Give names to the logs (for plot legends)
+    logs_names = ['LR_range_test']
+
+    # safe check log names
+    if len(logs) > len(logs_names):
+        logs = logs[:len(logs_names)]
+    logs_names = np.array(logs_names[:len(logs)])
+
+    return logs, logs_names
+
+
+
+
+def exp_training_strat2():
+    """
+    Here we look at what Cyclic learning rate and AdamW can bring to the table.
+    Also what happens if we use accumulation to simulate very large batch (but keep 
+    the same amount of data seen by reducing the number of epoch steps).
+    """
+
+    # Using the dates of the logs, you can easily gather consecutive ones. All logs should be of the same dataset.
+    start = 'Log_2022-08-12_12-49-02'
+    end = 'Log_2022-08-19_23-43-08'
 
     # Name of the result path
     res_path = 'results'
@@ -264,22 +296,24 @@ def test_input_pipeline():
     # Gather logs and sort by date
     logs = np.sort([join(res_path, l) for l in listdir_str(res_path) if start <= l <= end])
 
+    # Optionally add a specific log at a specific place in the log list
+    logs = logs.astype('<U50')
+    logs = np.insert(logs, 0, 'results/Log_2022-08-10_17-03-50')
+    
     # Give names to the logs (for plot legends)
-    logs_names = ['Full_neigh',
-                  'Less neighb',
-                  'Low neighb',
-                  'Very low neighb',
-                  'Small net',
-                  'Big net',
-                  'Med net / smaller conv',
-                  'Big net / smaller conv',
-                  'Mega net / smaller conv',
-                  'etc']
+    logs_names = ['e-4:20:e-2:40:-50(old)',
+                  'e-4: 5:e-2:30:-50',
+                  'e-4: 5:e-2:30:-80']
 
     # safe check log names
+    if len(logs) > len(logs_names):
+        logs = logs[:len(logs_names)]
     logs_names = np.array(logs_names[:len(logs)])
 
     return logs, logs_names
+
+
+
 
 
 
@@ -296,7 +330,7 @@ if __name__ == '__main__':
     ######################################################
 
     # My logs: choose the logs to show
-    logs, logs_names = exp_batch_accumulation()
+    logs, logs_names = exp_training_strat2()
 
     frame_lines_1(["Plot S3DIS experiments"])
 
@@ -321,7 +355,12 @@ if __name__ == '__main__':
                     # show_params=['model.init_sub_size',
                     #              'train.in_radius'],
                     hide_params=['test.batch_limit',
-                                 'train.batch_limit'])
+                                 'train.batch_limit',
+                                 'test.batch_size',
+                                 'model.neighbor_limits',
+                                 'train.max_epoch',
+                                 'train.checkpoint_gap',
+                                 'train.lr_decays'])
 
 
     ################
@@ -336,6 +375,7 @@ if __name__ == '__main__':
 
     print()
     underline("Ploting validation info")
+    print()
 
     # Plot the validation
     compare_convergences_segment(all_cfgs, logs, logs_names)

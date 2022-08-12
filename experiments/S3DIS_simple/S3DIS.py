@@ -81,7 +81,7 @@ def S3DIS_cfg(cfg):
 
 class S3DISDataset(SceneSegDataset):
 
-    def __init__(self, cfg, chosen_set='training', regular_sampling=False, precompute_pyramid=False, load_data=True):
+    def __init__(self, cfg, chosen_set='training', regular_sampling=False, precompute_pyramid=False, load_data=True, calib=True):
         """
         Class to handle S3DIS dataset.
         Simple implementation.
@@ -112,6 +112,9 @@ class S3DISDataset(SceneSegDataset):
                                    f_scales=[1/255, 1/255, 1/255])
 
 
+        # Stop data is not needed
+        if not calib:
+            return
 
         ############################
         # Batch selection parameters

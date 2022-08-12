@@ -2,8 +2,6 @@ from typing import Tuple
 
 import torch
 from torch import Tensor
-import pykeops
-pykeops.set_verbose(False)
 
 from utils.batch_conversion import batch_to_pack, pack_to_batch, pack_to_list, list_to_pack
 from utils.gpu_subsampling import subsample_pack_batch
@@ -26,6 +24,10 @@ def keops_radius_count(q_points: Tensor, s_points: Tensor, radius: float) -> Ten
     Returns:
         radius_counts (Tensor): (*, N)
     """
+        
+    import pykeops
+    pykeops.set_verbose(False)
+
     num_batch_dims = q_points.dim() - 2
     xi = pykeops.torch.LazyTensor(q_points.unsqueeze(-2))  # (*, N, 1, C)
     xj = pykeops.torch.LazyTensor(s_points.unsqueeze(-3))  # (*, 1, M, C)
@@ -46,6 +48,10 @@ def keops_knn(q_points: Tensor, s_points: Tensor, k: int) -> Tuple[Tensor, Tenso
         knn_distance (Tensor): (*, N, k)
         knn_indices (LongTensor): (*, N, k)
     """
+
+    import pykeops
+    pykeops.set_verbose(False)
+    
     xi = pykeops.torch.LazyTensor(q_points.unsqueeze(-2))  # (*, N, 1, C)
     xj = pykeops.torch.LazyTensor(s_points.unsqueeze(-3))  # (*, 1, M, C)
     dij = (xi - xj).norm2()  # (*, N, M)

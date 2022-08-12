@@ -25,6 +25,7 @@ from utils.printing import underline
 def training_epoch(epoch, t0, net, optimizer, training_loader, cfg, PID_file, device):
 
     mini_step = 0
+    accum_loss = 0
     step = 0
     last_display = time.time()
     t = [time.time()]
@@ -50,7 +51,6 @@ def training_epoch(epoch, t0, net, optimizer, training_loader, cfg, PID_file, de
         
 
         try:
-
 
             # New time at first accumulation step
             if mini_step % cfg.train.accum_batch == 0:
@@ -78,6 +78,7 @@ def training_epoch(epoch, t0, net, optimizer, training_loader, cfg, PID_file, de
 
             # Normalize loss
             loss = loss / cfg.train.accum_batch
+            accum_loss += loss.item()
 
             if 'cuda' in device.type:
                 torch.cuda.synchronize(device)
@@ -134,11 +135,10 @@ def training_epoch(epoch, t0, net, optimizer, training_loader, cfg, PID_file, de
                 # Console display (only one per second)
                 if (t[-1] - last_display) > 1.0:
                     last_display = t[-1]
-                    loss_value = loss.item() * cfg.train.accum_batch
 
                     message = '{:5d} {:4d} | {:8.3f} | {:7.1f} % | {:7.1f} stp/min | {:6.1f} {:5.1f} {:5.1f} {:5.1f} {:5.1f}'
                     print(message.format(epoch, step,
-                                            loss_value,
+                                            accum_loss,
                                             gpu_usage,
                                             60 / np.sum(mean_dt),
                                             1000 * mean_dt[0],
@@ -153,11 +153,12 @@ def training_epoch(epoch, t0, net, optimizer, training_loader, cfg, PID_file, de
                         message = '{:d} {:d} {:.5f} {:.5f} {:.3f}\n'
                         file.write(message.format(epoch,
                                                     step,
-                                                    loss_value,
+                                                    accum_loss,
                                                     net.reg_loss,
                                                     t[-1] - t0))
 
 
+                accum_loss = 0
                 step += 1
 
             mini_step += 1

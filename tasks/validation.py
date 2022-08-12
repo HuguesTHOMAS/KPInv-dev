@@ -77,7 +77,7 @@ def cloud_segmentation_validation(epoch, net, val_loader, cfg, val_data, device,
     t0 = time.time()
 
     # Choose validation smoothing parameter (0 for no smothing, 0.99 for big smoothing)
-    val_smooth = 0.95
+    val_smooth = cfg.test.val_momentum
     softmax = torch.nn.Softmax(1)
 
     # Number of classes including ignored labels
@@ -295,14 +295,11 @@ def cloud_segmentation_validation(epoch, net, val_loader, cfg, val_data, device,
     last_vote = int(np.floor(current_votes))
 
     # Check if vote has already been saved
+    all_sub_preds = []
     saved_votes = np.sort([int(l.split('_')[1]) for l in listdir(val_path) if  l.startswith('preds_')])
     if last_vote not in saved_votes:
 
-        preds_path = join(val_path, 'preds_{:d}_{:d}.pkl'.format(last_vote, epoch + 1))
-
-        # Save the vote predictions as pickle obj
-        with open(preds_path, 'wb') as f:
-            pickle.dump(val_data.probs, f)
+        preds_path = join(val_path, 'preds_{:d}_{:d}.pkl'.format(last_vote, epoch))
 
         # Save the subsampled input clouds with latest predictions
         files = val_loader.dataset.scene_files
@@ -321,6 +318,7 @@ def cloud_segmentation_validation(epoch, net, val_loader, cfg, val_data, device,
 
             # Get the predicted labels
             sub_preds = val_loader.dataset.label_values[np.argmax(sub_probs, axis=1).astype(np.int32)]
+            all_sub_preds.append(sub_preds.astype(np.int32))
 
             # Path of saved validation file
             cloud_name = file_path.split('/')[-1]
@@ -329,8 +327,13 @@ def cloud_segmentation_validation(epoch, net, val_loader, cfg, val_data, device,
             # Save file
             labels = val_loader.dataset.input_labels[c_i]
             write_ply(val_name,
-                      [points, sub_preds.astype(np.int32), labels.astype(np.int32)],
+                      [points, all_sub_preds[-1], labels.astype(np.int32)],
                       ['x', 'y', 'z', 'preds', 'class'])
+
+
+        # Save the vote predictions as pickle obj
+        with open(preds_path, 'wb') as f:
+            pickle.dump(all_sub_preds, f)
 
 
 

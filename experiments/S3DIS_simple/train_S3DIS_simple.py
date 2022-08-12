@@ -18,10 +18,13 @@
 #
 
 # Common libs
+from decimal import MAX_PREC
 import os
 import sys
 import time
 import signal
+import argparse
+import numpy as np
 from torch.utils.data import DataLoader
 
 # Local libs
@@ -67,14 +70,14 @@ def my_config():
 
     
     # cfg.model.layer_blocks = (2,  3,  4,  6,  3)
-    # cfg.model.layer_blocks = (3,  4,  6,  8,  4)
+    cfg.model.layer_blocks = (3,  4,  6,  8,  4)
     # cfg.model.layer_blocks = (4,  6,  8,  8,  6)
-    cfg.model.layer_blocks = (4,  6,  8, 12,  6)
+    # cfg.model.layer_blocks = (4,  6,  8, 12,  6)  # Strong architecture
 
     cfg.model.kp_mode = 'kpconv'
     cfg.model.kernel_size = 15
-    cfg.model.kp_radius = 2.9
-    cfg.model.kp_sigma = 1.7
+    cfg.model.kp_radius = 2.5
+    cfg.model.kp_sigma = 1.2
     cfg.model.kp_influence = 'linear'
     cfg.model.kp_aggregation = 'sum'
 
@@ -94,24 +97,58 @@ def my_config():
     # Training parameters
     # -------------------
 
+    # Input threads
     cfg.train.num_workers = 16
 
-    cfg.train.in_radius = 1.8       # Adapt this with model.init_sub_size. Try to keep a ratio of ~50
-    cfg.train.batch_size = 8        # Target batch size. If you don't want calibration, you can directly set train.batch_limit
-    cfg.train.accum_batch = 5       # Accumulate batches for an effective batch size of batch_size * accum_batch.
+    # Input spheres radius. Adapt this with model.init_sub_size. Try to keep a ratio of ~50
+    cfg.train.in_radius = 2.0
 
-    cfg.train.max_epoch = 100
-    cfg.train.steps_per_epoch = 500
-    cfg.train.checkpoint_gap = 10
+    # Batch related_parames
+    cfg.train.batch_size = 10        # Target batch size. If you don't want calibration, you can directly set train.batch_limit
+    cfg.train.accum_batch = 5        # Accumulate batches for an effective batch size of batch_size * accum_batch.
+    cfg.train.steps_per_epoch = 100
+    
+    # Training length
+    cfg.train.max_epoch = 180
+    cfg.train.checkpoint_gap = cfg.train.max_epoch // 5
 
-    cfg.train.optimizer = 'SGD'
-    cfg.train.sgd_momentum = 0.95
+    # Optimizer
+    cfg.train.optimizer = 'AdamW'
+    cfg.train.adam_b = (0.9, 0.999)
+    cfg.train.adam_eps = 1e-08
+    cfg.train.weight_decay = 1e-2
 
-    cfg.train.lr = 1e-2
-    cfg.train.lr_decays = {str(i): 0.1**(1 / 20) for i in range(1, cfg.train.max_epoch)}
+    # Cyclic lr 
+    cfg.train.cyc_lr0 = 1e-4                # Float, Start (minimum) learning rate of 1cycle decay
+    cfg.train.cyc_lr1 = 1e-2                # Float, Maximum learning rate of 1cycle decay
+    cfg.train.cyc_raise10 = 5               #   Int, Raise rate for first part of 1cycle = number of epoch to multiply lr by 10
+    cfg.train.cyc_decrease10 = 80           #   Int, Decrease rate for second part of 1cycle = number of epoch to divide lr by 10
+    cfg.train.cyc_plateau = 20              #   Int, Number of epoch for plateau at maximum lr
+    raise_rate = 10**(1 / cfg.train.cyc_raise10)
+    decrease_rate = 0.1**(1 / cfg.train.cyc_decrease10)
+    cfg.train.lr = cfg.train.cyc_lr0
+    n_raise = int(np.ceil(np.log(cfg.train.cyc_lr1/cfg.train.cyc_lr0) / np.log(raise_rate)))
+    cfg.train.lr_decays = {str(i): raise_rate for i in range(1, n_raise)}
+    for i in range(n_raise + cfg.train.cyc_plateau, cfg.train.max_epoch):
+        cfg.train.lr_decays[str(i)] = decrease_rate
 
-    cfg.train.class_w = []
+    # import matplotlib.pyplot as plt
+    # fig = plt.figure('lr')
+    # y = [init_lr]
+    # for i in range(cfg.train.max_epoch):
+    #     y.append(y[-1])
+    #     if str(i) in cfg.train.lr_decays:
+    #         y[-1] *= cfg.train.lr_decays[str(i)]
+    # plt.plot(y)
+    # plt.xlabel('epochs')
+    # plt.ylabel('lr')
+    # plt.yscale('log')
+    # ax = fig.gca()
+    # ax.grid(linestyle='-.', which='both')
+    # plt.show()
+    # a = 1/0
 
+    # Augmentations
     cfg.train.augment_anisotropic = True
     cfg.train.augment_min_scale = 0.8
     cfg.train.augment_max_scale = 1.2
@@ -120,9 +157,11 @@ def my_config():
     cfg.train.augment_noise = 0.005
     cfg.train.augment_color = 0.7
 
-
+    
     # Test parameters
     # ---------------
+
+    cfg.test.val_momentum = 0.95  # momentum for averaging predictions during validation. 0 for no averaging at all
 
     cfg.test.steps_per_epoch = 50    # Size of one validation epoch (should be small)
     
@@ -149,6 +188,12 @@ if __name__ == '__main__':
     # Define parameters
     ###################
 
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--log_path', type=str)
+    parser.add_argument('--layer_blocks', nargs='+', type=int)
+    parser.add_argument('--weight_decay', type=float)
+    args = parser.parse_args()
+
     # Configuration parameters
     cfg = my_config()
 
@@ -156,10 +201,18 @@ if __name__ == '__main__':
     cfg.data.update(S3DIS_cfg(cfg).data)
 
     # Load experiment parameters
-    if len(sys.argv) > 1:
-        get_directories(cfg, date=sys.argv[1])
+    if args.log_path is not None:
+        get_directories(cfg, date=args.log_path)
     else:
         get_directories(cfg)
+
+    # Update parameters
+    if args.log_path is not None:
+        cfg.model.layer_blocks = tuple(args.layer_blocks)
+    
+    if args.log_path is not None:
+        cfg.train.weight_decay = args.weight_decay
+
     
     ##############
     # Prepare Data
@@ -243,9 +296,8 @@ if __name__ == '__main__':
     # TODO:
     #
     #       0. KPInv does not work why??? Do we need specific learning rate for it?
+    #           > argument parser
     #           > Investigate why kpInv does not work
-    #           > In plot consider the accumulation of batch. Search other places where we need to take care of that
-    #           > Validation save only yhe susampled cloud, do reproj when testing the score
     #
     #       1. Go implement other datasets (NPM3D, Semantic3D, Scannetv2)
     #          Also other task: ModelNet40, ShapeNetPart, SemanticKitti
@@ -257,8 +309,7 @@ if __name__ == '__main__':
     #       3. Optimize operation
     #           > verify group conv results
     #           > check the effect of normalization in conv
-    #           > use einsum for the whole conv
-    #           > use keops lazytensor
+    #           > use keops lazytensor in convolution ?
     #
     #       4. Optimize network
     #           > Test heads
@@ -266,7 +317,7 @@ if __name__ == '__main__':
     #           > Test subsampling ph
     #           > Number of parameters. Use groups, reduce some of the mlp operations
     #           > See optimization here:
-    #                 OK - https://spell.ml/blog/pytorch-training-tricks-YAnJqBEAACkARhgD
+    #               TODO - https://spell.ml/blog/pytorch-training-tricks-YAnJqBEAACkARhgD
     #               TODO - https://efficientdl.com/faster-deep-learning-in-pytorch-a-guide/#2-use-multiple-workers-and-pinned-memory-in-dataloader
     #               TODO - https://www.fast.ai/2018/07/02/adam-weight-decay/
     #               TODO - https://arxiv.org/pdf/2206.04670v1.pdf
@@ -280,12 +331,14 @@ if __name__ == '__main__':
     #           > Other state of the art technique to incorporate in code: border learning
     #               https://openaccess.thecvf.com/content/CVPR2022/papers/Tang_Contrastive_Boundary_Learning_for_Point_Cloud_Segmentation_CVPR_2022_paper.pdf
     #
+    #           > Investigate cosine annealing (cosine decay).
+    #
     #
     #       5. Explore
     #           > For benchmarking purpose, use multiscale dataset: introduce another scaling parameter
     #               in addtion to the anysotropic one, pick random value just before getting sphere and
     #               pick a sphere with the according size. then scale the sphere so that we have spheres 
-    #               of the same scale eveytime, justthe object in it will be "zoomed" or "dezoomed"
+    #               of the same scale eveytime, just the object in it will be "zoomed" or "dezoomed"
     #
     #           > Use multidataset, multihead segmentation and test deeper and deeper networks
     #

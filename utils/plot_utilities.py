@@ -42,6 +42,8 @@ from utils.printing import frame_lines_1, underline
 from utils.metrics import IoU_from_confusions, smooth_metrics, fast_confusion
 from utils.ply import read_ply, write_ply
 
+from experiments.S3DIS_simple.S3DIS import S3DISDataset
+
 
 
 
@@ -168,7 +170,7 @@ def load_single_IoU(filename, n_parts):
     return all_IoUs
 
 
-def load_snap_clouds(path, cfg, only_last=False):
+def load_snap_clouds_old(path, cfg, only_last=False):
 
     cloud_folders = np.array([join(path, f) for f in listdir_str(path) if f.startswith('val_preds')])
     cloud_epochs = np.array([int(f.split('_')[-1]) for f in cloud_folders])
@@ -211,8 +213,78 @@ def load_snap_clouds(path, cfg, only_last=False):
 
     return cloud_epochs, IoU_from_confusions(Confs)
 
+
+def load_snap_clouds(path, cfg, only_last=False):
+
+    # Check if we have old or new validation style
+    cloud_folders = [join(path, f) for f in listdir_str(path) if f.startswith('val_preds')]
+    if len(cloud_folders) > 0:
+        return load_snap_clouds_old(path, cfg, only_last=only_last)
+
+    # Verify that we have a validation folder
+    val_path = join(path, 'validation')
+    if not exists(val_path):
+        return load_snap_clouds_old(path, cfg, only_last=only_last)
+
+    # Get list of vote predictions
+    preds_names = np.array([f for f in listdir_str(val_path) if f.startswith('preds_')])
+    saved_votes = np.array([int(f.split('_')[1]) for f in preds_names])
+    preds_names = preds_names[np.argsort(saved_votes)]
+    preds_paths = np.array([join(val_path, f) for f in preds_names])
+    preds_epochs = np.array([int(f[:-4].split('_')[-1]) for f in preds_names])
+    preds_votes = np.array([int(f.split('_')[1]) for f in preds_names])
+
+    # Get confusion matrices on full clouds
+    dataset = None
+    Confs = np.zeros((len(preds_epochs), cfg.data.num_classes, cfg.data.num_classes), dtype=np.int32)
+    for v_i, preds_path in enumerate(preds_paths):
+        
+        # Load confusion if previously saved
+        conf_path = join(val_path, 'conf_{:d}_{:d}.txt'.format(preds_votes[v_i], preds_epochs[v_i]))
+        if isfile(conf_path):
+            Confs[v_i] += np.loadtxt(conf_path, dtype=np.int32)
+
+        # Or compute it
+        else:
+
+            # Get dataset in memory to have reproj indices
+            if dataset is None:
+                dataset_dict = {'S3DIS': S3DISDataset}
+                if cfg.data.name not in dataset_dict:
+                    raise ValueError('Add your dataset "{:s}" to the dataset_dict just above'.format(cfg.data.name))
+                dataset = dataset_dict[cfg.data.name](cfg, chosen_set='validation', calib=False)
+
+            # Load vote predictions
+            with open(preds_path, 'rb') as f:
+                val_preds = pickle.load(f)
+
+            # Get points
+            files = dataset.scene_files
+            for c_i, file_path in enumerate(files):
+
+                # Get groundtruth labels
+                labels = dataset.val_labels[c_i].astype(np.int32)
+
+                # Reproject preds on the evaluations points
+                preds = (val_preds[c_i][dataset.test_proj[c_i]]).astype(np.int32)
+
+                # Confusion matrix
+                label_values = np.array(cfg.data.label_values, dtype=np.int32)
+                Confs[v_i] += fast_confusion(labels, preds, label_values).astype(np.int32)
+
+            # Save confusion for future use
+            np.savetxt(conf_path, Confs[v_i], '%12d')
+
+    # Remove ignored labels from confusions
+    for l_ind, label_value in reversed(list(enumerate(cfg.data.label_values))):
+        if label_value in cfg.data.ignored_labels:
+            Confs = np.delete(Confs, l_ind, axis=1)
+            Confs = np.delete(Confs, l_ind, axis=2)
+
+    return preds_epochs, IoU_from_confusions(Confs)
+
     
-def print_cfg_diffs(logs_names, log_cfgs, show_params=[], hide_params=[]):
+def print_cfg_diffs(logs_names, log_cfgs, show_params=[], hide_params=[], max_cols=145):
     """
     Print the differences in parameters between logs. Use show_params to force showing 
     some parameters even if no differences are seen.
@@ -267,7 +339,7 @@ def print_cfg_diffs(logs_names, log_cfgs, show_params=[], hide_params=[]):
         # Get all the string we want in this column
         col_strings = [k1, k2, '']
         if col_strings[1] == 'augment_symmetries':
-            col_strings[1] = 'augm'
+            col_strings[1] = 'augm_sym'
 
         for v in values:
 
@@ -313,8 +385,19 @@ def print_cfg_diffs(logs_names, log_cfgs, show_params=[], hide_params=[]):
             n_fmt_col = n_fmt1 + (len(bcolors.ENDC) + len(bcolors.FAIL)) * n_colors
             lines[c_i] += '{:^{width}s}|'.format(col_str, width=n_fmt_col)
 
+    # Print according to max_cols
     underline("Parameter differences in your logs")
     print('')
+
+    first_i = lines[0].find('|')
+
+    while len(lines[0]) > max_cols:
+        last_i = lines[0][:max_cols].rfind('|')
+        for l_i, line_str in enumerate(lines):
+            print(line_str[:last_i + 1])
+            lines[l_i] = line_str[:first_i+1] + line_str[last_i + 1:]
+        print('')
+
     for line_str in lines:
         print(line_str)
     print('\n')
@@ -334,8 +417,8 @@ def compare_trainings(list_of_cfg, list_of_paths, list_of_labels=None):
     # Parameters
     # **********
 
-    plot_lr = False
-    smooth_epochs = 0.5
+    plot_lr = True
+    smooth_epochs = 1.5
 
     if list_of_labels is None:
         list_of_labels = [str(i) for i in range(len(list_of_paths))]
@@ -392,9 +475,9 @@ def compare_trainings(list_of_cfg, list_of_paths, list_of_labels=None):
         # Learning rate
         if plot_lr:
             lr_decay_v = np.array([lr_d for ep, lr_d in cfg.train.lr_decays.items()])
-            lr_decay_e = np.array([ep for ep, lr_d in cfg.train.lr_decays.items()])
-            max_e = max(np.max(all_epochs[-1]) + 1, np.max(lr_decay_e) + 1)
-            lr_decays = np.ones(int(np.ceil(max_e)), dtype=np.float32)
+            lr_decay_e = np.array([int(ep) for ep, lr_d in cfg.train.lr_decays.items()])
+            max_ee = max(np.max(all_epochs[-1]) + 1, np.max(lr_decay_e) + 1)
+            lr_decays = np.ones(int(np.ceil(max_ee)), dtype=np.float32)
             lr_decays[0] = float(cfg.train.lr)
             lr_decays[lr_decay_e] = lr_decay_v
             lr = np.cumprod(lr_decays)
@@ -573,6 +656,9 @@ def compare_convergences_segment(list_of_cfg, list_of_paths, list_of_names=None)
     # Parameters
     # **********
 
+    print('\nCollecting validation logs')
+    t0 = time.time()
+
     smooth_n = 10
 
     if list_of_names is None:
@@ -592,13 +678,7 @@ def compare_convergences_segment(list_of_cfg, list_of_paths, list_of_names=None)
     
     num_classes = len(class_list)
 
-    s = '{:^10}|'.format('mean')
-    for c in class_list:
-        s += '{:^10}'.format(c)
-    print(s)
-    print(10*'-' + '|' + 10*num_classes*'-')
     for path, cfg in zip(list_of_paths, list_of_cfg):
-
 
         # Get validation IoUs
         file = join(path, 'val_IoUs.txt')
@@ -612,76 +692,50 @@ def compare_convergences_segment(list_of_cfg, list_of_paths, list_of_names=None)
         all_mIoUs += [mIoUs]
         all_class_IoUs += [class_IoUs]
 
+        # Get optional full validation on clouds
+        snap_epochs, snap_IoUs = load_snap_clouds(path, cfg)
+
+        # smooth_full_n
+        # # Get mean IoU per class for consecutive epochs to directly get a mean without further smoothing
+        # smoothed_IoUs = []
+        # for epoch in range(len(all_IoUs)):
+        #     i0 = max(epoch - smooth_n, 0)
+        #     i1 = min(epoch + smooth_n + 1, len(all_IoUs))
+        #     smoothed_IoUs += [np.mean(np.vstack(all_IoUs[i0:i1]), axis=0)]
+        # smoothed_IoUs = np.vstack(smoothed_IoUs)
+        # smoothed_mIoUs = np.mean(smoothed_IoUs, axis=1)
+
+        # return smoothed_IoUs, smoothed_mIoUs
+        all_snap_epochs += [snap_epochs]
+        all_snap_IoUs += [snap_IoUs]
+
+    print('Done in {:.3f} s'.format(time.time() - t0))
+    print('\n')
+
+    # Print spheres validation
+    s = '{:^10}|'.format('mean')
+    for c in class_list:
+        s += '{:^10}'.format(c)
+    print(s)
+    print(10*'-' + '|' + 10*num_classes*'-')
+    for mIoUs in all_mIoUs:
         s = '{:^10.1f}|'.format(100*mIoUs[-1])
         for IoU in class_IoUs[-1]:
             s += '{:^10.1f}'.format(100*IoU)
         print(s)
 
-        # Get optional full validation on clouds
-        snap_epochs, snap_IoUs = load_snap_clouds(path, cfg)
-        all_snap_epochs += [snap_epochs]
-        all_snap_IoUs += [snap_IoUs]
-
-
-
-        
-        
-            # Get points
-            points = val_loader.dataset.load_evaluation_points(file_path)
-
-            # Get probs on our own ply points
-            sub_probs = val_data.probs[i]
-
-            # Insert false columns for ignored labels
-            for l_ind, label_value in enumerate(val_loader.dataset.label_values):
-                if label_value in val_loader.dataset.ignored_labels:
-                    sub_probs = np.insert(sub_probs, l_ind, 0, axis=1)
-
-            # Get the predicted labels
-            sub_preds = val_loader.dataset.label_values[np.argmax(sub_probs, axis=1).astype(np.int32)]
-
-            tt_prob = (sub_probs[val_loader.dataset.test_proj[i], 0]).astype(np.float32)
-
-            # Reproject preds on the evaluations points
-            preds = (sub_preds[val_loader.dataset.test_proj[i]]).astype(np.int32)
-
-            # Path of saved validation file
-            cloud_name = file_path.split('/')[-1]
-            val_name = join(val_path, cloud_name)
-
-            # Save file
-            labels = val_loader.dataset.val_labels[i].astype(np.int32)
-            write_ply(val_name,
-                        [points, preds, labels, tt_prob],
-                        ['x', 'y', 'z', 'preds', 'class', 'tt_prob'])
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+    # Print clouds validation (average over the last ten validations)
     print(10*'-' + '|' + 10*num_classes*'-')
     for snap_IoUs in all_snap_IoUs:
         if len(snap_IoUs) > 0:
-            best_snap = np.argmax(np.mean(snap_IoUs, axis=1))
-            s = '{:^10.1f}|'.format(100*np.mean(snap_IoUs[best_snap]))
-            for IoU in snap_IoUs[best_snap]:
+            last_avg_n = 3
+            if snap_IoUs.shape[0] > last_avg_n:
+                last_snaps = snap_IoUs[-last_avg_n:]
+            else:
+                last_snaps = snap_IoUs
+            mean_IoUs = np.mean(last_snaps, axis=0)
+            s = '{:^10.1f}|'.format(100*np.mean(mean_IoUs))
+            for IoU in mean_IoUs:
                 s += '{:^10.1f}'.format(100*IoU)
         else:
             s = '{:^10s}'.format('-')

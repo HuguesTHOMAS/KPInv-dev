@@ -13,8 +13,8 @@ from utils.cpp_funcs import batch_radius_neighbors, batch_knn_neighbors
 
 # ----------------------------------------------------------------------------------------------------------------------
 #
-#           Implementation of k-nn search in Keops
-#       \********************************************/
+#           Input pyramid functions
+#       \*****************************/
 #
 
 

@@ -80,6 +80,12 @@ def train_and_validate(net, training_loader, val_loader, cfg, chkp_path=None, fi
                                      betas=cfg.train.adam_b,
                                      eps=cfg.train.adam_eps,
                                      weight_decay=cfg.train.weight_decay)
+    elif cfg.train.optimizer == 'AdamW':
+        optimizer = torch.optim.AdamW(net.parameters(),
+                                      lr=cfg.train.lr,
+                                      betas=cfg.train.adam_b,
+                                      eps=cfg.train.adam_eps,
+                                      weight_decay=cfg.train.weight_decay)
     else:
         raise ValueError('Optimizer \"{:s}\" unknown. Only \"Adam\" and \"SGD\" are accepted.'.format(cfg.train.optimizer))
 

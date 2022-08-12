@@ -128,12 +128,12 @@ def init_cfg():
     cfg.train.batch_limit = -1          #   Int, maximum number of points in total in a batch
     cfg.train.max_points = -1           #   Int, maximum number of points per element (randomly drop the excedent)
     
-    cfg.train.optimizer = 'SGD'         #   Str, optimizer ('SGD' or 'Adam')
+    cfg.train.optimizer = 'SGD'         #   Str, optimizer ('SGD', 'Adam' or 'AdamW')
     cfg.train.lr = 1e-2                 # Float, initial learning rate
     cfg.train.sgd_momentum = 0.95       # Float, learning rate momentum for sgd optimizer
     cfg.train.adam_b = (0.9, 0.999)     # Float, betas for Adam optimizer
     cfg.train.adam_eps = 1e-08          # Float, eps for Adam optimizer
-    cfg.train.weight_decay = 1e-4       # Float, weight decay
+    cfg.train.weight_decay = 1e-2       # Float, weight decay
     cfg.train.lr_decays = {'10': 0.1}   #  Dict, decay values with their epoch {epoch: decay}
     cfg.train.warmup = True             #  Bool, should the first epoch be a warmup
     cfg.train.grad_clip = 100.0         #   Int, gradient clipping value (negative means no clipping)
@@ -149,6 +149,12 @@ def init_cfg():
 
     cfg.train.segloss_balance = 'none'      #   Str, Respectively each point, class, or cloud in the batch has
                                             #        the same loss contribution ('none', 'class', 'batch'). 
+                                            
+    cfg.train.cyc_lr0 = 1e-4                # Float, Start (minimum) learning rate of 1cycle decay
+    cfg.train.cyc_lr1 = 1e-2                # Float, Maximum learning rate of 1cycle decay
+    cfg.train.cyc_raise10 = 5               #   Int, Raise rate for first part of 1cycle = number of epoch to multiply lr by 10
+    cfg.train.cyc_decrease10 = 50           #   Int, Decrease rate for second part of 1cycle = number of epoch to divide lr by 10
+    cfg.train.cyc_plateau = 20              #   Int, Number of epoch for plateau at maximum lr
     
     
     # Test parameters
@@ -165,6 +171,8 @@ def init_cfg():
     cfg.test.batch_size = 8             #   Int, number of input point cloud per batch
     cfg.test.batch_limit = -1           #   Int, maximum number of points in total in a batch
     cfg.test.max_points = -1            #   Int, maximum number of points per element (randomly drop the excedent)
+
+    cfg.test.val_momentum = 0.5         # Float, momentum for averaging predictions during validation.
 
 
     return cfg
@@ -207,126 +215,4 @@ def load_cfg(log_path):
         cfg[k].update(cfg2[k])
 
     return cfg
-
-
-
-    # def load0(self, log_path):
-
-
-
-    #     # List all parameters
-    #     config_names = [['exp', 'Experiment parameters'],
-    #                     ['data', 'Data parameters'],
-    #                     ['model', 'Model parameters'],
-    #                     ['train', 'Training parameters'],
-    #                     ['test', 'Test parameters']]
-
-    #     filename = join(log_path, 'parameters.txt')
-    #     with open(filename, 'r') as f:
-    #         lines = f.readlines()
-
-        
-    #     title_lines = []
-    #     start_lines = []
-    #     for config_name, config_title in config_names:
-    #         for i, lines in enumerate(lines):
-    #             if config_title in line:
-    #                 title_lines.append(i)
-    #                 start_lines.append(i)
-    #                 break
-
-            
-    #         while not lines[start_lines[-1]].startswith('{'):
-    #             start_lines[-1] += 1
-
-
-
-    #     for start_i in start_lines:
-
-    #         config_name, config_title = config_names[start_i]
-
-    #         i = start_i
-    #         while i < len():
-
-    #             i += 1
-
-
-
-    #     str_dict = ''.join(lines)
-        
-    #     easy_dict = EasyDict(eval(str_dict))
-
-    #     setattr(self, config_name, easy_dict)
-
-
-
-
-
-
-    #     # Class variable dictionary
-    #     for line in lines:
-    #         line_info = line.split()
-    #         if len(line_info) > 2 and line_info[0] != '#':
-
-    #             if line_info[2] == 'None':
-    #                 setattr(self, line_info[0], None)
-
-    #             elif line_info[0] == 'lr_decay_epochs':
-    #                 self.lr_decays = {int(b.split(':')[0]): float(b.split(':')[1]) for b in line_info[2:]}
-
-    #             elif line_info[0] == 'architecture':
-    #                 self.architecture = [b for b in line_info[2:]]
-
-    #             elif line_info[0] == 'augment_symmetries':
-    #                 self.augment_symmetries = [bool(int(b)) for b in line_info[2:]]
-
-    #             elif line_info[0] == 'num_classes':
-    #                 if len(line_info) > 3:
-    #                     self.num_classes = [int(c) for c in line_info[2:]]
-    #                 else:
-    #                     self.num_classes = int(line_info[2])
-
-    #             elif line_info[0] == 'class_w':
-    #                 self.class_w = [float(w) for w in line_info[2:]]
-
-    #             elif hasattr(self, line_info[0]):
-    #                 attr_type = type(getattr(self, line_info[0]))
-    #                 if attr_type == bool:
-    #                     setattr(self, line_info[0], attr_type(int(line_info[2])))
-    #                 else:
-    #                     setattr(self, line_info[0], attr_type(line_info[2]))
-
-    # def save0(self):
-
-        
-
-    #     # List all parameters
-    #     config_names = [['exp', 'Experiment parameters'],
-    #                     ['data', 'Data parameters'],
-    #                     ['model', 'Model parameters'],
-    #                     ['train', 'Training parameters'],
-    #                     ['test', 'Test parameters']]
-
-    #     with open(join(self.saving_path, 'parameters.txt'), "w") as text_file:
-
-    #         for config_name, config_title in config_names:
-
-    #             # Title of the config category
-    #             str = '# ' + config_title + '\n'
-    #             text_file.write('# ' + config_title + '\n')
-    #             text_file.write('# ' + '*' * len(config_title) + '\n\n')
-                
-    #             # Verify element
-    #             if hasattr(self, config_name):
-    #                 conf_dict = getattr(self, config_name)
-    #             else:
-    #                 raise ValueError('Wrong config definition. Parameter category {:s} is not defined'.format(config_name))
-
-    #             if not isinstance(conf_dict, EasyDict):
-    #                 raise ValueError('Wrong config definition. Parameter category {:s} is not an EasyDict'.format(config_name))
-
-    #             text_dict = json.dumps(conf_dict, sort_keys=False, indent=4)
-
-    #             text_file.write(text_dict)
-    #             text_file.write('\n\n')
 
