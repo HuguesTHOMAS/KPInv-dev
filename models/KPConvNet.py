@@ -5,26 +5,29 @@ import torch.nn as nn
 import numpy as np
 
 from models.generic_blocks import NearestUpsampleBlock, UnaryBlock, local_nearest_pool
-from models.kpconv_blocks import KPConv, KPConvBlock, KPConvResidualBlock
+from models.kpconv_blocks import KPDef, KPConvBlock, KPConvResidualBlock
 
 from utils.torch_pyramid import fill_pyramid
 
 
-def p2p_fitting_regularizer(net):
+def p2p_fit_rep_loss(net):
+    """
+    Explore a network parameters to find deformable convolutions and get fitting and repulsives losses for all of them.
+    """
 
     fitting_loss = 0
     repulsive_loss = 0
 
     for m in net.modules():
 
-        if isinstance(m, KPConv) and m.deformable:
+        if isinstance(m, KPDef):
 
             ##############
             # Fitting loss
             ##############
 
             # Get the distance to nearest input point and normalize to be independant from layers
-            KP_min_d2 = m.min_d2 / (m.KP_extent ** 2)
+            KP_min_d2 = m.min_d2 / (m.radius ** 2)
 
             # Loss will be the square distance to nearest input point. We use L1 because dist is already squared
             fitting_loss += net.l1(KP_min_d2, torch.zeros_like(KP_min_d2))
@@ -34,16 +37,16 @@ def p2p_fitting_regularizer(net):
             ################
 
             # Normalized KP locations
-            KP_locs = m.deformed_KP / m.KP_extent
+            KP_locs = m.deformed_KP / m.radius
 
             # Point should not be close to each other
-            for i in range(net.K):
+            for i in range(m.kernel_size):
                 other_KP = torch.cat([KP_locs[:, :i, :], KP_locs[:, i + 1:, :]], dim=1).detach()
                 distances = torch.sqrt(torch.sum((other_KP - KP_locs[:, i:i + 1, :]) ** 2, dim=2))
-                rep_loss = torch.sum(torch.clamp_max(distances - net.repulse_extent, max=0.0) ** 2, dim=1)
-                repulsive_loss += net.l1(rep_loss, torch.zeros_like(rep_loss)) / net.K
+                rep_loss = torch.sum(torch.clamp_max(distances - m.sigma, max=0.0) ** 2, dim=1)
+                repulsive_loss += net.l1(rep_loss, torch.zeros_like(rep_loss)) / m.kernel_size
 
-    return net.deform_fitting_power * (2 * fitting_loss + repulsive_loss)
+    return fitting_loss, repulsive_loss
 
 
 class KPCNN(nn.Module):
@@ -180,7 +183,7 @@ class KPCNN(nn.Module):
 
 class KPFCNN(nn.Module):
 
-    def __init__(self, cfg):
+    def __init__(self, cfg, modulated=False, deformable=False):
         """
         Class defining KPFCNN, in a more readable way. The number of block at each layer can be chosen.
         For KPConv Paper architecture, use cfg.model.layer_blocks = (2, 1, 1, 1, 1).
@@ -203,6 +206,8 @@ class KPFCNN(nn.Module):
         self.first_sigma = self.subsample_size * self.kp_sigma
         self.layer_blocks = cfg.model.layer_blocks
         self.num_layers = len(self.layer_blocks)
+        self.deformable = deformable
+        self.modulated = modulated
         
         # List of valid labels (those not ignored in loss)
         self.valid_labels = np.sort([c for c in cfg.data.label_values if c not in cfg.data.ignored_labels])
@@ -309,6 +314,8 @@ class KPFCNN(nn.Module):
         # self.deform_lr_factor = config.deform_lr_factor
         # self.repulse_extent = config.repulse_extent
 
+        self.deform_loss_factor = cfg.train.deform_loss_factor
+        self.fit_rep_ratio = cfg.train.deform_fit_rep_ratio
         self.output_loss = 0
         self.reg_loss = 0
         self.l1 = nn.L1Loss()
@@ -332,6 +339,8 @@ class KPFCNN(nn.Module):
                            cfg.model.kernel_size,
                            radius,
                            sigma,
+                           modulated=self.modulated,
+                           deformable=self.deformable,
                            influence_mode=cfg.model.kp_influence,
                            aggregation_mode=cfg.model.kp_aggregation,
                            dimension=cfg.data.dim,
@@ -345,6 +354,8 @@ class KPFCNN(nn.Module):
                                cfg.model.kernel_size,
                                radius,
                                sigma,
+                               modulated=self.modulated,
+                               deformable=self.deformable,
                                influence_mode=cfg.model.kp_influence,
                                aggregation_mode=cfg.model.kp_aggregation,
                                dimension=cfg.data.dim,
@@ -464,16 +475,12 @@ class KPFCNN(nn.Module):
         # Cross entropy loss
         self.output_loss = self.criterion(outputs, target)
 
-        # # Regularization of deformable offsets
-        # if self.deform_fitting_mode == 'point2point':
-        #     self.reg_loss = p2p_fitting_regularizer(self)
-        # elif self.deform_fitting_mode == 'point2plane':
-        #     raise ValueError('point2plane fitting mode not implemented yet.')
-        # else:
-        #     raise ValueError('Unknown fitting mode: ' + self.deform_fitting_mode)
+        # Regularization of deformable offsets (=0 if no deformable conv in network)
+        fitting_loss, repulsive_loss = p2p_fit_rep_loss(self)
+        self.reg_loss = self.deform_loss_factor * (self.fit_rep_ratio * fitting_loss + repulsive_loss)
 
         # Combined loss
-        return self.output_loss
+        return self.output_loss + self.reg_loss
 
     def accuracy(self, outputs, labels):
         """

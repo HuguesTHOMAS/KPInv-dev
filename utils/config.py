@@ -155,7 +155,10 @@ def init_cfg():
     cfg.train.cyc_raise10 = 5               #   Int, Raise rate for first part of 1cycle = number of epoch to multiply lr by 10
     cfg.train.cyc_decrease10 = 50           #   Int, Decrease rate for second part of 1cycle = number of epoch to divide lr by 10
     cfg.train.cyc_plateau = 20              #   Int, Number of epoch for plateau at maximum lr
-    
+
+    cfg.train.deform_loss_factor = 0.1      # Float, multiplier for deformation loss. Reduce to reduce influence for deformation on overall features
+    cfg.train.deform_lr_factor = 1.0        # Float, multiplier for deformation lr. Higher so that feformation are learned faster (especially if deform_loss_factor i low)
+    cfg.train.deform_fit_rep_ratio = 2.0    # Float, ratio between fitting loss and regularization loss
     
     # Test parameters
     # ---------------

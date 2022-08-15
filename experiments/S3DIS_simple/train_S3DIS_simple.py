@@ -19,6 +19,7 @@
 
 # Common libs
 from decimal import MAX_PREC
+from operator import mod
 import os
 import sys
 import time
@@ -74,7 +75,7 @@ def my_config():
     # cfg.model.layer_blocks = (4,  6,  8,  8,  6)
     # cfg.model.layer_blocks = (4,  6,  8, 12,  6)  # Strong architecture
 
-    cfg.model.kp_mode = 'kpconv'
+    cfg.model.kp_mode = 'kpdef'        # Choose ['kpconv', 'kpdef', 'kpinv']. And ['kpconv-mod', 'kpdef-mod'] for modulations
     cfg.model.kernel_size = 15
     cfg.model.kp_radius = 2.5
     cfg.model.kp_sigma = 1.2
@@ -104,19 +105,23 @@ def my_config():
     cfg.train.in_radius = 2.0
 
     # Batch related_parames
-    cfg.train.batch_size = 10        # Target batch size. If you don't want calibration, you can directly set train.batch_limit
-    cfg.train.accum_batch = 5        # Accumulate batches for an effective batch size of batch_size * accum_batch.
-    cfg.train.steps_per_epoch = 100
+    cfg.train.batch_size = 5            # Target batch size. If you don't want calibration, you can directly set train.batch_limit
+    cfg.train.accum_batch = 8           # Accumulate batches for an effective batch size of batch_size * accum_batch.
+    cfg.train.steps_per_epoch = 125
     
     # Training length
     cfg.train.max_epoch = 180
     cfg.train.checkpoint_gap = cfg.train.max_epoch // 5
+    
+    # Deformations
+    cfg.train.deform_loss_factor = 0.1      # Reduce to reduce influence for deformation on overall features
+    cfg.train.deform_lr_factor = 10.0       # Higher so that deformation are learned faster (especially if deform_loss_factor is low)
 
     # Optimizer
     cfg.train.optimizer = 'AdamW'
     cfg.train.adam_b = (0.9, 0.999)
     cfg.train.adam_eps = 1e-08
-    cfg.train.weight_decay = 1e-2
+    cfg.train.weight_decay = 0.01
 
     # Cyclic lr 
     cfg.train.cyc_lr0 = 1e-4                # Float, Start (minimum) learning rate of 1cycle decay
@@ -189,7 +194,6 @@ if __name__ == '__main__':
     ###################
 
     # TODO: finish run_multiple exp
-    # TODO: finish run_multiple exp
 
     parser = argparse.ArgumentParser()
     parser.add_argument('--log_path', type=str)
@@ -210,10 +214,10 @@ if __name__ == '__main__':
         get_directories(cfg)
 
     # Update parameters
-    if args.log_path is not None:
+    if args.layer_blocks is not None:
         cfg.model.layer_blocks = tuple(args.layer_blocks)
     
-    if args.log_path is not None:
+    if args.weight_decay is not None:
         cfg.train.weight_decay = args.weight_decay
 
     
@@ -269,14 +273,22 @@ if __name__ == '__main__':
     # Define network model
     t1 = time.time()
 
-    if cfg.model.kp_mode == 'kpconv':
-        net = KPConvFCNN(cfg)
-    elif cfg.model.kp_mode == 'kpinv':
+
+    modulated = False
+    if 'mod' in cfg.model.kp_mode:
+        modulated = True
+
+    if cfg.model.kp_mode.startswith('kpconv'):
+        net = KPConvFCNN(cfg, modulated=modulated, deformable=False)
+    elif cfg.model.kp_mode.startswith('kpdef'):
+        net = KPConvFCNN(cfg, modulated=modulated, deformable=True)
+    elif cfg.model.kp_mode.startswith('kpinv'):
         net = KPInvFCNN(cfg)
 
 
     print()
     print(net)
+    print("Model size %i" % sum(param.numel() for param in net.parameters() if param.requires_grad))
 
     debug = False
     if debug:

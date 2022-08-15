@@ -314,6 +314,41 @@ def exp_training_strat2():
 
 
 
+def exp_weight_decay():
+    """
+    w=0.01 is the best value.
+    """
+
+    # Using the dates of the logs, you can easily gather consecutive ones. All logs should be of the same dataset.
+    start = 'Log_2022-08-12_12-49-29'
+    end = 'Log_2022-08-19_23-43-08'
+
+    # Name of the result path
+    res_path = 'results'
+
+    # Gather logs and sort by date
+    logs = np.sort([join(res_path, l) for l in listdir_str(res_path) if start <= l <= end])
+    
+    # Give names to the logs (for plot legends)
+    logs_names = ['w=0.01',
+                  'w=0.1',
+                  'w=0.001',
+                  'w=0.0001',
+                  'w=1.0',]
+
+    # safe check log names
+    if len(logs) > len(logs_names):
+        logs = logs[:len(logs_names)]
+    logs_names = np.array(logs_names[:len(logs)])
+
+    # Reorder
+    logs = logs[[3, 2, 0, 1, 4]]
+    logs_names = logs_names[[3, 2, 0, 1, 4]]
+
+    return logs, logs_names
+
+
+
 
 
 
@@ -330,7 +365,7 @@ if __name__ == '__main__':
     ######################################################
 
     # My logs: choose the logs to show
-    logs, logs_names = exp_training_strat2()
+    logs, logs_names = exp_weight_decay()
 
     frame_lines_1(["Plot S3DIS experiments"])
 
