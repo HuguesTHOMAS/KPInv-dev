@@ -70,8 +70,8 @@ def my_config():
     # cfg.model.layer_blocks = (2, 3, 8, 32, 4)
 
     
-    # cfg.model.layer_blocks = (2,  3,  4,  6,  3)
-    cfg.model.layer_blocks = (3,  4,  6,  8,  4)
+    cfg.model.layer_blocks = (2,  3,  4,  6,  3)
+    # cfg.model.layer_blocks = (3,  4,  6,  8,  4)
     # cfg.model.layer_blocks = (4,  6,  8,  8,  6)
     # cfg.model.layer_blocks = (4,  6,  8, 12,  6)  # Strong architecture
 
@@ -102,11 +102,11 @@ def my_config():
     cfg.train.num_workers = 16
 
     # Input spheres radius. Adapt this with model.init_sub_size. Try to keep a ratio of ~50
-    cfg.train.in_radius = 2.0
+    cfg.train.in_radius = 1.8
 
     # Batch related_parames
-    cfg.train.batch_size = 5            # Target batch size. If you don't want calibration, you can directly set train.batch_limit
-    cfg.train.accum_batch = 8           # Accumulate batches for an effective batch size of batch_size * accum_batch.
+    cfg.train.batch_size = 8            # Target batch size. If you don't want calibration, you can directly set train.batch_limit
+    cfg.train.accum_batch = 5           # Accumulate batches for an effective batch size of batch_size * accum_batch.
     cfg.train.steps_per_epoch = 125
     
     # Training length
@@ -115,7 +115,7 @@ def my_config():
     
     # Deformations
     cfg.train.deform_loss_factor = 0.1      # Reduce to reduce influence for deformation on overall features
-    cfg.train.deform_lr_factor = 10.0       # Higher so that deformation are learned faster (especially if deform_loss_factor is low)
+    cfg.train.deform_lr_factor = 1.0        # Higher so that deformation are learned faster (especially if deform_loss_factor is low)
 
     # Optimizer
     cfg.train.optimizer = 'AdamW'
@@ -193,12 +193,26 @@ if __name__ == '__main__':
     # Define parameters
     ###################
 
-    # TODO: finish run_multiple exp
+    # Add argument here to handle it
+    str_args = ['model.kp_mode']
+    float_args = ['train.weight_decay']
+    list_args = ['model.layer_blocks']
 
     parser = argparse.ArgumentParser()
+    for str_arg_name in str_args:
+        parser_name = '--' + str_arg_name.split('.')[-1]
+        parser.add_argument(parser_name, type=str)
+
+    for float_arg_name in float_args:
+        parser_name = '--' + float_arg_name.split('.')[-1]
+        parser.add_argument(parser_name, type=float)
+
+    for list_arg_name in list_args:
+        parser_name = '--' + list_arg_name.split('.')[-1]
+        parser.add_argument(parser_name, nargs='+', type=int)
+
+    # Log path special arg
     parser.add_argument('--log_path', type=str)
-    parser.add_argument('--layer_blocks', nargs='+', type=int)
-    parser.add_argument('--weight_decay', type=float)
     args = parser.parse_args()
 
     # Configuration parameters
@@ -214,11 +228,12 @@ if __name__ == '__main__':
         get_directories(cfg)
 
     # Update parameters
-    if args.layer_blocks is not None:
-        cfg.model.layer_blocks = tuple(args.layer_blocks)
-    
-    if args.weight_decay is not None:
-        cfg.train.weight_decay = args.weight_decay
+    for all_args in [str_args, float_args, list_args]:
+        for arg_name in all_args:
+            key1, key2 =arg_name.split('.')
+            new_arg = getattr(args, key2)
+            if new_arg is not None:
+                cfg[key1][key2] = new_arg
 
     
     ##############
@@ -309,6 +324,16 @@ if __name__ == '__main__':
     ################
 
     # TODO:
+    #
+    #       00. KPDef List of experiments to do:
+    #           > Test with param that allow kpdef-mod v2 to run. Compare v1 v2, def, conv mod, nomod
+    #           > Test if we propagate gradient with neighbor influence
+    #           > Test values of deform loss and deform lr
+    #           > Test having deform only on later layers
+    #           > Test using groups to reduce computation cost
+    #           > Test inception style block with def and conv
+    #           > Study if modulation = self-attention
+    #           > Study relation with KPInv
     #
     #       0. KPInv does not work why??? Do we need specific learning rate for it?
     #           > argument parser

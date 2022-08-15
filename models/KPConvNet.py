@@ -123,7 +123,7 @@ class KPCNN(nn.Module):
         self.deform_lr_factor = config.deform_lr_factor
         self.repulse_extent = config.repulse_extent
         self.output_loss = 0
-        self.reg_loss = 0
+        self.deform_loss = 0
         self.l1 = nn.L1Loss()
 
         return
@@ -156,14 +156,14 @@ class KPCNN(nn.Module):
 
         # Regularization of deformable offsets
         if self.deform_fitting_mode == 'point2point':
-            self.reg_loss = p2p_fitting_regularizer(self)
+            self.deform_loss = p2p_fitting_regularizer(self)
         elif self.deform_fitting_mode == 'point2plane':
             raise ValueError('point2plane fitting mode not implemented yet.')
         else:
             raise ValueError('Unknown fitting mode: ' + self.deform_fitting_mode)
 
         # Combined loss
-        return self.output_loss + self.reg_loss
+        return self.output_loss + self.deform_loss
 
     @staticmethod
     def accuracy(outputs, labels):
@@ -253,16 +253,16 @@ class KPFCNN(nn.Module):
 
             # First block takes features to new dimension.
             encoder_i = nn.ModuleList()
-            encoder_i.append(self.get_residual_block(C, C * 2, conv_r, conv_sig, cfg))
+            encoder_i.append(self.get_residual_block(C, C * 2, conv_r, conv_sig, cfg, deformable=self.deformable))
 
             # Next blocks
             for _ in range(self.layer_blocks[layer - 1] - 1):
-                encoder_i.append(self.get_residual_block(C * 2, C * 2, conv_r, conv_sig, cfg))
+                encoder_i.append(self.get_residual_block(C * 2, C * 2, conv_r, conv_sig, cfg, deformable=self.deformable))
             setattr(self, 'encoder_{:d}'.format(layer), encoder_i)
 
             # Pooling block (not for the last layer)
             if layer < self.num_layers:
-                pooling_i = self.get_residual_block(C * 2, C * 2, conv_r, conv_sig, cfg, strided=True)
+                pooling_i = self.get_residual_block(C * 2, C * 2, conv_r, conv_sig, cfg, deformable=self.deformable, strided=True)
                 setattr(self, 'pooling_{:d}'.format(layer), pooling_i)
 
 
@@ -317,7 +317,7 @@ class KPFCNN(nn.Module):
         self.deform_loss_factor = cfg.train.deform_loss_factor
         self.fit_rep_ratio = cfg.train.deform_fit_rep_ratio
         self.output_loss = 0
-        self.reg_loss = 0
+        self.deform_loss = 0
         self.l1 = nn.L1Loss()
 
         return
@@ -332,7 +332,7 @@ class KPFCNN(nn.Module):
                            norm_type=norm_type,
                            bn_momentum=cfg.model.bn_momentum)
 
-    def get_conv_block(self, in_C, out_C, radius, sigma, cfg):
+    def get_conv_block(self, in_C, out_C, radius, sigma, cfg, deformable=False):
 
         return KPConvBlock(in_C,
                            out_C,
@@ -340,14 +340,14 @@ class KPFCNN(nn.Module):
                            radius,
                            sigma,
                            modulated=self.modulated,
-                           deformable=self.deformable,
+                           deformable=deformable,
                            influence_mode=cfg.model.kp_influence,
                            aggregation_mode=cfg.model.kp_aggregation,
                            dimension=cfg.data.dim,
                            norm_type=cfg.model.norm,
                            bn_momentum=cfg.model.bn_momentum)
 
-    def get_residual_block(self, in_C, out_C, radius, sigma, cfg, strided=False):
+    def get_residual_block(self, in_C, out_C, radius, sigma, cfg, deformable=False, strided=False):
 
         return KPConvResidualBlock(in_C,
                                out_C,
@@ -355,7 +355,7 @@ class KPFCNN(nn.Module):
                                radius,
                                sigma,
                                modulated=self.modulated,
-                               deformable=self.deformable,
+                               deformable=deformable,
                                influence_mode=cfg.model.kp_influence,
                                aggregation_mode=cfg.model.kp_aggregation,
                                dimension=cfg.data.dim,
@@ -477,10 +477,10 @@ class KPFCNN(nn.Module):
 
         # Regularization of deformable offsets (=0 if no deformable conv in network)
         fitting_loss, repulsive_loss = p2p_fit_rep_loss(self)
-        self.reg_loss = self.deform_loss_factor * (self.fit_rep_ratio * fitting_loss + repulsive_loss)
+        self.deform_loss = self.deform_loss_factor * (self.fit_rep_ratio * fitting_loss + repulsive_loss)
 
         # Combined loss
-        return self.output_loss + self.reg_loss
+        return self.output_loss + self.deform_loss
 
     def accuracy(self, outputs, labels):
         """

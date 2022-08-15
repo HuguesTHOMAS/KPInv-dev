@@ -154,7 +154,7 @@ def training_epoch(epoch, t0, net, optimizer, training_loader, cfg, PID_file, de
                         file.write(message.format(epoch,
                                                     step,
                                                     accum_loss,
-                                                    net.reg_loss,
+                                                    net.deform_loss,
                                                     t[-1] - t0))
 
 

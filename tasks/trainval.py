@@ -67,21 +67,28 @@ def train_and_validate(net, training_loader, val_loader, cfg, chkp_path=None, fi
     ######################
     # Initialize optimizer
     ######################
+    
+    # Optimizer with specific learning rate for deformable KPConv
+    deform_params = [v for k, v in net.named_parameters() if 'offset_' in k]
+    other_params = [v for k, v in net.named_parameters() if 'offset_' not in k]
+    deform_lr = cfg.train.lr * cfg.train.deform_lr_factor
+    param_dicts = [{'params': other_params},
+                   {'params': deform_params, 'lr': deform_lr}]
 
     # Define optimizer
     if cfg.train.optimizer == 'SGD':
-        optimizer = torch.optim.SGD(net.parameters(),
+        optimizer = torch.optim.SGD(param_dicts,
                                     lr=cfg.train.lr,
                                     momentum=cfg.train.sgd_momentum,
                                     weight_decay=cfg.train.weight_decay)
     elif cfg.train.optimizer == 'Adam':
-        optimizer = torch.optim.Adam(net.parameters(),
+        optimizer = torch.optim.Adam(param_dicts,
                                      lr=cfg.train.lr,
                                      betas=cfg.train.adam_b,
                                      eps=cfg.train.adam_eps,
                                      weight_decay=cfg.train.weight_decay)
     elif cfg.train.optimizer == 'AdamW':
-        optimizer = torch.optim.AdamW(net.parameters(),
+        optimizer = torch.optim.AdamW(param_dicts,
                                       lr=cfg.train.lr,
                                       betas=cfg.train.adam_b,
                                       eps=cfg.train.adam_eps,

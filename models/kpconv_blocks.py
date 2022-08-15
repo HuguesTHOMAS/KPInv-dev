@@ -356,10 +356,10 @@ class KPDef(nn.Module):
         else:
             self.offset_dim = self.dimension * self.kernel_size
 
-        self.version = 'v2'
+        self.version = 'v1'
         if self.version == 'v1':
             # MLP
-            self.gen_mlp = nn.Linear(in_channels, self.offset_dim, bias=True)
+            self.offset_mlp = nn.Linear(in_channels, self.offset_dim, bias=True)
 
         elif self.version == 'v2':
             # KPConv
@@ -428,14 +428,12 @@ class KPDef(nn.Module):
             # Get Kernel point distances to neigbors
             neighbors = neighbors.unsqueeze(2)  # (M, H, 3) -> (M, H, 1, 3)
 
-
         differences = neighbors - deformed_K_points  # (M, H, 1, 3) x (M, 1, K, 3) -> (M, H, K, 3)
         sq_distances = torch.sum(differences ** 2, dim=3)  # (M, H, K)
 
         # Save min distances for loss
         self.min_d2, _ = torch.min(sq_distances, dim=1)   # (M, K)
 
-        
         # TODO: Should we use grad at this stage or not ???
         with torch.no_grad():
 
@@ -504,7 +502,7 @@ class KPDef(nn.Module):
                 # pooled_feats = neighbor_feats[:, 0, :]  # nearest pool (M, H, C) -> (M, C)
                 # pooled_feats = torch.max(neighbor_feats, dim=1)  # max pool (M, H, C) -> (M, C)
                 pooled_feats = torch.mean(neighbor_feats, dim=1)  # avg pool (M, H, C) -> (M, C)
-            self.offset_features = self.gen_mlp(pooled_feats)  # (M, K*D)
+            self.offset_features = self.offset_mlp(pooled_feats)  # (M, K*D)
 
         elif self.version == 'v2':
             self.offset_features = self.offset_conv(q_pts, s_pts, s_feats, neighb_inds) + self.offset_bias
