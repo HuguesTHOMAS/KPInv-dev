@@ -254,6 +254,9 @@ if __name__ == '__main__':
                                 chosen_set='validation',
                                 regular_sampling=True,
                                 precompute_pyramid=True)
+    
+    # Calib from training data
+    training_dataset.calib_all(cfg)
 
     # Save configuration now that it is complete
     save_cfg(cfg)

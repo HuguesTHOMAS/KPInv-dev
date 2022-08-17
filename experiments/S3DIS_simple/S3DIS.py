@@ -90,10 +90,10 @@ class S3DISDataset(SceneSegDataset):
             > Sampling is done simply with random picking (X spheres per class)
         """
         SceneSegDataset.__init__(self,
-                                       cfg,
-                                       chosen_set=chosen_set,
-                                       regular_sampling=regular_sampling,
-                                       precompute_pyramid=precompute_pyramid)
+                                 cfg,
+                                 chosen_set=chosen_set,
+                                 regular_sampling=regular_sampling,
+                                 precompute_pyramid=precompute_pyramid)
 
         ############
         # S3DIS data
@@ -123,7 +123,10 @@ class S3DISDataset(SceneSegDataset):
         # To pick points randomly per class, we need every point index from each class
         self.prepare_label_inds()
 
+        return
 
+    def calib_all(self, cfg, update_test=True):
+        
         ###################
         # Quick calibration
         ###################
@@ -140,6 +143,10 @@ class S3DISDataset(SceneSegDataset):
         if self.set == 'training':
             cfg.train.batch_size = self.b_n
             cfg.train.batch_limit = self.b_lim
+            if update_test:
+                cfg.test.batch_size = self.b_n
+                cfg.test.batch_limit = self.b_lim
+
         else:
             cfg.test.batch_size = self.b_n
             cfg.test.batch_limit = self.b_lim
