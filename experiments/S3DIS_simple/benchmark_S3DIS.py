@@ -75,7 +75,7 @@ def my_config():
     #   |           python3 experiments/S3DIS_simple/benchmark_S3DIS.py --param_name param_value    |
     #   |                                                                                           |
     #   |       4. After a few minutes you should be able to plot where the training is at with:    |
-    #   |           python3 experiments/S3DIS_simple/plot_results.py                                |
+    #   |           python3 experiments/S3DIS_simple/plot_benchmarks.py                             |
     #   +-------------------------------------------------------------------------------------------+
     #
     #
