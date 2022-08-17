@@ -311,7 +311,7 @@ class KPFCNN(nn.Module):
         # self.repulse_extent = config.repulse_extent
 
         self.output_loss = 0
-        self.reg_loss = 0
+        self.deform_loss = 0
         self.l1 = nn.L1Loss()
 
         return
@@ -338,7 +338,6 @@ class KPFCNN(nn.Module):
                            dimension=cfg.data.dim,
                            norm_type=cfg.model.norm,
                            bn_momentum=cfg.model.bn_momentum)
-
 
     def get_residual_block(self, in_C, out_C, radius, sigma, cfg, strided=False):
 
@@ -474,6 +473,8 @@ class KPFCNN(nn.Module):
         #     raise ValueError('point2plane fitting mode not implemented yet.')
         # else:
         #     raise ValueError('Unknown fitting mode: ' + self.deform_fitting_mode)
+
+        self.deform_loss = 0
 
         # Combined loss
         return self.output_loss

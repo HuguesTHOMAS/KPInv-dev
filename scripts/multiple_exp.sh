@@ -11,9 +11,7 @@ max_containers="2"
 training_script="experiments/S3DIS_simple/train_S3DIS_simple.py"
 
 ## declare an array variable
-declare -a arg_arr=("--kp_mode kpconv"
-                    "--kp_mode kpconv-mod"
-                    "--kp_mode kpdef"
+declare -a arg_arr=("--kp_mode kpdef"
                     "--kp_mode kpdef-mod")
 
 

@@ -63,17 +63,57 @@ def my_config():
     # Network parameters
     # ------------------
 
-    # cfg.model.layer_blocks = (2, 1, 1, 1, 1)    # KPConv paper architecture. Can be changed for a deeper network
-    # cfg.model.layer_blocks = (2, 2, 2, 4, 2)
-    # cfg.model.layer_blocks = (2, 3, 4, 8, 4)
-    # cfg.model.layer_blocks = (2, 3, 4, 16, 4)
-    # cfg.model.layer_blocks = (2, 3, 8, 32, 4)
+    #
+    #   +-------------------------------------------------------------------------------------------+
+    #   |   How to Benchmark:                                                                       |
+    #   |                                                                                           |
+    #   |       1. Modify parameters as you wish below this.                                        |
+    #   |                                                                                           |
+    #   |       2. cd to the directory [...]/KPInv-dev                                              |
+    #   |                                                                                           |
+    #   |       3. Run:                                                                             |
+    #   |           python3 experiments/S3DIS_simple/benchmark_S3DIS.py --param_name param_value    |
+    #   |                                                                                           |
+    #   |       4. After a few minutes you should be able to plot where the training is at with:    |
+    #   |           python3 experiments/S3DIS_simple/plot_results.py                                |
+    #   +-------------------------------------------------------------------------------------------+
+    #
+    #
+    #       List of benchmarkings that we need to perform:
+    #           
+    #               1. KPConv radius/sigma study
+    #                   The radius of KPConv determines the nubmer of neighbors, but also the size 
+    #                   of the kernel. We want to try different values of radius and sigma:
+    #                       - radius in [1.4, 1.9, 2.4, 2.9, 3.4, 3.9]
+    #                       - sigma = radius * 0.7
+    #                       
+    #                   (args: --kp_radius XXXX --kp_sigma XXXX)
+    #                   N.B. Start with the biggest radiuses so that you are sure that the next 
+    #                        experiments will fit in the GPU memory
+    #           
+    #               2. KPConv radius/sigma study around 1.9
+    #                   Same but focus on small radiuses.
+    #                       - radius in [1.6, 1.7, 1.8, 1.9, 2.0, 2.1, 2.2, 2.3]
+    #                       - sigma = radius * 0.7
+    #
+    #               3. Network number of channels.
+    #                   See if we can get better results with more channels.
+    #                       - init_channels in [16, 32, 48, 64, 80, 96, 112, 128]
+    #
+    #               4. Test group convolution. TODO
+    #
+    #               5. check the effect of normalization in conv TODO
+    #
+    #               6. Study stronger downsampling at first layer like stems in RedNet101 TODO
+    #
 
-    
+
+    cfg.model.init_channels = 64
     cfg.model.layer_blocks = (2,  3,  4,  6,  3)
     # cfg.model.layer_blocks = (3,  4,  6,  8,  4)
     # cfg.model.layer_blocks = (4,  6,  8,  8,  6)
-    # cfg.model.layer_blocks = (4,  6,  8, 12,  6)  # Strong architecture
+    # cfg.model.layer_blocks = (4,  6,  8, 12,  6)
+
 
     cfg.model.kp_mode = 'kpconv'        # Choose ['kpconv', 'kpdef', 'kpinv']. And ['kpconv-mod', 'kpdef-mod'] for modulations
     cfg.model.kernel_size = 15
@@ -196,7 +236,13 @@ if __name__ == '__main__':
 
     # Add argument here to handle it
     str_args = ['model.kp_mode']
-    float_args = ['train.weight_decay']
+
+    float_args = ['train.weight_decay',
+                  'model.kp_radius',
+                  'model.kp_sigma']
+
+    int_args = ['model.kernel_size']
+
     list_args = ['model.layer_blocks']
 
     parser = argparse.ArgumentParser()
@@ -207,6 +253,10 @@ if __name__ == '__main__':
     for float_arg_name in float_args:
         parser_name = '--' + float_arg_name.split('.')[-1]
         parser.add_argument(parser_name, type=float)
+
+    for int_arg_name in int_args:
+        parser_name = '--' + int_arg_name.split('.')[-1]
+        parser.add_argument(parser_name, type=int)
 
     for list_arg_name in list_args:
         parser_name = '--' + list_arg_name.split('.')[-1]
@@ -229,7 +279,7 @@ if __name__ == '__main__':
         get_directories(cfg)
 
     # Update parameters
-    for all_args in [str_args, float_args, list_args]:
+    for all_args in [str_args, float_args, int_args, list_args]:
         for arg_name in all_args:
             key1, key2 =arg_name.split('.')
             new_arg = getattr(args, key2)
@@ -322,85 +372,6 @@ if __name__ == '__main__':
     ################
     # Start training
     ################
-
-    # TODO:
-    #
-    #       00. KPDef List of experiments to do:
-    #           > Test with param that allow kpdef-mod v2 to run. Compare v1 v2, def, conv mod, nomod
-    #           > Test if we propagate gradient with neighbor influence
-    #           > Test values of deform loss and deform lr
-    #           > Test having deform only on later layers
-    #           > Test using groups to reduce computation cost
-    #           > Test inception style block with def and conv
-    #           > Study if modulation = self-attention
-    #           > Study relation with KPInv
-    #           > Replace modulation with self-attention
-    #
-    #       0. KPInv does not work why??? Do we need specific learning rate for it?
-    #
-    #           > TODO: Implement and test all the designs in our powerpoint
-    #                       - Point-involution-naive
-    #                       - Point-involution-v2
-    #                       - Point-involution-v3
-    #                       - Point-involution-v4
-    #                       - Point-involution-v2
-    #                       - KP-involution (verif si bug)
-    #                       - KPConv-group modulations
-    #                       - KPConv-inv
-    #                       - Add geometric encoding to KPConv and related designs
-    #
-    #           > TODO: Kernel point verification by measurinf chamfer distance with neighbors given different radiuses => Get optimal radius value
-    #
-    #       1. Go implement other datasets (NPM3D, Semantic3D, Scannetv2)
-    #          Also other task: ModelNet40, ShapeNetPart, SemanticKitti
-    #          Add code for completely different tasks??? Invariance??
-    #           New classif dataset: ScanObjectNN
-    #           Revisiting point cloud classification: A new benchmark dataset 
-    #           and classification model on real-world data
-    #
-    #       3. Optimize operation
-    #           > verify group conv results
-    #           > check the effect of normalization in conv
-    #           > use keops lazytensor in convolution ?
-    #
-    #       4. Optimize network
-    #           > Test heads
-    #           > Compare deeper architectures
-    #           > Test subsampling ph
-    #           > Number of parameters. Use groups, reduce some of the mlp operations
-    #           > See optimization here:
-    #               TODO - https://spell.ml/blog/pytorch-training-tricks-YAnJqBEAACkARhgD
-    #               TODO - https://efficientdl.com/faster-deep-learning-in-pytorch-a-guide/#2-use-multiple-workers-and-pinned-memory-in-dataloader
-    #               TODO - https://www.fast.ai/2018/07/02/adam-weight-decay/
-    #               TODO - https://arxiv.org/pdf/2206.04670v1.pdf
-    #               TODO - https://arxiv.org/pdf/2205.05740v2.pdf
-    #
-    #           > State of the art agmentation technique:
-    #               https://arxiv.org/pdf/2110.02210.pdf
-    #
-    #           > dont hesitate to train ensemble of models to score on Scannetv2
-    #
-    #           > Other state of the art technique to incorporate in code: border learning
-    #               https://openaccess.thecvf.com/content/CVPR2022/papers/Tang_Contrastive_Boundary_Learning_for_Point_Cloud_Segmentation_CVPR_2022_paper.pdf
-    #
-    #           > Investigate cosine annealing (cosine decay).
-    #
-    #
-    #       5. Explore
-    #           > For benchmarking purpose, use multiscale dataset: introduce another scaling parameter
-    #               in addtion to the anysotropic one, pick random value just before getting sphere and
-    #               pick a sphere with the according size. then scale the sphere so that we have spheres 
-    #               of the same scale eveytime, just the object in it will be "zoomed" or "dezoomed"
-    #
-    #           > Use multidataset, multihead segmentation and test deeper and deeper networks
-    #
-    #           > New task instance seg: look at mask group and soft group
-    #
-    #           > Study stronger downsampling at first layer like stems in RedNet101
-    #
-    #           > Study the batch size accumulation
-    #
-    #
 
     print('\n')
     frame_lines_1(['Training and Validation'])

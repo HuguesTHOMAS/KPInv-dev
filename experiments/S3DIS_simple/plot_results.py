@@ -348,6 +348,43 @@ def exp_weight_decay():
     return logs, logs_names
 
 
+def exp_deformable_modulations():
+    """
+    w=0.01 is the best value.
+    """
+
+    # Using the dates of the logs, you can easily gather consecutive ones. All logs should be of the same dataset.
+    start = 'Log_2022-08-15_11-48-16'
+    end = 'Log_2022-08-19_23-43-08'
+
+    # Name of the result path
+    res_path = 'results'
+
+    # Gather logs and sort by date
+    logs = np.sort([join(res_path, l) for l in listdir_str(res_path) if start <= l <= end])
+
+    
+    # Optionally add a specific log at a specific place in the log list
+    logs = logs.astype('<U50')
+    logs = np.insert(logs, 0, 'results/Log_2022-08-12_12-49-29')
+    
+    # Give names to the logs (for plot legends)
+    logs_names = ['baseline',
+                  'KPConv',
+                  'KPConv-mod',
+                  'KPDef',
+                  'KPDef-mod']
+
+    # safe check log names
+    if len(logs) > len(logs_names):
+        logs = logs[:len(logs_names)]
+    logs_names = np.array(logs_names[:len(logs)])
+
+    return logs, logs_names
+
+
+
+
 
 
 
@@ -365,7 +402,7 @@ if __name__ == '__main__':
     ######################################################
 
     # My logs: choose the logs to show
-    logs, logs_names = exp_weight_decay()
+    logs, logs_names = exp_deformable_modulations()
 
     frame_lines_1(["Plot S3DIS experiments"])
 
