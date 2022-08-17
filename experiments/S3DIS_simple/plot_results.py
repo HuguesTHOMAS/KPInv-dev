@@ -277,8 +277,6 @@ def exp_LR_range_test():
     return logs, logs_names
 
 
-
-
 def exp_training_strat2():
     """
     Here we look at what Cyclic learning rate and AdamW can bring to the table.
@@ -311,7 +309,6 @@ def exp_training_strat2():
     logs_names = np.array(logs_names[:len(logs)])
 
     return logs, logs_names
-
 
 
 def exp_weight_decay():
@@ -350,7 +347,7 @@ def exp_weight_decay():
 
 def exp_deformable_modulations():
     """
-    w=0.01 is the best value.
+     
     """
 
     # Using the dates of the logs, you can easily gather consecutive ones. All logs should be of the same dataset.
@@ -373,7 +370,8 @@ def exp_deformable_modulations():
                   'KPConv',
                   'KPConv-mod',
                   'KPDef',
-                  'KPDef-mod']
+                  'KPDef-mod',
+                  'KPInv']
 
     # safe check log names
     if len(logs) > len(logs_names):
