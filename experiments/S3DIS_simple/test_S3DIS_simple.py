@@ -24,6 +24,7 @@ import sys
 import time
 import signal
 import argparse
+import torch
 import numpy as np
 from torch.utils.data import DataLoader
 
@@ -43,7 +44,7 @@ from datasets.scene_seg import SceneSegSampler, SceneSegCollate
 
 from experiments.S3DIS_simple.S3DIS import S3DIS_cfg, S3DISDataset
 
-from tasks.trainval import train_and_validate
+from tasks.test import test_model
 
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -51,12 +52,31 @@ from tasks.trainval import train_and_validate
 #           Main Call
 #       \***************/
 #
+
+
 if __name__ == '__main__':
 
+    ###############################
+    # Choose the model to visualize
+    ###############################
 
-    ###################
-    # Define parameters
-    ###################
+    #   Here you can choose which model you want to test with the variable test_model. Here are the possible values :
+    #
+    #       > 'last_XXX': Automatically retrieve the last trained model on dataset XXX
+    #       > '(old_)results/Log_YYYY-MM-DD_HH-MM-SS': Directly provide the path of a trained model
+
+    chosen_log = 'results/Log_2022-08-17_16-52-30'
+
+    # Choose the index of the checkpoint to load OR None if you want to load the current checkpoint
+    chkp_idx = -1
+
+    # Choose to test on validation or test split
+    on_val = True
+
+
+    #############
+    # Load config
+    #############
 
     # Add argument here to handle it
     parser = argparse.ArgumentParser()
@@ -64,17 +84,31 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     # Get log to test
-    log = 'results/Log_2022-08-17_16-52-30'
     if args.log_path is not None:
-        log = 'results/' + args.log_path
+        chosen_log = 'results/' + args.log_path
 
     # Configuration parameters
-    cfg = load_cfg(log)
+    cfg = load_cfg(chosen_log)
+
+
+    ###################
+    # Define parameters
+    ###################
 
     # Change some parameters
-    cfg.test.in_radius = 5.0
-    cfg.test.batch_size = 4
-    cfg.test.batch_limit = -1
+    cfg.test.in_radius = 6.0
+    cfg.test.batch_limit = 1
+    cfg.test.steps_per_epoch = 9999999
+
+    # # Augmentations
+    # cfg.train.augment_anisotropic = True
+    # cfg.train.augment_min_scale = 0.8
+    # cfg.train.augment_max_scale = 1.2
+    # cfg.train.augment_symmetries =  [True, False, False]
+    # cfg.train.augment_rotation = 'vertical'
+    # cfg.train.augment_noise = 0.005
+    # cfg.train.augment_color = 0.7
+
     
 
     ##############
@@ -87,28 +121,19 @@ if __name__ == '__main__':
     # Load dataset
     underline('Loading validation dataset')
     test_dataset = S3DISDataset(cfg,
-                                chosen_set='validation',
+                                chosen_set='test',
                                 regular_sampling=True,
                                 precompute_pyramid=True)
     
     # Calib from training data
-    test_dataset.calib_batch(cfg)
-    test_dataset.calib_neighbors(cfg)
+    # test_dataset.calib_batch(cfg)
+    # test_dataset.calib_neighbors(cfg)
 
     # Save configuration now that it is complete
     save_cfg(cfg)
     
     # Initialize samplers
-    training_sampler = SceneSegSampler(training_dataset)
     test_sampler = SceneSegSampler(test_dataset)
-
-    # Initialize the dataloader
-    training_loader = DataLoader(training_dataset,
-                                 batch_size=1,
-                                 sampler=training_sampler,
-                                 collate_fn=SceneSegCollate,
-                                 num_workers=cfg.train.num_workers,
-                                 pin_memory=True)
     test_loader = DataLoader(test_dataset,
                              batch_size=1,
                              sampler=test_sampler,
@@ -129,7 +154,6 @@ if __name__ == '__main__':
     # Define network model
     t1 = time.time()
 
-
     modulated = False
     if 'mod' in cfg.model.kp_mode:
         modulated = True
@@ -143,112 +167,39 @@ if __name__ == '__main__':
     elif cfg.model.kp_mode.startswith('transformer') or cfg.model.kp_mode.startswith('inv_'):
         net = InvolutionFCNN(cfg)
 
-    print()
-    print(net)
-    print("Model size %i" % sum(param.numel() for param in net.parameters() if param.requires_grad))
+        
+    #########################
+    # Load pretrained weights
+    #########################
 
-    debug = False
-    if debug:
-        print('\n*************************************\n')
-        print(net.state_dict().keys())
-        print('\n*************************************\n')
-        for param in net.parameters():
-            if param.requires_grad:
-                print(param.shape)
-        print('\n*************************************\n')
-        print("Model size %i" % sum(param.numel() for param in net.parameters() if param.requires_grad))
-        print('\n*************************************\n')
+    # Find all checkpoints in the chosen training folder
+    chkp_path = os.path.join(chosen_log, 'checkpoints')
+    chkps = [f for f in os.listdir(chkp_path) if f[:4] == 'chkp']
 
+    # Find which snapshot to restore
+    if chkp_idx is None:
+        chosen_chkp = 'current_chkp.tar'
+    else:
+        chosen_chkp = np.sort(chkps)[chkp_idx]
+    chosen_chkp = os.path.join(chosen_log, 'checkpoints', chosen_chkp)
+
+    # Load previous checkpoint
+    checkpoint = torch.load(chosen_chkp)
+    net.load_state_dict(checkpoint['model_state_dict'])
+    net.eval()
+    print("\nModel and training state restored from:")
+    print(chosen_chkp)
     print()
     
-    ################
-    # Start training
-    ################
-
-    # TODO:
-    #
-    #       00. KPDef List of experiments to do:
-    #           > Test with param that allow kpdef-mod v2 to run. Compare v1 v2, def, conv mod, nomod
-    #           > Test if we propagate gradient with neighbor influence
-    #           > Test values of deform loss and deform lr
-    #           > Test having deform only on later layers
-    #           > Test using groups to reduce computation cost
-    #           > Test inception style block with def and conv
-    #           > Study if modulation = self-attention
-    #           > Study relation with KPInv
-    #           > Replace modulation with self-attention
-    #
-    #       0. KPInv does not work why??? Do we need specific learning rate for it?
-    #
-    #           > TODO: Implement and test all the designs in our powerpoint
-    #                       - Point-involution-naive            OK
-    #                       - Point-involution-v2               OK
-    #                       - Point-involution-v3               OK
-    #                       - Point-involution-v4               OK
-    #                       - Point-transformers                OK
-    #                       - KP-involution (verif si bug)
-    #                       - KPConv-group modulations
-    #                       - KPConv-inv
-    #                       - Add geometric encoding to KPConv and related designs
-    #
-    #           > TODO: Kernel point verification by measurinf chamfer distance with neighbors given different radiuses => Get optimal radius value
-    #
-    #       1. Go implement other datasets (NPM3D, Semantic3D, Scannetv2)
-    #          Also other task: ModelNet40, ShapeNetPart, SemanticKitti
-    #          Add code for completely different tasks??? Invariance??
-    #           New classif dataset: ScanObjectNN
-    #           Revisiting point cloud classification: A new benchmark dataset 
-    #           and classification model on real-world data
-    #
-    #       3. Optimize operation
-    #           > verify group conv results
-    #           > check the effect of normalization in conv
-    #           > use keops lazytensor in convolution ?
-    #
-    #       4. Optimize network
-    #           > Test heads
-    #           > Compare deeper architectures
-    #           > Test subsampling ph
-    #           > Number of parameters. Use groups, reduce some of the mlp operations
-    #           > See optimization here:
-    #               TODO - https://spell.ml/blog/pytorch-training-tricks-YAnJqBEAACkARhgD
-    #               TODO - https://efficientdl.com/faster-deep-learning-in-pytorch-a-guide/#2-use-multiple-workers-and-pinned-memory-in-dataloader
-    #               TODO - https://www.fast.ai/2018/07/02/adam-weight-decay/
-    #               TODO - https://arxiv.org/pdf/2206.04670v1.pdf
-    #               TODO - https://arxiv.org/pdf/2205.05740v2.pdf
-    #
-    #           > State of the art agmentation technique:
-    #               https://arxiv.org/pdf/2110.02210.pdf
-    #
-    #           > dont hesitate to train ensemble of models to score on Scannetv2
-    #
-    #           > Other state of the art technique to incorporate in code: border learning
-    #               https://openaccess.thecvf.com/content/CVPR2022/papers/Tang_Contrastive_Boundary_Learning_for_Point_Cloud_Segmentation_CVPR_2022_paper.pdf
-    #
-    #           > Investigate cosine annealing (cosine decay).
-    #
-    #
-    #       5. Explore
-    #           > For benchmarking purpose, use multiscale dataset: introduce another scaling parameter
-    #               in addtion to the anysotropic one, pick random value just before getting sphere and
-    #               pick a sphere with the according size. then scale the sphere so that we have spheres 
-    #               of the same scale eveytime, just the object in it will be "zoomed" or "dezoomed"
-    #
-    #           > Use multidataset, multihead segmentation and test deeper and deeper networks
-    #
-    #           > New task instance seg: look at mask group and soft group
-    #
-    #           > Study stronger downsampling at first layer like stems in RedNet101
-    #
-    #           > Study the batch size accumulation
-    #
-    #
+    ############
+    # Start test
+    ############
 
     print('\n')
     frame_lines_1(['Training and Validation'])
 
     # Go
-    train_and_validate(net, training_loader, test_loader, cfg, on_gpu=True)
+    test_model(net, test_loader, cfg)
 
     print('Forcing exit now')
     os.kill(os.getpid(), signal.SIGINT)

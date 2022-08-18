@@ -34,6 +34,7 @@ from os.path import join, exists
 import torch
 from torch.utils.data import Dataset, Sampler
 from sklearn.neighbors import KDTree
+from easydict import EasyDict
 
 from torch.multiprocessing import Lock
 # from torch.multiprocessing import set_start_method
@@ -168,7 +169,11 @@ class SceneSegDataset(Dataset):
                 else:
                     data = read_ply(file_path)
                 sub_features = np.vstack([data[f_prop].astype(np.float32) for f_prop in f_properties]).T
-                sub_labels = data[label_property]
+
+                if label_property in [p for p, _ in data.dtype.fields.items()]:
+                    sub_labels = data[label_property]
+                else:
+                    sub_labels = None
 
                 # Read pkl with search tree
                 with open(KDTree_file, 'rb') as f:
@@ -180,21 +185,35 @@ class SceneSegDataset(Dataset):
                 # Read ply file
                 data = read_ply(file_path)
                 points = np.vstack((data['x'], data['y'], data['z'])).T
-                labels = data[label_property].astype(np.int32)
+                if label_property in [p for p, _ in data.dtype.fields.items()]:
+                    labels = data[label_property].astype(np.int32)
+                else:
+                    labels = None
                 features = np.vstack([data[f_prop].astype(np.float32) for f_prop in f_properties]).T
 
                 # Subsample cloud (optional)
                 if dl > 0:
-                    sub_points, sub_features, sub_labels = subsample_numpy(points,
-                                                                           dl,
-                                                                           features=features,
-                                                                           labels=labels,
-                                                                           method=self.cfg.model.sub_mode)
+                    sub_data = subsample_numpy(points,
+                                               dl,
+                                               features=features,
+                                               labels=labels,
+                                               method=self.cfg.model.sub_mode)
+                                               
+                    if labels is None:
+                        sub_points, sub_features = sub_data
+                        sub_labels = None
+                        sub_features *= np.array(f_scales, dtype=np.float32)
+                        write_ply(sub_ply_file,
+                                [sub_points, sub_features],
+                                ['x', 'y', 'z'] + f_properties)
 
-                    sub_features *= np.array(f_scales, dtype=np.float32)
-                    write_ply(sub_ply_file,
-                            [sub_points, sub_features, sub_labels.astype(np.int32)],
-                            ['x', 'y', 'z'] + f_properties + [label_property])
+                    else:
+                        sub_points, sub_features, sub_labels = sub_data
+                        sub_features *= np.array(f_scales, dtype=np.float32)
+                        write_ply(sub_ply_file,
+                                [sub_points, sub_features, sub_labels.astype(np.int32)],
+                                ['x', 'y', 'z'] + f_properties + [label_property])
+
                 else:
                     sub_points, sub_features, sub_labels = (points, features, labels)
                 
@@ -206,9 +225,11 @@ class SceneSegDataset(Dataset):
                     pickle.dump(search_tree, f)
 
             # Check data types and scale features
-            sub_labels = sub_labels.astype(np.int32)
             sub_features = sub_features.astype(np.float32)
-            # sub_features *= np.array(f_scales, dtype=np.float32)
+            if sub_labels is not None:
+                sub_labels = sub_labels.astype(np.int32)
+            else:
+                sub_labels = np.zeros((0,), dtype=np.int32)
 
             # Fill data containers
             self.input_trees += [search_tree]
@@ -244,10 +265,10 @@ class SceneSegDataset(Dataset):
                 else:
                     data = read_ply(file_path)
                     points = np.vstack((data['x'], data['y'], data['z'])).T
-                    if self.set == 'test':
-                        labels = np.zeros((data.shape[0],), dtype=np.int32)
-                    else:
+                    if label_property in [p for p, _ in data.dtype.fields.items()]:
                         labels = data[label_property].astype(np.int32)
+                    else:
+                        labels = np.zeros((0,), dtype=np.int32)
 
                     # Compute projection inds
                     idxs = self.input_trees[i].query(points, return_distance=False)
@@ -337,17 +358,18 @@ class SceneSegDataset(Dataset):
         if self.regular_sampling:
             
             with self.worker_lock:
-                
-                # If first time, compute new regular sampling points
-                if self.reg_sample_pts is None:
-                    self.new_reg_sampling_pts()
                     
-                # If we reach the end of the regular sampling points, Recompute new ones
+                # Case if we reach the end of the regular sampling points
                 reg_sampling_N = int(self.reg_sample_pts.shape[0])
                 if self.reg_sampling_i >= reg_sampling_N:
-                    self.reg_sampling_i -= reg_sampling_N
-                    self.new_reg_sampling_pts()
-                    self.reg_votes += 1
+                    if self.set == 'validation':
+                        # Recompute new ones if we are in validation
+                        self.reg_sampling_i *= 0
+                        self.new_reg_sampling_pts()
+                        self.reg_votes += 1
+                    else:
+                        # Stop generating if we are in test 
+                        return None, None
 
                 # Get next regular sampling element
                 cloud_ind = int(self.reg_sample_clouds[self.reg_sampling_i])
@@ -433,6 +455,10 @@ class SceneSegDataset(Dataset):
             # Pick a sphere center randomly
             cloud_ind, c_point = self.sample_random_sphere()
 
+            # In case we reach the end of the test epoch
+            if cloud_ind is None:
+                break
+
             # Get the input sphere
             in_inds, in_points, in_features, in_labels = self.get_sphere(cloud_ind, c_point)
             
@@ -483,6 +509,21 @@ class SceneSegDataset(Dataset):
             # In case batch is full, stop
             if batch_n_pts > int(self.b_lim):
                 break
+
+        
+
+        #####################
+        # Handle epmpty batch
+        #####################
+
+        # Return empty input list
+        if len(p_list) < 1:
+            input_dict = EasyDict()
+            input_dict.points = []
+            # Wait to let time for other worker to return their last batch
+            time.sleep(0.1)
+            return input_dict
+            
 
         ###################
         # Concatenate batch
@@ -599,7 +640,6 @@ class SceneSegDataset(Dataset):
         an approximate batch limit.
         """
 
-
         t0 = time.time()
 
         # Get gpu for faster calibration
@@ -616,6 +656,8 @@ class SceneSegDataset(Dataset):
         all_cloud_n = []
         while len(all_cloud_n) < samples:
             cloud_ind, center_p = self.sample_random_sphere()
+            if cloud_ind is None:
+                break
             _, in_points, _, _ = self.get_sphere(cloud_ind, center_p)
 
             if in_points.shape[0] > 0:
@@ -776,6 +818,9 @@ class SceneSegDataset(Dataset):
 
         if overwrite:
             cfg.model.neighbor_limits = advised_neighbor_limits
+
+        # After calibration reset counters for regular sampling
+        self.reg_sampling_i *= 0
 
         return
 

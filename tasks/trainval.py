@@ -34,8 +34,8 @@ def train_and_validate(net, training_loader, val_loader, cfg, chkp_path=None, fi
     Training and validation of a model on a particular dataset.    
     Args:
         net (Model): network object.
-        training_loader (DataLoader): the numbers of points in the batch (B,).
-        val_loader (DataLoader): the voxel size.
+        training_loader (DataLoader): the loader for training data.
+        val_loader (DataLoader): the loader for test data.
         cfg (EasyDict): configuration dictionary.
         chkp_path (str=None): path to the checkpoint that needs to be loaded (None for new training).
         finetune (bool=False): Finetuning, if true, the model state are restored but not the training state.

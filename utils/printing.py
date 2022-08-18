@@ -9,18 +9,22 @@ def underline(str0):
 
     return
 
-def frame_lines_1(lines):
+def frame_lines_1(lines, no_print=False):
     """
     Frame a list of str lines.
     """
     
     max_l = np.max([len(line) for line in lines])
     lines = ['|   {:<{width}s}   |'.format(line, width=max_l) for line in lines]
-    print()
-    print('+---' + max_l * '-' + '---+')
-    for line in lines:
-        print(line)
-    print('+---' + max_l * '-' + '---+')
-    print()
 
-    return
+    s = '\n'
+    s += '+---' + max_l * '-' + '---+\n'
+    for line in lines:
+        s += line + '\n'
+    s += '+---' + max_l * '-' + '---+\n'
+    s += '\n'
+
+    if not no_print:
+        print(s)
+
+    return s

@@ -40,13 +40,11 @@ sys.path.append(parent)
 
 
 # My libs
-from utils.metrics import IoU_from_confusions, smooth_metrics, fast_confusion
 from utils.ply import read_ply
 
 
 # My libs
 from utils.printing import frame_lines_1, underline
-from utils.metrics import IoU_from_confusions, smooth_metrics, fast_confusion
 from utils.ply import read_ply, write_ply
 from utils.config import load_cfg
 

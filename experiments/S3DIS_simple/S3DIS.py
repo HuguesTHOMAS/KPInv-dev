@@ -156,6 +156,9 @@ class S3DISDataset(SceneSegDataset):
             cfg.test.batch_size = self.b_n
             cfg.test.batch_limit = self.b_lim
 
+        # After calibration reset counters for regular sampling
+        self.reg_sampling_i *= 0
+
         print('\n')
 
         return
