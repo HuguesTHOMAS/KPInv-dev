@@ -371,7 +371,9 @@ def exp_deformable_modulations():
                   'KPConv-mod',
                   'KPDef',
                   'KPDef-mod',
-                  'KPInv']
+                  'KPInv',
+                  'KPConv-mod-again',
+                  'KPConv-mod-bigger-batch']
 
     # safe check log names
     if len(logs) > len(logs_names):

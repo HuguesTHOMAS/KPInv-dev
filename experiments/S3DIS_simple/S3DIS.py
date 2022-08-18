@@ -123,10 +123,15 @@ class S3DISDataset(SceneSegDataset):
         # To pick points randomly per class, we need every point index from each class
         self.prepare_label_inds()
 
+        # In case regular sampling, generate the first sampling points
+        if self.regular_sampling:
+            self.new_reg_sampling_pts()
+
         return
 
-    def calib_all(self, cfg, update_test=True):
         
+    def calib_batch(self, cfg, update_test=True):
+
         ###################
         # Quick calibration
         ###################
@@ -150,9 +155,6 @@ class S3DISDataset(SceneSegDataset):
         else:
             cfg.test.batch_size = self.b_n
             cfg.test.batch_limit = self.b_lim
-
-        # Calibrate neighbor limits
-        self.calib_neighbors(cfg)
 
         print('\n')
 

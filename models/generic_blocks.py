@@ -202,9 +202,17 @@ class BatchNormBlock(nn.Module):
     def forward(self, x):
 
         if self.bn_momentum > 0:
-            x = x.transpose(0, 1).unsqueeze(0)  # (N, C) -> (B=1, C, N)
-            x = self.batch_norm(x)
-            x = x.squeeze(0).transpose(0, 1)  # (B=1, C, N) -> (N, C)
+
+            if x.ndim == 2:
+                x = x.transpose(0, 1).unsqueeze(0)  # (N, C) -> (B=1, C, N)
+                x = self.batch_norm(x)
+                x = x.squeeze(0).transpose(0, 1)  # (B=1, C, N) -> (N, C)
+
+            elif x.ndim == 3:
+                x = torch.permute(x, (1, 2, 0))  # (N, K, C) -> (K, C, N)
+                x = self.batch_norm(x)
+                x = torch.permute(x, (2, 0, 1))  # (K, C, N) -> (N, K, C)
+
             return x
 
         else:
@@ -270,6 +278,48 @@ class GroupNormBlock(nn.Module):
                                                                   self.num_groups)
 
 
+
+class NormBlock(nn.Module):
+
+    
+    def __init__(self,
+                 num_channels: int,
+                 norm_type: str = 'batch',
+                 bn_momentum: float = 0.98):
+        """
+        Generic norm block able to choose between different types of normalization.
+        Args:
+            num_channels (int): dimension input features
+            norm_type (str='batch'): type of normalization used in layer ('group', 'batch', 'none')
+            bn_momentum (float=0.98): Momentum for batch normalization. < 0 to avoid using it.
+        """
+        super(NormBlock, self).__init__()
+
+        # Define parameters
+        self.num_channels = num_channels
+        self.norm_type = norm_type
+        self.bn_momentum = bn_momentum
+
+        if norm_type == 'none':
+            self.norm = BatchNormBlock(num_channels, -1)
+        elif norm_type == 'batch':
+            self.norm = BatchNormBlock(num_channels, bn_momentum)
+        elif norm_type == 'group':
+            self.norm = GroupNormBlock(num_channels)
+        else:
+            raise ValueError('Unknown normalization type: {:s}. Must be in (\'group\', \'batch\', \'none\')'.format(norm_type))
+
+        return
+
+    def forward(self, x):
+        return self.norm(x)
+
+    def __repr__(self):
+        return 'NormBlock(num_C: {:d}, momentum: {:.2f}, norm: {:s})'.format(self.num_channels,
+                                                                             self.bn_momentum,
+                                                                             self.norm_type)
+
+
 class UnaryBlock(nn.Module):
 
     
@@ -300,15 +350,8 @@ class UnaryBlock(nn.Module):
         self.mlp = nn.Linear(in_channels, out_channels, bias=False)
         self.activation = activation
 
-        if norm_type == 'none':
-            self.norm = BatchNormBlock(out_channels, -1)
-        elif norm_type == 'batch':
-            self.norm = BatchNormBlock(out_channels, bn_momentum)
-        elif norm_type == 'group':
-            self.norm = GroupNormBlock(out_channels)
-        else:
-            raise ValueError('Unknown normalization type: {:s}. Must be in (\'group\', \'batch\', \'none\')'.format(norm_type))
-
+        # Batch norm
+        self.norm = NormBlock(out_channels, norm_type, bn_momentum)
         return
 
     def forward(self, x):

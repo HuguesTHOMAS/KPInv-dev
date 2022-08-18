@@ -5,7 +5,7 @@
 #       \******************/
 #
 #
-#   Use this script to train a network on S3DIS using the simple input pipeline 
+#   Use this script to test a network on S3DIS using the simple input pipeline 
 #   (no neighbors computation in the dataloader)
 #
 #
@@ -18,7 +18,6 @@
 #
 
 # Common libs
-from decimal import MAX_PREC
 from operator import mod
 import os
 import sys
@@ -33,7 +32,7 @@ current = os.path.dirname(os.path.realpath(__file__))
 parent = os.path.dirname(os.path.dirname(current))
 sys.path.append(parent)
 
-from utils.config import init_cfg, save_cfg, get_directories
+from utils.config import load_cfg, save_cfg, get_directories
 from utils.printing import frame_lines_1, underline
 
 from models.KPConvNet import KPFCNN as KPConvFCNN
@@ -49,143 +48,6 @@ from tasks.trainval import train_and_validate
 
 # ----------------------------------------------------------------------------------------------------------------------
 #
-#           Config Class
-#       \******************/
-#
-
-
-def my_config():
-    """
-    Override the parameters you want to modify for this dataset
-    """
-
-    cfg = init_cfg()
-
-    # Network parameters
-    # ------------------
-
-    # cfg.model.layer_blocks = (2, 1, 1, 1, 1)    # KPConv paper architecture. Can be changed for a deeper network
-    # cfg.model.layer_blocks = (2, 2, 2, 4, 2)
-    # cfg.model.layer_blocks = (2, 3, 4, 8, 4)
-    # cfg.model.layer_blocks = (2, 3, 4, 16, 4)
-    # cfg.model.layer_blocks = (2, 3, 8, 32, 4)
-
-    
-    cfg.model.layer_blocks = (2,  3,  4,  6,  3)
-    # cfg.model.layer_blocks = (3,  4,  6,  8,  4)
-    # cfg.model.layer_blocks = (4,  6,  8,  8,  6)
-    # cfg.model.layer_blocks = (4,  6,  8, 12,  6)  # Strong architecture
-
-    cfg.model.kp_mode = 'kpconv-mod'       # Choose ['kpconv', 'kpdef', 'kpinv']. And ['kpconv-mod', 'kpdef-mod'] for modulations
-                                           # Choose ['inv_v1', 'inv_v2', 'inv_v3', 'inv_v4', 'transformer']
-    cfg.model.kernel_size = 15
-    cfg.model.kp_radius = 2.5
-    cfg.model.kp_sigma = 1.2
-    cfg.model.kp_influence = 'linear'
-    cfg.model.kp_aggregation = 'sum'
-
-    cfg.model.conv_groups = 8
-
-    cfg.data.sub_size = 0.02          # -1.0 so that dataset point clouds are not initially subsampled
-    cfg.model.init_sub_size = 0.04    # Adapt this with train.in_radius. Try to keep a ratio of ~50
-    cfg.model.sub_mode = 'grid'
-
-    cfg.model.input_channels = 5    # This value has to be compatible with one of the dataset input features definition
-
-    # cfg.model.neighbor_limits = [35, 40, 50, 50, 50]    # Use empty list to let calibration get the values
-    cfg.model.neighbor_limits = []
-
-    cfg.model.kpinv_grp_ch = 1          #   Int, number of channels per group in involutions
-    cfg.model.kpinv_reduc = 1           #   Int, reduction ration for kpinv gen mlp
-
-
-
-    # Training parameters
-    # -------------------
-
-    # Input threads
-    cfg.train.num_workers = 16
-
-    # Input spheres radius. Adapt this with model.init_sub_size. Try to keep a ratio of ~50
-    cfg.train.in_radius = 1.8
-
-    # Batch related_parames
-    cfg.train.batch_size = 8           # Target batch size. If you don't want calibration, you can directly set train.batch_limit
-    cfg.train.accum_batch = 5           # Accumulate batches for an effective batch size of batch_size * accum_batch.
-    cfg.train.steps_per_epoch = 125
-    
-    # Training length
-    cfg.train.max_epoch = 180
-    cfg.train.checkpoint_gap = cfg.train.max_epoch // 5
-    
-    # Deformations
-    cfg.train.deform_loss_factor = 0.1      # Reduce to reduce influence for deformation on overall features
-    cfg.train.deform_lr_factor = 1.0        # Higher so that deformation are learned faster (especially if deform_loss_factor is low)
-
-    # Optimizer
-    cfg.train.optimizer = 'AdamW'
-    cfg.train.adam_b = (0.9, 0.999)
-    cfg.train.adam_eps = 1e-08
-    cfg.train.weight_decay = 0.01
-
-    # Cyclic lr 
-    cfg.train.cyc_lr0 = 1e-4                # Float, Start (minimum) learning rate of 1cycle decay
-    cfg.train.cyc_lr1 = 1e-2                # Float, Maximum learning rate of 1cycle decay
-    cfg.train.cyc_raise10 = 5               #   Int, Raise rate for first part of 1cycle = number of epoch to multiply lr by 10
-    cfg.train.cyc_decrease10 = 80           #   Int, Decrease rate for second part of 1cycle = number of epoch to divide lr by 10
-    cfg.train.cyc_plateau = 20              #   Int, Number of epoch for plateau at maximum lr
-    raise_rate = 10**(1 / cfg.train.cyc_raise10)
-    decrease_rate = 0.1**(1 / cfg.train.cyc_decrease10)
-    cfg.train.lr = cfg.train.cyc_lr0
-    n_raise = int(np.ceil(np.log(cfg.train.cyc_lr1/cfg.train.cyc_lr0) / np.log(raise_rate)))
-    cfg.train.lr_decays = {str(i): raise_rate for i in range(1, n_raise)}
-    for i in range(n_raise + cfg.train.cyc_plateau, cfg.train.max_epoch):
-        cfg.train.lr_decays[str(i)] = decrease_rate
-
-    # import matplotlib.pyplot as plt
-    # fig = plt.figure('lr')
-    # y = [init_lr]
-    # for i in range(cfg.train.max_epoch):
-    #     y.append(y[-1])
-    #     if str(i) in cfg.train.lr_decays:
-    #         y[-1] *= cfg.train.lr_decays[str(i)]
-    # plt.plot(y)
-    # plt.xlabel('epochs')
-    # plt.ylabel('lr')
-    # plt.yscale('log')
-    # ax = fig.gca()
-    # ax.grid(linestyle='-.', which='both')
-    # plt.show()
-    # a = 1/0
-
-    # Augmentations
-    cfg.train.augment_anisotropic = True
-    cfg.train.augment_min_scale = 0.8
-    cfg.train.augment_max_scale = 1.2
-    cfg.train.augment_symmetries =  [True, False, False]
-    cfg.train.augment_rotation = 'vertical'
-    cfg.train.augment_noise = 0.005
-    cfg.train.augment_color = 0.7
-
-    
-    # Test parameters
-    # ---------------
-
-    cfg.test.val_momentum = 0.95  # momentum for averaging predictions during validation. 0 for no averaging at all
-
-    cfg.test.steps_per_epoch = 50    # Size of one validation epoch (should be small)
-
-    cfg.test.in_radius = cfg.train.in_radius
-    cfg.test.num_workers = cfg.train.num_workers
-    cfg.test.batch_size = cfg.train.batch_size
-    cfg.test.batch_limit = cfg.train.batch_limit
-    cfg.test.max_points = cfg.train.max_points
-
-    return cfg
-
-
-# ----------------------------------------------------------------------------------------------------------------------
-#
 #           Main Call
 #       \***************/
 #
@@ -197,59 +59,24 @@ if __name__ == '__main__':
     ###################
 
     # Add argument here to handle it
-    str_args = ['model.kp_mode']
-
-    float_args = ['train.weight_decay',
-                  'model.kp_radius',
-                  'model.kp_sigma']
-
-    int_args = ['model.kernel_size',
-                'model.conv_groups']
-
-    list_args = ['model.layer_blocks']
-    
     parser = argparse.ArgumentParser()
-    for str_arg_name in str_args:
-        parser_name = '--' + str_arg_name.split('.')[-1]
-        parser.add_argument(parser_name, type=str)
-
-    for float_arg_name in float_args:
-        parser_name = '--' + float_arg_name.split('.')[-1]
-        parser.add_argument(parser_name, type=float)
-
-    for int_arg_name in int_args:
-        parser_name = '--' + int_arg_name.split('.')[-1]
-        parser.add_argument(parser_name, type=int)
-
-    for list_arg_name in list_args:
-        parser_name = '--' + list_arg_name.split('.')[-1]
-        parser.add_argument(parser_name, nargs='+', type=int)
-
-    # Log path special arg
     parser.add_argument('--log_path', type=str)
     args = parser.parse_args()
 
-    # Configuration parameters
-    cfg = my_config()
-
-    # Load data parameters
-    cfg.data.update(S3DIS_cfg(cfg).data)
-
-    # Load experiment parameters
+    # Get log to test
+    log = 'results/Log_2022-08-17_16-52-30'
     if args.log_path is not None:
-        get_directories(cfg, date=args.log_path)
-    else:
-        get_directories(cfg)
+        log = 'results/' + args.log_path
 
-    # Update parameters
-    for all_args in [str_args, float_args, int_args, list_args]:
-        for arg_name in all_args:
-            key1, key2 =arg_name.split('.')
-            new_arg = getattr(args, key2)
-            if new_arg is not None:
-                cfg[key1][key2] = new_arg
+    # Configuration parameters
+    cfg = load_cfg(log)
 
+    # Change some parameters
+    cfg.test.in_radius = 5.0
+    cfg.test.batch_size = 4
+    cfg.test.batch_limit = -1
     
+
     ##############
     # Prepare Data
     ##############
@@ -258,10 +85,6 @@ if __name__ == '__main__':
     frame_lines_1(['Data Preparation'])
 
     # Load dataset
-    underline('Loading training dataset')
-    training_dataset = S3DISDataset(cfg,
-                                    chosen_set='training',
-                                    precompute_pyramid=True)
     underline('Loading validation dataset')
     test_dataset = S3DISDataset(cfg,
                                 chosen_set='validation',
@@ -269,10 +92,8 @@ if __name__ == '__main__':
                                 precompute_pyramid=True)
     
     # Calib from training data
-    training_dataset.calib_batch(cfg)
-    training_dataset.calib_neighbors(cfg)
-    test_dataset.b_n = cfg.test.batch_size
-    test_dataset.b_lim = cfg.test.batch_limit
+    test_dataset.calib_batch(cfg)
+    test_dataset.calib_neighbors(cfg)
 
     # Save configuration now that it is complete
     save_cfg(cfg)

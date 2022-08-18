@@ -306,7 +306,10 @@ if __name__ == '__main__':
                                 precompute_pyramid=True)
     
     # Calib from training data
-    training_dataset.calib_all(cfg)
+    training_dataset.calib_batch(cfg)
+    training_dataset.calib_neighbors(cfg)
+    test_dataset.b_n = cfg.test.batch_size
+    test_dataset.b_lim = cfg.test.batch_limit
 
     # Save configuration now that it is complete
     save_cfg(cfg)
