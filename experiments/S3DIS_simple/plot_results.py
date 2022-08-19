@@ -476,7 +476,7 @@ if __name__ == '__main__':
     underline("Ploting training info")
 
     # Plot the training loss and accuracy
-    compare_trainings(all_cfgs, logs, logs_names)
+    # compare_trainings(all_cfgs, logs, logs_names)
 
 
     # Test the network or show validation

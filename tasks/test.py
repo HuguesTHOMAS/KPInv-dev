@@ -337,7 +337,8 @@ def cloud_segmentation_test(epoch, net, test_loader, cfg, test_data, device, sav
             all_sub_labels.append(sub_labels)
 
             # Confs
-            sub_confs += [fast_confusion(sub_labels, all_sub_preds[c_i], test_loader.dataset.label_values)]
+            label_values = np.array(cfg.data.label_values, dtype=np.int32)
+            sub_confs += [fast_confusion(sub_labels, all_sub_preds[c_i], label_values).astype(np.int64)]
 
     t3 = time.time()
     print('Done in {:.1f}s\n'.format(t3 - t2))
@@ -374,7 +375,7 @@ def cloud_segmentation_test(epoch, net, test_loader, cfg, test_data, device, sav
 
             # Confusion matrix
             label_values = np.array(cfg.data.label_values, dtype=np.int32)
-            full_confs.append(fast_confusion(labels, preds, label_values).astype(np.int32))
+            full_confs.append(fast_confusion(labels, preds, label_values).astype(np.int64))
 
     t5 = time.time()
     if available_labels:
@@ -480,6 +481,9 @@ def cloud_segmentation_test(epoch, net, test_loader, cfg, test_data, device, sav
                 text_file.write('\nVote {:d}: \n\n'.format(epoch))
                 text_file.write(report_str)
                 text_file.write('\n\n')
+
+            conf_path = join(saving_path, 'full_conf_{:03d}.txt'.format(epoch))
+            np.savetxt(conf_path, full_conf, '%15d')
 
 
     return

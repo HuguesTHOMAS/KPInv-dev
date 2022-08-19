@@ -1058,25 +1058,19 @@ def compare_on_test_set(list_of_cfg,
                         list_of_names=None,
                         redo_test=False):
 
-    ###################
+    ############
     # Parameters
-    ###################
+    ############
 
     if list_of_names is None:
         list_of_names = [str(i) for i in range(len(list_of_paths))]
 
+    all_confs = []
 
 
-    all_pred_epochs = []
-    all_mIoUs = []
-    all_class_IoUs = []
-    all_snap_epochs = []
-    all_snap_IoUs = []
-
-    class_list = [name for label, name in list_of_cfg[0].data.label_and_names
-                  if label not in list_of_cfg[0].data.ignored_labels]
-    
-    num_classes = len(class_list)
+    ##############
+    # Loop on logs
+    ##############
 
     for path, cfg in zip(list_of_paths, list_of_cfg):
 
@@ -1088,7 +1082,7 @@ def compare_on_test_set(list_of_cfg,
         cfg.test.batch_limit = 1
         cfg.test.steps_per_epoch = 9999999
         cfg.test.max_votes = 3
-        cfg.test.chkp_idx = None
+        cfg.test.chkp_idx = -1
 
         # Augmentations
         cfg.train.augment_anisotropic = True
@@ -1104,19 +1098,21 @@ def compare_on_test_set(list_of_cfg,
         # ******************************
 
         found_test = None
+        test_folders = []
         test_path = join(cfg.exp.log_dir, 'test')
-        test_folders = [join(test_path, f) for f in listdir(test_path) if f.startswith('test_')]
-        for test_folder in test_folders:
-            
-            # Load the cfg already tested
-            test_cfg = load_cfg(test_folder)
+        if exists(test_path):
+            test_folders = [join(test_path, f) for f in listdir(test_path) if f.startswith('test_')]
+            for test_folder in test_folders:
+                
+                # Load the cfg already tested
+                test_cfg = load_cfg(test_folder)
 
-            # Get differences between configs
-            diff_params, _ = cfg_differences([cfg, test_cfg], ignore_params=['test.max_votes'])
+                # Get differences between configs
+                diff_params, _ = cfg_differences([cfg, test_cfg], ignore_params=['test.max_votes'])
 
-            if len(diff_params) == 0:
-                found_test = test_folder
-                break
+                if len(diff_params) == 0:
+                    found_test = test_folder
+                    break
 
 
         # Compute test results if not found
@@ -1137,15 +1133,49 @@ def compare_on_test_set(list_of_cfg,
         # Save test data
         # **************
 
+        # Read confision matrix
+        all_conf_pathes = np.sort([join(found_test, f) for f in listdir(found_test) if f.startswith('full_conf_')])
         
+        log_confs = []
+        for conf_path in all_conf_pathes:
+            if isfile(conf_path):
+                log_confs.append(np.loadtxt(conf_path, dtype=np.int32))
 
-        
+        all_confs.append(np.stack(log_confs,  axis=0))
 
 
 
+    ##############
+    # Show results
+    ##############
+
+    print('\n')
+    print('________________________________________________________________________________________________________')
+    underline('Test Results')
+
+    # Get IoUs from the final vote
+    all_IoUs = [IoU_from_confusions(full_conf[-1]) for full_conf in all_confs]
+
+    class_list = [name for label, name in list_of_cfg[0].data.label_and_names
+                  if label not in list_of_cfg[0].data.ignored_labels]
+    
+    num_classes = len(class_list)
 
 
+    # Print spheres validation
+    s = '{:^10}|'.format('mean')
+    for c in class_list:
+        s += '{:^10}'.format(c)
+    print(s)
+    print(10*'-' + '|' + 10*num_classes*'-')
+    for log_IoUs in all_IoUs:
+        s = '{:^10.1f}|'.format(100*np.mean(log_IoUs))
+        for IoU in log_IoUs:
+            s += '{:^10.1f}'.format(100*IoU)    
+        print(s)
 
+    print('________________________________________________________________________________________________________')
+    print('\n')
 
     return
 

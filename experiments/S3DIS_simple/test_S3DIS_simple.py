@@ -54,7 +54,7 @@ from tasks.test import test_model
 #
 
 
-def test_log(chosen_log, new_config):
+def test_log(chosen_log, new_cfg):
 
     ##############
     # Prepare Data
@@ -65,14 +65,14 @@ def test_log(chosen_log, new_config):
 
     # Load dataset
     underline('Loading validation dataset')
-    test_dataset = S3DISDataset(new_config,
+    test_dataset = S3DISDataset(new_cfg,
                                 chosen_set='test',
                                 regular_sampling=True,
                                 precompute_pyramid=True)
     
     # Calib from training data
-    # test_dataset.calib_batch(new_config)
-    # test_dataset.calib_neighbors(new_config)
+    # test_dataset.calib_batch(new_cfg)
+    # test_dataset.calib_neighbors(new_cfg)
     
     # Initialize samplers
     test_sampler = SceneSegSampler(test_dataset)
@@ -80,7 +80,7 @@ def test_log(chosen_log, new_config):
                              batch_size=1,
                              sampler=test_sampler,
                              collate_fn=SceneSegCollate,
-                             num_workers=new_config.test.num_workers,
+                             num_workers=new_cfg.test.num_workers,
                              pin_memory=True)
 
 
@@ -94,17 +94,17 @@ def test_log(chosen_log, new_config):
     underline('Loading network')
 
     modulated = False
-    if 'mod' in new_config.model.kp_mode:
+    if 'mod' in new_cfg.model.kp_mode:
         modulated = True
 
-    if new_config.model.kp_mode.startswith('kpconv'):
-        net = KPConvFCNN(new_config, modulated=modulated, deformable=False)
-    elif new_config.model.kp_mode.startswith('kpdef'):
-        net = KPConvFCNN(new_config, modulated=modulated, deformable=True)
-    elif new_config.model.kp_mode.startswith('kpinv'):
-        net = KPInvFCNN(new_config)
-    elif new_config.model.kp_mode.startswith('transformer') or new_config.model.kp_mode.startswith('inv_'):
-        net = InvolutionFCNN(new_config)
+    if new_cfg.model.kp_mode.startswith('kpconv'):
+        net = KPConvFCNN(new_cfg, modulated=modulated, deformable=False)
+    elif new_cfg.model.kp_mode.startswith('kpdef'):
+        net = KPConvFCNN(new_cfg, modulated=modulated, deformable=True)
+    elif new_cfg.model.kp_mode.startswith('kpinv'):
+        net = KPInvFCNN(new_cfg)
+    elif new_cfg.model.kp_mode.startswith('transformer') or new_cfg.model.kp_mode.startswith('inv_'):
+        net = InvolutionFCNN(new_cfg)
 
         
     #########################
@@ -138,10 +138,7 @@ def test_log(chosen_log, new_config):
     frame_lines_1(['Training and Validation'])
 
     # Go
-    test_model(net, test_loader, new_config)
-
-    print('Forcing exit now')
-    os.kill(os.getpid(), signal.SIGINT)
+    test_model(net, test_loader, new_cfg)
 
     return
 
@@ -206,6 +203,9 @@ if __name__ == '__main__':
 
     test_log(chosen_log, new_cfg)
     
+
+    print('Forcing exit now')
+    os.kill(os.getpid(), signal.SIGINT)
 
 
 
