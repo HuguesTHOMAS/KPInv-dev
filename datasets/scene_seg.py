@@ -466,7 +466,7 @@ class SceneSegDataset(Dataset):
                 continue
             
             # Color augmentation
-            if self.set == 'training' and np.random.rand() > self.cfg.train.augment_color:
+            if np.random.rand() > self.cfg.train.augment_color:
                 in_features *= 0
             
             # Add original height as additional feature
