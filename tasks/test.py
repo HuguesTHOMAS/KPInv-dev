@@ -9,7 +9,7 @@
 # Basic libs
 import time
 import torch
-from os import makedirs, remove
+from os import makedirs, remove, listdir
 from os.path import exists, join
 from easydict import EasyDict
 import numpy as np
@@ -19,6 +19,7 @@ import matplotlib.pyplot as plt
 from utils.printing import underline, frame_lines_1
 from utils.gpu_init import init_gpu
 from utils.ply import read_ply, write_ply
+from utils.config import save_cfg
 
 from tasks.training import training_epoch, training_epoch_debug
 from tasks.validation import validation_epoch
@@ -83,6 +84,29 @@ def test_model(net, test_loader, cfg, on_gpu=True):
         raise ValueError('No validation method implemented for this network type')
 
 
+    ####################
+    # Create test folder
+    ####################
+
+    test_path = join(cfg.exp.log_dir, 'test')
+    if not exists(test_path):
+        makedirs(test_path)
+    
+    # Create a new test folder
+    test_folders = [f for f in listdir(test_path) if f.startswith('test_')]
+    test_inds = [int(f.split('_')[-1]) for f in test_folders]
+    new_ind = 1
+    while new_ind in test_inds:
+        new_ind += 1
+
+    new_test_path = join(test_path, 'test_{:03d}'.format(new_ind))
+    if not exists(new_test_path):
+        makedirs(new_test_path)
+        
+    # Save parameters used for test
+    save_cfg(cfg, path=new_test_path)
+
+
     ##################
     # Start experiment
     ##################
@@ -96,7 +120,7 @@ def test_model(net, test_loader, cfg, on_gpu=True):
 
         # Perform one peoch of test
         with torch.no_grad():
-            test_epoch_func(vote_n, net, test_loader, cfg, test_data, device)
+            test_epoch_func(vote_n, net, test_loader, cfg, test_data, device, saving_path=new_test_path)
 
         # Create new sampling points for next test epoch
         t1 = time.time()
@@ -123,7 +147,7 @@ def test_model(net, test_loader, cfg, on_gpu=True):
 #
 
 
-def cloud_segmentation_test(epoch, net, test_loader, cfg, test_data, device, saving=True):
+def cloud_segmentation_test(epoch, net, test_loader, cfg, test_data, device, saving_path=None):
     """
     Test method for cloud segmentation models
     """
@@ -131,6 +155,8 @@ def cloud_segmentation_test(epoch, net, test_loader, cfg, test_data, device, sav
     ############
     # Initialize
     ############
+
+    saving = saving_path is not None
     
     underline('Test epoch {:d}'.format(epoch))
     message =  '\n                                                          Timings        '
@@ -361,11 +387,6 @@ def cloud_segmentation_test(epoch, net, test_loader, cfg, test_data, device, sav
     if saving:
 
         print('Save results')
-        
-        # Create test folder
-        test_path = join(cfg.exp.log_dir, 'test')
-        if not exists(test_path):
-            makedirs(test_path)
             
         files = test_loader.dataset.scene_files
         for c_i, sub_preds in enumerate(all_sub_preds):
@@ -375,7 +396,7 @@ def cloud_segmentation_test(epoch, net, test_loader, cfg, test_data, device, sav
 
             # Path of saved validation file
             cloud_name = files[c_i].split('/')[-1]
-            sub_name = join(test_path, 'sub_' + cloud_name)
+            sub_name = join(saving_path, 'sub_' + cloud_name)
 
             # Get subsampled points from tree structure
             sub_points = np.array(test_loader.dataset.input_trees[c_i].data, copy=False)
@@ -395,7 +416,7 @@ def cloud_segmentation_test(epoch, net, test_loader, cfg, test_data, device, sav
             # ************************
 
             if cfg.data.name == 'Semantic3D':
-                test_name = join(test_path, cloud_name[:-4] + '.txt')
+                test_name = join(saving_path, cloud_name[:-4] + '.txt')
                 #TODO
 
         t6 = time.time()
@@ -454,7 +475,7 @@ def cloud_segmentation_test(epoch, net, test_loader, cfg, test_data, device, sav
         
         # Save report in text file
         if saving:
-            report_path = join(test_path, 'report.txt')
+            report_path = join(saving_path, 'report.txt')
             with open(report_path, "a") as text_file:
                 text_file.write('\nVote {:d}: \n\n'.format(epoch))
                 text_file.write(report_str)

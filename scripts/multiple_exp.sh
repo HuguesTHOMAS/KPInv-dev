@@ -5,15 +5,22 @@
 ########
 
 # Number of docker allowed to work in parrallel
+# *********************************************
+
 max_containers="2"
 
-# training script used
+
+# Training script used
+# ********************
+
 training_script="experiments/S3DIS_simple/train_S3DIS_simple.py"
 
-## declare an array variable
+
+# Declare an array variable
+# *************************
+
 declare -a arg_arr=("--conv_groups 4"
                     "--conv_groups 8")
-
 
 
 echo ""

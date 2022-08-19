@@ -41,8 +41,10 @@ import imageio
 from utils.printing import frame_lines_1, underline
 from utils.metrics import IoU_from_confusions, smooth_metrics, fast_confusion
 from utils.ply import read_ply, write_ply
+from utils.config import load_cfg
 
 from experiments.S3DIS_simple.S3DIS import S3DISDataset
+from experiments.S3DIS_simple.test_S3DIS_simple import test_log
 
 
 
@@ -283,16 +285,11 @@ def load_snap_clouds(path, cfg, only_last=False):
 
     return preds_epochs, IoU_from_confusions(Confs)
 
-    
-def print_cfg_diffs(logs_names, log_cfgs, show_params=[], hide_params=[], max_cols=145):
-    """
-    Print the differences in parameters between logs. Use show_params to force showing 
-    some parameters even if no differences are seen.
-    """
+def cfg_differences(list_of_cfg, ignore_params=[]):
 
     # First list all possible keys in case some parameter do not exist in some configs
     all_keys = []
-    for cfg in log_cfgs:
+    for cfg in list_of_cfg:
         for k1, v1 in cfg.items():
             for k2, v2 in v1.items():
                 all_keys.append(k1 + "." + k2)
@@ -307,8 +304,37 @@ def print_cfg_diffs(logs_names, log_cfgs, show_params=[], hide_params=[], max_co
         k1, k2 = k_str.split('.')
 
         # skip some parameters that are always different
-        if k1 == 'exp' or k_str in hide_params:
+        if k1 == 'exp' or k_str in ignore_params:
             continue
+
+        # Get value for each config
+        values = []
+        for cfg in list_of_cfg:
+            if k2 in cfg[k1]:
+                values.append(cfg[k1][k2])
+            else:
+                values.append(None)
+
+        if np.any([v != values[0] for v in values[1:]]):
+            diff_params.append((k1, k2))
+            diff_values.append(values)
+
+    return diff_params, diff_values
+    
+def print_cfg_diffs(logs_names, log_cfgs, show_params=[], hide_params=[], max_cols=145):
+    """
+    Print the differences in parameters between logs. Use show_params to force showing 
+    some parameters even if no differences are seen.
+    """
+
+    # Get differences between configs
+    diff_params, diff_values = cfg_differences(log_cfgs, ignore_params=hide_params)
+    
+    # Add parameters that are shown anyway
+    for k_str in show_params:
+
+        # Get the two keys
+        k1, k2 = k_str.split('.')
 
         # Get value for each config
         values = []
@@ -318,9 +344,8 @@ def print_cfg_diffs(logs_names, log_cfgs, show_params=[], hide_params=[], max_co
             else:
                 values.append(None)
 
-        if k_str in show_params or np.any([v != values[0] for v in values[1:]]):
-            diff_params.append((k1, k2))
-            diff_values.append(values)
+        diff_params.append((k1, k2))
+        diff_values.append(values)
 
     # Create the first column of the table with each log
     first_col = ['      \\  Params ',
@@ -1026,3 +1051,105 @@ def compare_convergences_SLAM(dataset, list_of_paths, list_of_names=None):
 
     # Show all
     plt.show()
+
+
+def compare_on_test_set(list_of_cfg,
+                        list_of_paths,
+                        list_of_names=None,
+                        redo_test=False):
+
+    ###################
+    # Parameters
+    ###################
+
+    if list_of_names is None:
+        list_of_names = [str(i) for i in range(len(list_of_paths))]
+
+
+
+    all_pred_epochs = []
+    all_mIoUs = []
+    all_class_IoUs = []
+    all_snap_epochs = []
+    all_snap_IoUs = []
+
+    class_list = [name for label, name in list_of_cfg[0].data.label_and_names
+                  if label not in list_of_cfg[0].data.ignored_labels]
+    
+    num_classes = len(class_list)
+
+    for path, cfg in zip(list_of_paths, list_of_cfg):
+
+        # Define parameters
+        # *****************
+
+        # Change some parameters
+        cfg.test.in_radius = 4.0
+        cfg.test.batch_limit = 1
+        cfg.test.steps_per_epoch = 9999999
+        cfg.test.max_votes = 3
+        cfg.test.chkp_idx = None
+
+        # Augmentations
+        cfg.train.augment_anisotropic = True
+        cfg.train.augment_min_scale = 0.99
+        cfg.train.augment_max_scale = 1.01
+        cfg.train.augment_symmetries =  [True, False, False]
+        cfg.train.augment_rotation = 'vertical'
+        cfg.train.augment_noise = 0.0001
+        cfg.train.augment_color = 0.1
+
+        
+        # Read test results if available
+        # ******************************
+
+        found_test = None
+        test_path = join(cfg.exp.log_dir, 'test')
+        test_folders = [join(test_path, f) for f in listdir(test_path) if f.startswith('test_')]
+        for test_folder in test_folders:
+            
+            # Load the cfg already tested
+            test_cfg = load_cfg(test_folder)
+
+            # Get differences between configs
+            diff_params, _ = cfg_differences([cfg, test_cfg], ignore_params=['test.max_votes'])
+
+            if len(diff_params) == 0:
+                found_test = test_folder
+                break
+
+
+        # Compute test results if not found
+        # *********************************
+
+        # Perform test
+        if found_test is None:
+            test_log(path, cfg)
+            
+        # Get the new test folder
+        test_folders2 = [join(test_path, f) for f in listdir(test_path) if f.startswith('test_')]
+        for test_folder in test_folders2:
+            if test_folder not in test_folders:
+                found_test = test_folder
+                break
+
+
+        # Save test data
+        # **************
+
+        
+
+        
+
+
+
+
+
+
+
+    return
+
+
+
+
+

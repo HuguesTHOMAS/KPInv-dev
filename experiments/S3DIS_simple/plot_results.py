@@ -48,7 +48,7 @@ from utils.printing import frame_lines_1, underline
 from utils.ply import read_ply, write_ply
 from utils.config import load_cfg
 
-from utils.plot_utilities import listdir_str, print_cfg_diffs, compare_trainings, compare_convergences_segment
+from utils.plot_utilities import listdir_str, print_cfg_diffs, compare_trainings, compare_convergences_segment, compare_on_test_set
 
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -478,10 +478,24 @@ if __name__ == '__main__':
     # Plot the training loss and accuracy
     compare_trainings(all_cfgs, logs, logs_names)
 
-    print()
-    underline("Ploting validation info")
-    print()
 
-    # Plot the validation
-    compare_convergences_segment(all_cfgs, logs, logs_names)
+    # Test the network or show validation
+    perform_test = True
+    if perform_test:
+
+        print()
+        underline("Test networks")
+        print()
+
+        # Plot the validation
+        compare_on_test_set(all_cfgs, logs, logs_names)
+
+
+    else:
+        print()
+        underline("Ploting validation info")
+        print()
+
+        # Plot the validation
+        compare_convergences_segment(all_cfgs, logs, logs_names)
 

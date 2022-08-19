@@ -49,67 +49,12 @@ from tasks.test import test_model
 
 # ----------------------------------------------------------------------------------------------------------------------
 #
-#           Main Call
-#       \***************/
+#           Main Function
+#       \*******************/
 #
 
 
-if __name__ == '__main__':
-
-    ###############################
-    # Choose the model to visualize
-    ###############################
-
-    #   Here you can choose which model you want to test with the variable test_model. Here are the possible values :
-    #
-    #       > 'last_XXX': Automatically retrieve the last trained model on dataset XXX
-    #       > '(old_)results/Log_YYYY-MM-DD_HH-MM-SS': Directly provide the path of a trained model
-
-    chosen_log = 'results/Log_2022-08-17_16-52-30'
-
-    # Choose the index of the checkpoint to load OR None if you want to load the current checkpoint
-    chkp_idx = -1
-
-    # Choose to test on validation or test split
-    on_val = True
-
-
-    #############
-    # Load config
-    #############
-
-    # Add argument here to handle it
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--log_path', type=str)
-    args = parser.parse_args()
-
-    # Get log to test
-    if args.log_path is not None:
-        chosen_log = 'results/' + args.log_path
-
-    # Configuration parameters
-    cfg = load_cfg(chosen_log)
-
-
-    ###################
-    # Define parameters
-    ###################
-
-    # Change some parameters
-    cfg.test.in_radius = 4.0
-    cfg.test.batch_limit = 1
-    cfg.test.steps_per_epoch = 9999999
-
-    # Augmentations
-    cfg.train.augment_anisotropic = True
-    cfg.train.augment_min_scale = 0.99
-    cfg.train.augment_max_scale = 1.01
-    cfg.train.augment_symmetries =  [True, False, False]
-    cfg.train.augment_rotation = 'vertical'
-    cfg.train.augment_noise = 0.0001
-    cfg.train.augment_color = 0.1
-
-    
+def test_log(chosen_log, new_config):
 
     ##############
     # Prepare Data
@@ -120,14 +65,14 @@ if __name__ == '__main__':
 
     # Load dataset
     underline('Loading validation dataset')
-    test_dataset = S3DISDataset(cfg,
+    test_dataset = S3DISDataset(new_config,
                                 chosen_set='test',
                                 regular_sampling=True,
                                 precompute_pyramid=True)
     
     # Calib from training data
-    # test_dataset.calib_batch(cfg)
-    # test_dataset.calib_neighbors(cfg)
+    # test_dataset.calib_batch(new_config)
+    # test_dataset.calib_neighbors(new_config)
     
     # Initialize samplers
     test_sampler = SceneSegSampler(test_dataset)
@@ -135,7 +80,7 @@ if __name__ == '__main__':
                              batch_size=1,
                              sampler=test_sampler,
                              collate_fn=SceneSegCollate,
-                             num_workers=cfg.test.num_workers,
+                             num_workers=new_config.test.num_workers,
                              pin_memory=True)
 
 
@@ -148,21 +93,18 @@ if __name__ == '__main__':
 
     underline('Loading network')
 
-    # Define network model
-    t1 = time.time()
-
     modulated = False
-    if 'mod' in cfg.model.kp_mode:
+    if 'mod' in new_config.model.kp_mode:
         modulated = True
 
-    if cfg.model.kp_mode.startswith('kpconv'):
-        net = KPConvFCNN(cfg, modulated=modulated, deformable=False)
-    elif cfg.model.kp_mode.startswith('kpdef'):
-        net = KPConvFCNN(cfg, modulated=modulated, deformable=True)
-    elif cfg.model.kp_mode.startswith('kpinv'):
-        net = KPInvFCNN(cfg)
-    elif cfg.model.kp_mode.startswith('transformer') or cfg.model.kp_mode.startswith('inv_'):
-        net = InvolutionFCNN(cfg)
+    if new_config.model.kp_mode.startswith('kpconv'):
+        net = KPConvFCNN(new_config, modulated=modulated, deformable=False)
+    elif new_config.model.kp_mode.startswith('kpdef'):
+        net = KPConvFCNN(new_config, modulated=modulated, deformable=True)
+    elif new_config.model.kp_mode.startswith('kpinv'):
+        net = KPInvFCNN(new_config)
+    elif new_config.model.kp_mode.startswith('transformer') or new_config.model.kp_mode.startswith('inv_'):
+        net = InvolutionFCNN(new_config)
 
         
     #########################
@@ -174,10 +116,10 @@ if __name__ == '__main__':
     chkps = [f for f in os.listdir(chkp_path) if f[:4] == 'chkp']
 
     # Find which snapshot to restore
-    if chkp_idx is None:
+    if new_cfg.test.chkp_idx is None:
         chosen_chkp = 'current_chkp.tar'
     else:
-        chosen_chkp = np.sort(chkps)[chkp_idx]
+        chosen_chkp = np.sort(chkps)[new_cfg.test.chkp_idx]
     chosen_chkp = os.path.join(chosen_log, 'checkpoints', chosen_chkp)
 
     # Load previous checkpoint
@@ -196,10 +138,74 @@ if __name__ == '__main__':
     frame_lines_1(['Training and Validation'])
 
     # Go
-    test_model(net, test_loader, cfg)
+    test_model(net, test_loader, new_config)
 
     print('Forcing exit now')
     os.kill(os.getpid(), signal.SIGINT)
+
+    return
+
+
+# ----------------------------------------------------------------------------------------------------------------------
+#
+#           Main Call
+#       \***************/
+#
+
+
+if __name__ == '__main__':
+
+    ###############################
+    # Choose the model to visualize
+    ###############################
+
+    #   Here you can choose which model you want to test with the variable test_model. Here are the possible values :
+    #
+    #       > 'last_XXX': Automatically retrieve the last trained model on dataset XXX
+    #       > '(old_)results/Log_YYYY-MM-DD_HH-MM-SS': Directly provide the path of a trained model
+
+    chosen_log = 'results/Log_2022-08-17_16-52-30'
+
+    # Add argument here to handle it
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--log_path', type=str)
+    args = parser.parse_args()
+
+    # Get log to test
+    if args.log_path is not None:
+        chosen_log = 'results/' + args.log_path
+
+    #############
+    # Load config
+    #############
+
+    # Configuration parameters
+    new_cfg = load_cfg(chosen_log)
+
+
+    ###################
+    # Define parameters
+    ###################
+
+    # Change some parameters
+    new_cfg.test.in_radius = 4.0
+    new_cfg.test.batch_limit = 1
+    new_cfg.test.steps_per_epoch = 9999999
+    new_cfg.test.max_votes = 3
+    new_cfg.test.chkp_idx = None
+
+    # Augmentations
+    new_cfg.train.augment_anisotropic = True
+    new_cfg.train.augment_min_scale = 0.99
+    new_cfg.train.augment_max_scale = 1.01
+    new_cfg.train.augment_symmetries =  [True, False, False]
+    new_cfg.train.augment_rotation = 'vertical'
+    new_cfg.train.augment_noise = 0.0001
+    new_cfg.train.augment_color = 0.1
+
+
+    test_log(chosen_log, new_cfg)
+    
 
 
 

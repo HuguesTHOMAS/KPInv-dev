@@ -176,6 +176,7 @@ def init_cfg():
     cfg.test.max_points = -1            #   Int, maximum number of points per element (randomly drop the excedent)
 
     cfg.test.val_momentum = 0.5         # Float, momentum for averaging predictions during validation.
+    cfg.test.chkp_idx = None            #   Int, index of the checkpoint used for test
 
 
     return cfg
@@ -199,11 +200,16 @@ def get_directories(cfg, date=None, seed=None):
 
     return
 
-def save_cfg(cfg):
+def save_cfg(cfg, path=None):
+
+    if path is None:
+        path = cfg.exp.log_dir
+
     # Serialize data into file:
-    with open(join(cfg.exp.log_dir, 'parameters.json'), "w") as jsonfile:
+    with open(join(path, 'parameters.json'), "w") as jsonfile:
         json.dump(cfg, jsonfile, indent=4, sort_keys=False)
     return
+
 
 def load_cfg(log_path):
 
