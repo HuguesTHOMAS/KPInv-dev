@@ -1095,7 +1095,7 @@ def compare_on_test_set(list_of_cfg,
         cfg.train.augment_symmetries =  [True, False, False]
         cfg.train.augment_rotation = 'vertical'
         cfg.train.augment_noise = 0.0001
-        cfg.train.augment_color = 0.7
+        cfg.train.augment_color = 1.0
 
         
         # Read test results if available

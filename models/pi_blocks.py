@@ -400,7 +400,7 @@ class point_involution_v3(nn.Module):
                  delta_layers: int = 2,
                  delta_reduction: int = 1,
                  double_delta: bool = False,
-                 geom_mode: str = 'add',
+                 geom_mode: str = 'sub',
                  stride_mode: str = 'nearest',
                  dimension: int = 3,
                  norm_type: str = 'batch',
@@ -493,6 +493,7 @@ class point_involution_v3(nn.Module):
         else:
             self.gamma_mlp = nn.Linear(C, C)
         
+        self.inf = 1e6
 
         return
 
@@ -623,7 +624,7 @@ class point_transformer(nn.Module):
                  delta_reduction: int = 4,
                  double_delta: bool = False,
                  normalize_p: bool = False,
-                 geom_mode: str = 'add',
+                 geom_mode: str = 'sub',
                  stride_mode: str = 'nearest',
                  dimension: int = 3,
                  norm_type: str = 'batch',
@@ -719,10 +720,13 @@ class point_transformer(nn.Module):
                 self.delta2_mlp.append(nn.Linear(C // R, C))
 
         # Define MLP gamma
+        use_gamma_mlp = False
         if geom_mode == 'cat':
             self.gamma_mlp = nn.Linear(2 * C, C)
-        else:
+        elif use_gamma_mlp:
             self.gamma_mlp = nn.Linear(C, C)
+        else:
+            self.gamma_mlp = nn.Identity()
         
         self.inf = 1e6
         self.softmax = nn.Softmax(dim=1)
@@ -814,39 +818,39 @@ class point_transformer(nn.Module):
 
         # Merge geometric encodings with feature
         if self.geom_mode == 'add':
-            qk_feats = qk_feats.unsqueeze(1) + geom_encodings2  # -> (M, H, C)
+            qk_feats = qk_feats + geom_encodings2  # -> (M, H, C)
         elif self.geom_mode == 'sub':
-            qk_feats = qk_feats.unsqueeze(1) - geom_encodings2  # -> (M, H, C)
+            qk_feats = qk_feats - geom_encodings2  # -> (M, H, C)
         elif self.geom_mode == 'mul':
-            qk_feats = qk_feats.unsqueeze(1) * geom_encodings2  # -> (M, H, C)
+            qk_feats = qk_feats * geom_encodings2  # -> (M, H, C)
         elif self.geom_mode == 'cat':
-            qk_feats = torch.cat((qk_feats.unsqueeze(1), geom_encodings2), dim=2)  # -> (M, H, 2C)
+            qk_feats = torch.cat((qk_feats, geom_encodings2), dim=2)  # -> (M, H, 2C)
 
         # Generate attention weights
         attention_weights = self.alpha_mlp(qk_feats) # (M, H, C) -> (M, H, G)
         attention_weights = self.softmax(attention_weights)
 
-
         # Apply attention weights
         # ************************
 
         # Separate features in groups
-        H = int(neighbor_feats.shape[1])
-        neighbor_feats = neighbor_feats.view(-1, H, self.channels_per_group, self.groups)  # (M, H, C) -> (M, H, CpG, G)
+        H = int(neighb_v_feats.shape[1])
+        neighb_v_feats = neighb_v_feats.view(-1, H, self.channels_per_group, self.groups)  # (M, H, C) -> (M, H, CpG, G)
         attention_weights = attention_weights.view(-1, H, self.channels_per_group, 1)  # (M, H*CpG) -> (M, H, CpG, 1)
 
         # Multiply and sum
-        output_feats = torch.sum(neighbor_feats * attention_weights, dim=1)  # -> (M, CpG, G)
+        output_feats = torch.sum(neighb_v_feats * attention_weights, dim=1)  # -> (M, CpG, G)
         
         # Reshape
-        output_feats = output_feats.view(-1, self.channels)  # -> (M, C)
+        output_feats = output_feats.view(-1, self.out_channels)  # -> (M, C)
 
         return output_feats
 
     def __repr__(self):
 
-        repr_str = 'point_involution_v3'
-        repr_str += '(C: {:d}'.format(self.channels)
+        repr_str = 'point_transformer'
+        repr_str += '(Cin: {:d}'.format(self.in_channels)
+        repr_str += ', Cout: {:d}'.format(self.out_channels)
         repr_str += ', G: {:d})'.format(self.groups)
 
         return repr_str

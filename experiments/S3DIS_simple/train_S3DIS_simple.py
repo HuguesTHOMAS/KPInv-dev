@@ -71,12 +71,12 @@ def my_config():
     # cfg.model.layer_blocks = (2, 3, 8, 32, 4)
 
     
-    cfg.model.layer_blocks = (2,  3,  4,  6,  3)
+    cfg.model.layer_blocks = (2,  3,  4,  6,  3)    # Same as point transformers
     # cfg.model.layer_blocks = (3,  4,  6,  8,  4)
     # cfg.model.layer_blocks = (4,  6,  8,  8,  6)
     # cfg.model.layer_blocks = (4,  6,  8, 12,  6)  # Strong architecture
 
-    cfg.model.kp_mode = 'kpconv-mod'       # Choose ['kpconv', 'kpdef', 'kpinv']. And ['kpconv-mod', 'kpdef-mod'] for modulations
+    cfg.model.kp_mode = 'inv_v3'       # Choose ['kpconv', 'kpdef', 'kpinv']. And ['kpconv-mod', 'kpdef-mod'] for modulations
                                            # Choose ['inv_v1', 'inv_v2', 'inv_v3', 'inv_v4', 'transformer']
     cfg.model.kernel_size = 15
     cfg.model.kp_radius = 2.5
@@ -84,7 +84,7 @@ def my_config():
     cfg.model.kp_influence = 'linear'
     cfg.model.kp_aggregation = 'sum'
 
-    cfg.model.conv_groups = 1
+    cfg.model.conv_groups = 8
 
     cfg.data.sub_size = 0.02          # -1.0 so that dataset point clouds are not initially subsampled
     cfg.model.init_sub_size = 0.04    # Adapt this with train.in_radius. Try to keep a ratio of ~50
@@ -92,11 +92,15 @@ def my_config():
 
     cfg.model.input_channels = 5    # This value has to be compatible with one of the dataset input features definition
 
+    # cfg.model.neighbor_limits = []                      # Use empty list to let calibration get the values
     # cfg.model.neighbor_limits = [35, 40, 50, 50, 50]    # Use empty list to let calibration get the values
-    cfg.model.neighbor_limits = []
+    cfg.model.neighbor_limits = [16, 16, 16, 16, 16]    # List for point_transformer
 
     cfg.model.kpinv_grp_ch = 1          #   Int, number of channels per group in involutions
     cfg.model.kpinv_reduc = 1           #   Int, reduction ration for kpinv gen mlp
+
+    cfg.model.use_strided_conv = True           # Use convolution op for strided layers instead of involution
+    cfg.model.first_inv_layer = 0               # Use involution layers only from this layer index
 
 
 
@@ -110,9 +114,9 @@ def my_config():
     cfg.train.in_radius = 1.8
 
     # Batch related_parames
-    cfg.train.batch_size = 8           # Target batch size. If you don't want calibration, you can directly set train.batch_limit
+    cfg.train.batch_size = 4            # Target batch size. If you don't want calibration, you can directly set train.batch_limit
     cfg.train.accum_batch = 5           # Accumulate batches for an effective batch size of batch_size * accum_batch.
-    cfg.train.steps_per_epoch = 125
+    cfg.train.steps_per_epoch = 250
     
     # Training length
     cfg.train.max_epoch = 180
@@ -126,7 +130,8 @@ def my_config():
     cfg.train.optimizer = 'AdamW'
     cfg.train.adam_b = (0.9, 0.999)
     cfg.train.adam_eps = 1e-08
-    cfg.train.weight_decay = 0.01
+    # cfg.train.weight_decay = 0.01     # for KPConv
+    cfg.train.weight_decay = 0.0001     # for transformer
 
     # Cyclic lr 
     cfg.train.cyc_lr0 = 1e-4                # Float, Start (minimum) learning rate of 1cycle decay
@@ -160,8 +165,8 @@ def my_config():
 
     # Augmentations
     cfg.train.augment_anisotropic = True
-    cfg.train.augment_min_scale = 0.8
-    cfg.train.augment_max_scale = 1.2
+    cfg.train.augment_min_scale = 0.9
+    cfg.train.augment_max_scale = 1.1
     cfg.train.augment_symmetries =  [True, False, False]
     cfg.train.augment_rotation = 'vertical'
     cfg.train.augment_noise = 0.005

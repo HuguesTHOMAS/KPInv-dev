@@ -13,7 +13,7 @@ from utils.torch_pyramid import fill_pyramid
 
 class InvolutionFCNN(nn.Module):
 
-    def __init__(self, cfg, strided_convolutions=True):
+    def __init__(self, cfg):
         """
         Class defining InvolutionFCNN, in a more readable way. The number of block at each layer can be chosen.
         Args:
@@ -60,19 +60,19 @@ class InvolutionFCNN(nn.Module):
         # ------ Layers 1 ------
 
         # Initial convolution 
+        use_conv = cfg.model.first_inv_layer > 0
         self.encoder_1 = nn.ModuleList()
         self.encoder_1.append(self.get_conv_block(in_C, C, conv_r, conv_sig, cfg))
-        self.encoder_1.append(self.get_residual_block(C, C * 2, 0, conv_r, cfg))
+        self.encoder_1.append(self.get_residual_block(C, C * 2, 0, conv_r, conv_sig, cfg, conv_layer=use_conv))
 
+        
         # Next blocks
         for _ in range(self.layer_blocks[0] - 2):
-            self.encoder_1.append(self.get_residual_block(C * 2, C * 2, 0, conv_r, cfg))
+            self.encoder_1.append(self.get_residual_block(C * 2, C * 2, 0, conv_r, conv_sig, cfg, conv_layer=use_conv))
 
         # Pooling block
-        if strided_convolutions:
-            self.pooling_1 = self.get_conv_residual_block(C * 2, C * 2, conv_r, conv_sig, cfg, strided=True)
-        else:
-            self.pooling_1 = self.get_residual_block(C * 2, C * 2, 0, conv_r, cfg, strided=True)
+        use_conv = cfg.model.use_strided_conv or use_conv
+        self.pooling_1 = self.get_residual_block(C * 2, C * 2, 0, conv_r, conv_sig, cfg, strided=True, conv_layer=use_conv)
 
 
         # ------ Layers [2, 3, 4, 5] ------
@@ -82,20 +82,19 @@ class InvolutionFCNN(nn.Module):
             C *= 2; conv_r *= 2; conv_sig *= 2
 
             # First block takes features to new dimension.
+            use_conv = cfg.model.first_inv_layer > layer - 1
             encoder_i = nn.ModuleList()
-            encoder_i.append(self.get_residual_block(C, C * 2, layer - 1, conv_r, cfg))
+            encoder_i.append(self.get_residual_block(C, C * 2, layer - 1, conv_r, conv_sig, cfg, conv_layer=use_conv))
 
             # Next blocks
             for _ in range(self.layer_blocks[layer - 1] - 1):
-                encoder_i.append(self.get_residual_block(C * 2, C * 2, layer - 1, conv_r, cfg))
+                encoder_i.append(self.get_residual_block(C * 2, C * 2, layer - 1, conv_r, conv_sig, cfg, conv_layer=use_conv))
             setattr(self, 'encoder_{:d}'.format(layer), encoder_i)
 
             # Pooling block (not for the last layer)
             if layer < self.num_layers:
-                if strided_convolutions:
-                    pooling_i = self.get_conv_residual_block(C * 2, C * 2, conv_r, conv_sig, cfg, strided=True)
-                else:
-                    pooling_i = self.get_residual_block(C * 2, C * 2, layer - 1, conv_r, cfg, strided=True)
+                use_conv = cfg.model.use_strided_conv or use_conv
+                pooling_i = self.get_residual_block(C * 2, C * 2, layer - 1, conv_r, conv_sig, cfg, strided=True, conv_layer=use_conv)
                 setattr(self, 'pooling_{:d}'.format(layer), pooling_i)
 
 
@@ -177,18 +176,21 @@ class InvolutionFCNN(nn.Module):
                            norm_type=cfg.model.norm,
                            bn_momentum=cfg.model.bn_momentum)
 
-    def get_residual_block(self, in_C, out_C, layer, radius, cfg, strided=False):
-
-        return InvolutionResidualBlock(in_C,
-                                       out_C,
-                                       radius,
-                                       cfg.model.neighbor_limits[layer],
-                                       cfg.model.kp_mode,
-                                       groups=cfg.model.conv_groups,
-                                       strided=strided,
-                                       dimension=cfg.data.dim,
-                                       norm_type=cfg.model.norm,
-                                       bn_momentum=cfg.model.bn_momentum)
+    def get_residual_block(self, in_C, out_C, layer, radius, sigma, cfg, strided=False, conv_layer=False):
+        
+        if conv_layer:
+            return self.get_conv_residual_block(in_C, out_C, radius, sigma, cfg, strided=strided)
+        else:
+            return InvolutionResidualBlock(in_C,
+                                        out_C,
+                                        radius,
+                                        cfg.model.neighbor_limits[layer],
+                                        cfg.model.kp_mode,
+                                        groups=cfg.model.conv_groups,
+                                        strided=strided,
+                                        dimension=cfg.data.dim,
+                                        norm_type=cfg.model.norm,
+                                        bn_momentum=cfg.model.bn_momentum)
 
     def get_conv_residual_block(self, in_C, out_C, radius, sigma, cfg, deformable=False, strided=False):
 

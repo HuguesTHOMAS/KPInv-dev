@@ -92,6 +92,9 @@ def init_cfg():
     cfg.model.kpinv_grp_ch = 16         #   Int, number of channels per group in involutions
     cfg.model.kpinv_reduc = 4           #   Int, reduction ration for kpinv gen mlp
 
+    cfg.model.use_strided_conv = True   #  Bool, Use convolution op for strided layers instead of involution
+    cfg.model.first_inv_layer = 0       #   Int, Use involution layers only from this layer index
+
     cfg.model.kp_deform_w = 1.0         # Float, multiplier for deformation the fitting/repulsive loss
     cfg.model.kp_deform_grad = 0.1      # Float, multiplier for deformation gradient
     cfg.model.kp_repulse_dist = 1.0     # Float, distance of repulsion for deformed kernel points

@@ -188,8 +188,8 @@ if __name__ == '__main__':
     new_cfg.test.in_radius = 4.0
     new_cfg.test.batch_limit = 1
     new_cfg.test.steps_per_epoch = 9999999
-    new_cfg.test.max_votes = 3
-    new_cfg.test.chkp_idx = None
+    new_cfg.test.max_votes = 15
+    new_cfg.test.chkp_idx = -1
 
     # Augmentations
     new_cfg.train.augment_anisotropic = True
@@ -198,7 +198,7 @@ if __name__ == '__main__':
     new_cfg.train.augment_symmetries =  [True, False, False]
     new_cfg.train.augment_rotation = 'vertical'
     new_cfg.train.augment_noise = 0.0001
-    new_cfg.train.augment_color = 0.1
+    new_cfg.train.augment_color = 1.0
 
 
     test_log(chosen_log, new_cfg)
