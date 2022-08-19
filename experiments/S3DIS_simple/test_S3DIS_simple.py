@@ -96,18 +96,18 @@ if __name__ == '__main__':
     ###################
 
     # Change some parameters
-    cfg.test.in_radius = 6.0
+    cfg.test.in_radius = 4.0
     cfg.test.batch_limit = 1
     cfg.test.steps_per_epoch = 9999999
 
-    # # Augmentations
-    # cfg.train.augment_anisotropic = True
-    # cfg.train.augment_min_scale = 0.8
-    # cfg.train.augment_max_scale = 1.2
-    # cfg.train.augment_symmetries =  [True, False, False]
-    # cfg.train.augment_rotation = 'vertical'
-    # cfg.train.augment_noise = 0.005
-    # cfg.train.augment_color = 0.7
+    # Augmentations
+    cfg.train.augment_anisotropic = True
+    cfg.train.augment_min_scale = 0.99
+    cfg.train.augment_max_scale = 1.01
+    cfg.train.augment_symmetries =  [True, False, False]
+    cfg.train.augment_rotation = 'vertical'
+    cfg.train.augment_noise = 0.0001
+    cfg.train.augment_color = 0.1
 
     
 
@@ -128,9 +128,6 @@ if __name__ == '__main__':
     # Calib from training data
     # test_dataset.calib_batch(cfg)
     # test_dataset.calib_neighbors(cfg)
-
-    # Save configuration now that it is complete
-    save_cfg(cfg)
     
     # Initialize samplers
     test_sampler = SceneSegSampler(test_dataset)

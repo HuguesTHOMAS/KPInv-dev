@@ -84,7 +84,7 @@ def my_config():
     cfg.model.kp_influence = 'linear'
     cfg.model.kp_aggregation = 'sum'
 
-    cfg.model.conv_groups = 8
+    cfg.model.conv_groups = 1
 
     cfg.data.sub_size = 0.02          # -1.0 so that dataset point clouds are not initially subsampled
     cfg.model.init_sub_size = 0.04    # Adapt this with train.in_radius. Try to keep a ratio of ~50

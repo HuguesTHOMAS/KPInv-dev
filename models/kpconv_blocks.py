@@ -253,7 +253,7 @@ class KPConv(nn.Module):
             # group conv
             weighted_feats = weighted_feats.view(-1, self.kernel_size, self.groups, self.in_channels_per_group)  # (M, K, C) -> (M, K, G, C//G)
             output_feats = torch.einsum("mkgc,kgcd->mgd", weighted_feats, self.weights)  # (M, K, G, C//G) * (K, G, C//G, O//G) -> (M, G, O//G)
-            output_feats = output_feats.view(-1, self.out_channels)  # (M, G, O//G) -> (M, O)
+            output_feats = output_feats.reshape((-1, self.out_channels))  # (M, G, O//G) -> (M, O)
 
             # weighted_feats = weighted_feats.view(-1, self.kernel_size, self.groups, self.in_channels_per_group)  # (M, K, C) -> (M, K, G, C//G)
             # weighted_feats = weighted_feats.permute((1, 2, 0, 3))  # (M, K, G, C//G) -> (K, G, M, C//G)
