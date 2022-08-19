@@ -54,7 +54,7 @@ from tasks.test import test_model
 #
 
 
-def test_log(chosen_log, new_cfg):
+def test_log(chosen_log, new_cfg, save_visu=False):
 
     ##############
     # Prepare Data
@@ -138,7 +138,7 @@ def test_log(chosen_log, new_cfg):
     frame_lines_1(['Training and Validation'])
 
     # Go
-    test_model(net, test_loader, new_cfg)
+    test_model(net, test_loader, new_cfg, save_visu=save_visu)
 
     return
 

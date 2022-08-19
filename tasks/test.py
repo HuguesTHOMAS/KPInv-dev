@@ -32,7 +32,7 @@ from utils.metrics import fast_confusion, IoU_from_confusions
 #
 
 
-def test_model(net, test_loader, cfg, on_gpu=True):
+def test_model(net, test_loader, cfg, on_gpu=True, save_visu=False):
     """
     Training and validation of a model on a particular dataset.    
     Args:
@@ -120,7 +120,14 @@ def test_model(net, test_loader, cfg, on_gpu=True):
 
         # Perform one peoch of test
         with torch.no_grad():
-            test_epoch_func(vote_n, net, test_loader, cfg, test_data, device, saving_path=new_test_path)
+            test_epoch_func(vote_n,
+                            net,
+                            test_loader,
+                            cfg,
+                            test_data,
+                            device,
+                            saving_path=new_test_path,
+                            save_visu=save_visu)
 
         # Create new sampling points for next test epoch
         t1 = time.time()
@@ -147,7 +154,7 @@ def test_model(net, test_loader, cfg, on_gpu=True):
 #
 
 
-def cloud_segmentation_test(epoch, net, test_loader, cfg, test_data, device, saving_path=None):
+def cloud_segmentation_test(epoch, net, test_loader, cfg, test_data, device, saving_path=None, save_visu=False):
     """
     Test method for cloud segmentation models
     """
@@ -395,22 +402,24 @@ def cloud_segmentation_test(epoch, net, test_loader, cfg, test_data, device, sav
             # Save subsampled for visu
             # ************************
 
-            # Path of saved validation file
-            cloud_name = files[c_i].split('/')[-1]
-            sub_name = join(saving_path, 'sub_' + cloud_name)
+            if save_visu:
 
-            # Get subsampled points from tree structure
-            sub_points = np.array(test_loader.dataset.input_trees[c_i].data, copy=False)
+                # Path of saved validation file
+                cloud_name = files[c_i].split('/')[-1]
+                sub_name = join(saving_path, 'sub_' + cloud_name)
 
-            # We first save the subsampled version for visu
-            if available_labels:
-                write_ply(sub_name,
-                        [sub_points, sub_preds, all_sub_labels[c_i].astype(np.int32)],
-                        ['x', 'y', 'z', 'preds', 'class'])
-            else:
-                write_ply(sub_name,
-                        [sub_points, sub_preds],
-                        ['x', 'y', 'z', 'preds'])
+                # Get subsampled points from tree structure
+                sub_points = np.array(test_loader.dataset.input_trees[c_i].data, copy=False)
+
+                # We first save the subsampled version for visu
+                if available_labels:
+                    write_ply(sub_name,
+                            [sub_points, sub_preds, all_sub_labels[c_i].astype(np.int32)],
+                            ['x', 'y', 'z', 'preds', 'class'])
+                else:
+                    write_ply(sub_name,
+                            [sub_points, sub_preds],
+                            ['x', 'y', 'z', 'preds'])
 
 
             # Save full for benchmarks

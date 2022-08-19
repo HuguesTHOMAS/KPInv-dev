@@ -276,6 +276,10 @@ def load_snap_clouds(path, cfg, only_last=False):
 
             # Save confusion for future use
             np.savetxt(conf_path, Confs[v_i], '%12d')
+        
+        # Erase label files to save disk memory
+        if v_i < len(preds_paths) - 1 and exists(preds_path):
+            remove(preds_path)
 
     # Remove ignored labels from confusions
     for l_ind, label_value in reversed(list(enumerate(cfg.data.label_values))):
@@ -1091,7 +1095,7 @@ def compare_on_test_set(list_of_cfg,
         cfg.train.augment_symmetries =  [True, False, False]
         cfg.train.augment_rotation = 'vertical'
         cfg.train.augment_noise = 0.0001
-        cfg.train.augment_color = 0.1
+        cfg.train.augment_color = 0.7
 
         
         # Read test results if available
