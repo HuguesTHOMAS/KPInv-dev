@@ -417,6 +417,48 @@ def exp_kp_groups():
 
 
 
+def exp_involution():
+    """
+     
+    """
+
+    # Using the dates of the logs, you can easily gather consecutive ones. All logs should be of the same dataset.
+    start = 'Log_2022-08-19_15-09-59'
+    end = 'Log_2022-08-29_23-43-08'
+
+    # Name of the result path
+    res_path = 'results'
+
+    # Gather logs and sort by date
+    logs = np.sort([join(res_path, l) for l in listdir_str(res_path) if start <= l <= end])
+
+    
+    # Optionally add a specific log at a specific place in the log list
+    logs = logs.astype('<U50')
+    logs = np.insert(logs, 0, 'results/Log_2022-08-17_16-52-30')
+    
+    # Give names to the logs (for plot legends)
+    logs_names = ['baseline',
+                  'trans-G8-0',
+                  'trans-G8-0-sconv',
+                  'trans-G1-0-sconv',
+                  'trans-G1-2-sconv',
+                  'inv-G1-0',
+                  'inv-G8-0',
+                  'inv-G1-0-sconv',
+                  'inv-G1-1-sconv',
+                  'inv-G1-2-sconv',
+                  'inv-G1-3-sconv',]
+
+    # safe check log names
+    if len(logs) > len(logs_names):
+        logs = logs[:len(logs_names)]
+    logs_names = np.array(logs_names[:len(logs)])
+
+    return logs, logs_names
+
+
+
 
 
 
@@ -435,7 +477,7 @@ if __name__ == '__main__':
     ######################################################
 
     # My logs: choose the logs to show
-    logs, logs_names = exp_kp_groups()
+    logs, logs_names = exp_involution()
 
     frame_lines_1(["Plot S3DIS experiments"])
 
@@ -476,11 +518,11 @@ if __name__ == '__main__':
     underline("Ploting training info")
 
     # Plot the training loss and accuracy
-    # compare_trainings(all_cfgs, logs, logs_names)
+    compare_trainings(all_cfgs, logs, logs_names)
 
 
     # Test the network or show validation
-    perform_test = True
+    perform_test = False
     if perform_test:
 
         print()

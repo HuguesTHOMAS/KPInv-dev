@@ -76,8 +76,8 @@ def my_config():
     # cfg.model.layer_blocks = (4,  6,  8,  8,  6)
     # cfg.model.layer_blocks = (4,  6,  8, 12,  6)  # Strong architecture
 
-    cfg.model.kp_mode = 'inv_v3'       # Choose ['kpconv', 'kpdef', 'kpinv']. And ['kpconv-mod', 'kpdef-mod'] for modulations
-                                           # Choose ['inv_v1', 'inv_v2', 'inv_v3', 'inv_v4', 'transformer']
+    cfg.model.kp_mode = 'transformer'       # Choose ['kpconv', 'kpdef', 'kpinv']. And ['kpconv-mod', 'kpdef-mod'] for modulations
+                                            # Choose ['inv_v1', 'inv_v2', 'inv_v3', 'inv_v4', 'transformer']
     cfg.model.kernel_size = 15
     cfg.model.kp_radius = 2.5
     cfg.model.kp_sigma = 1.2
@@ -169,7 +169,7 @@ def my_config():
     cfg.train.augment_max_scale = 1.1
     cfg.train.augment_symmetries =  [True, False, False]
     cfg.train.augment_rotation = 'vertical'
-    cfg.train.augment_noise = 0.005
+    cfg.train.augment_noise = 0.003
     cfg.train.augment_color = 0.7
 
     
@@ -209,7 +209,10 @@ if __name__ == '__main__':
                   'model.kp_sigma']
 
     int_args = ['model.kernel_size',
-                'model.conv_groups']
+                'model.conv_groups',
+                'model.first_inv_layer']
+
+    bool_args = ['model.use_strided_conv']
 
     list_args = ['model.layer_blocks']
     
@@ -224,6 +227,10 @@ if __name__ == '__main__':
 
     for int_arg_name in int_args:
         parser_name = '--' + int_arg_name.split('.')[-1]
+        parser.add_argument(parser_name, type=int)
+
+    for bool_arg_name in bool_args:
+        parser_name = '--' + bool_arg_name.split('.')[-1]
         parser.add_argument(parser_name, type=int)
 
     for list_arg_name in list_args:
@@ -247,12 +254,19 @@ if __name__ == '__main__':
         get_directories(cfg)
 
     # Update parameters
-    for all_args in [str_args, float_args, int_args, list_args]:
+    for all_args in [str_args, float_args, int_args, list_args, bool_args]:
         for arg_name in all_args:
-            key1, key2 =arg_name.split('.')
+            key1, key2 = arg_name.split('.')
             new_arg = getattr(args, key2)
             if new_arg is not None:
                 cfg[key1][key2] = new_arg
+
+    # Sepcial boolean handling
+    for arg_name in bool_args:
+        key1, key2 = arg_name.split('.')
+        new_arg = getattr(args, key2)
+        if new_arg is not None:
+            cfg[key1][key2] = bool(new_arg)
 
     
     ##############

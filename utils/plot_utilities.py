@@ -24,7 +24,7 @@ import os
 import shutil
 import torch
 import numpy as np
-from utils.config import bcolors
+from utils.printing import bcolors
 import matplotlib.pyplot as plt
 from os.path import isfile, join, exists
 from os import listdir, remove, getcwd, makedirs
@@ -38,7 +38,7 @@ from matplotlib.widgets import Slider, Button, RadioButtons
 import imageio
 
 # My libs
-from utils.printing import frame_lines_1, underline
+from utils.printing import frame_lines_1, underline, print_color
 from utils.metrics import IoU_from_confusions, smooth_metrics, fast_confusion
 from utils.ply import read_ply, write_ply
 from utils.config import load_cfg
@@ -228,6 +228,10 @@ def load_snap_clouds(path, cfg, only_last=False):
     if not exists(val_path):
         return load_snap_clouds_old(path, cfg, only_last=only_last)
 
+
+    # Read prediction and compute confusions
+    # **************************************
+
     # Get list of vote predictions
     preds_names = np.array([f for f in listdir_str(val_path) if f.startswith('preds_')])
     saved_votes = np.array([int(f.split('_')[1]) for f in preds_names])
@@ -236,18 +240,12 @@ def load_snap_clouds(path, cfg, only_last=False):
     preds_epochs = np.array([int(f[:-4].split('_')[-1]) for f in preds_names])
     preds_votes = np.array([int(f.split('_')[1]) for f in preds_names])
 
-    # Get confusion matrices on full clouds
     dataset = None
-    Confs = np.zeros((len(preds_epochs), cfg.data.num_classes, cfg.data.num_classes), dtype=np.int32)
     for v_i, preds_path in enumerate(preds_paths):
         
-        # Load confusion if previously saved
+        # compute confusion if not already saved
         conf_path = join(val_path, 'conf_{:d}_{:d}.txt'.format(preds_votes[v_i], preds_epochs[v_i]))
-        if isfile(conf_path):
-            Confs[v_i] += np.loadtxt(conf_path, dtype=np.int32)
-
-        # Or compute it
-        else:
+        if not isfile(conf_path):
 
             # Get dataset in memory to have reproj indices
             if dataset is None:
@@ -262,6 +260,7 @@ def load_snap_clouds(path, cfg, only_last=False):
 
             # Get points
             files = dataset.scene_files
+            scene_confs = np.zeros((cfg.data.num_classes, cfg.data.num_classes), dtype=np.int32)
             for c_i, file_path in enumerate(files):
 
                 # Get groundtruth labels
@@ -272,14 +271,29 @@ def load_snap_clouds(path, cfg, only_last=False):
 
                 # Confusion matrix
                 label_values = np.array(cfg.data.label_values, dtype=np.int32)
-                Confs[v_i] += fast_confusion(labels, preds, label_values).astype(np.int32)
+                scene_confs += fast_confusion(labels, preds, label_values).astype(np.int32)
 
             # Save confusion for future use
-            np.savetxt(conf_path, Confs[v_i], '%12d')
+            np.savetxt(conf_path, scene_confs, '%12d')
         
         # Erase label files to save disk memory
         if v_i < len(preds_paths) - 1 and exists(preds_path):
             remove(preds_path)
+
+
+    # Read confusions
+    # ***************
+
+    conf_names = np.array([f for f in listdir_str(val_path) if f.startswith('conf_')])
+    saved_votes = np.array([int(f.split('_')[1]) for f in conf_names])
+    conf_names = conf_names[np.argsort(saved_votes)]
+    conf_paths = np.array([join(val_path, f) for f in conf_names])
+    conf_epochs = np.array([int(f[:-4].split('_')[-1]) for f in conf_names])
+    conf_votes = np.array([int(f.split('_')[1]) for f in conf_names])
+    
+    Confs = np.zeros((len(conf_epochs), cfg.data.num_classes, cfg.data.num_classes), dtype=np.int32)
+    for v_i, conf_path in enumerate(conf_paths):
+        Confs[v_i] += np.loadtxt(conf_path, dtype=np.int32)
 
     # Remove ignored labels from confusions
     for l_ind, label_value in reversed(list(enumerate(cfg.data.label_values))):
@@ -287,7 +301,8 @@ def load_snap_clouds(path, cfg, only_last=False):
             Confs = np.delete(Confs, l_ind, axis=1)
             Confs = np.delete(Confs, l_ind, axis=2)
 
-    return preds_epochs, IoU_from_confusions(Confs)
+    return conf_epochs, IoU_from_confusions(Confs)
+
 
 def cfg_differences(list_of_cfg, ignore_params=[]):
 
@@ -325,6 +340,7 @@ def cfg_differences(list_of_cfg, ignore_params=[]):
 
     return diff_params, diff_values
     
+
 def print_cfg_diffs(logs_names, log_cfgs, show_params=[], hide_params=[], max_cols=145):
     """
     Print the differences in parameters between logs. Use show_params to force showing 
@@ -403,11 +419,6 @@ def print_cfg_diffs(logs_names, log_cfgs, show_params=[], hide_params=[], max_co
         # horizontal line
         col_strings[2] = '-' * n_fmt1
 
-        #color the checkmarks
-        for c_i, col_str in enumerate(col_strings):
-            col_str = col_str.replace(u'\u2713', '{:}{:s}{:}'.format(bcolors.OKBLUE, u'\u2713', bcolors.ENDC, width=n_fmt1))
-            col_strings[c_i] = col_str.replace(u'\u2718', '{:}{:s}{:}'.format(bcolors.FAIL, u'\u2718', bcolors.ENDC, width=n_fmt1))
-
         # fill columns
         for c_i, col_str in enumerate(col_strings):
             n_colors = col_str.count(bcolors.ENDC)
@@ -423,12 +434,12 @@ def print_cfg_diffs(logs_names, log_cfgs, show_params=[], hide_params=[], max_co
     while len(lines[0]) > max_cols:
         last_i = lines[0][:max_cols].rfind('|')
         for l_i, line_str in enumerate(lines):
-            print(line_str[:last_i + 1])
+            print_color(line_str[:last_i + 1])
             lines[l_i] = line_str[:first_i+1] + line_str[last_i + 1:]
         print('')
 
     for line_str in lines:
-        print(line_str)
+        print_color(line_str)
     print('\n')
     
     return

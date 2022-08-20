@@ -31,7 +31,7 @@ from os import makedirs
 from os.path import join, exists
 
 from utils.ply import read_ply, write_ply
-from utils.config import bcolors
+from utils.printing import bcolors
 
 
 # ------------------------------------------------------------------------------------------

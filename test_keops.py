@@ -20,7 +20,7 @@ from utils.batch_conversion import list_to_pack
 from utils.gpu_subsampling import grid_subsample, subsample_pack_batch, init_gpu
 from utils.gpu_neigbors import radius_search_pack_mode, radius_search_list_mode
 from utils.cpp_funcs import batch_radius_neighbors, batch_knn_neighbors
-from utils.config import bcolors
+from utils.printing import bcolors
 
 import matplotlib.pyplot as plt
 import numpy as np
