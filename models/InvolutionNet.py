@@ -186,7 +186,7 @@ class InvolutionFCNN(nn.Module):
                                         radius,
                                         cfg.model.neighbor_limits[layer],
                                         cfg.model.kp_mode,
-                                        groups=cfg.model.conv_groups,
+                                        groups=cfg.model.inv_groups,
                                         strided=strided,
                                         dimension=cfg.data.dim,
                                         norm_type=cfg.model.norm,

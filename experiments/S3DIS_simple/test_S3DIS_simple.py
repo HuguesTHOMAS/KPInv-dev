@@ -161,7 +161,7 @@ if __name__ == '__main__':
     #       > 'last_XXX': Automatically retrieve the last trained model on dataset XXX
     #       > '(old_)results/Log_YYYY-MM-DD_HH-MM-SS': Directly provide the path of a trained model
 
-    chosen_log = 'results/Log_2022-08-17_16-52-30'
+    chosen_log = 'results/Log_2022-08-19_15-09-59'
 
     # Add argument here to handle it
     parser = argparse.ArgumentParser()

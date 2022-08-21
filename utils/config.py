@@ -77,7 +77,8 @@ def init_cfg():
     cfg.model.kp_influence = 'linear'   #   Str, Influence function when d < KP_extent. ('constant', 'linear', 'gaussian')
     cfg.model.kp_aggregation = 'sum'    #   Str, Aggregation mode ('nearest', 'sum')
     cfg.model.kp_fixed = 'center'       #   Str, Fixed points in the kernel ('none', 'center', 'verticals')
-    cfg.model.conv_groups = 1           #   Int, number of groups for group conv
+    cfg.model.conv_groups = 1           #   Int, number of groups for groups in convolution
+    cfg.model.inv_groups = 1            #   Int, number of groups for groups in involution
 
     cfg.model.kpinv_grp_ch = 16         #   Int, number of channels per group in involutions
     cfg.model.kpinv_reduc = 4           #   Int, reduction ration for kpinv gen mlp

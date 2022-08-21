@@ -213,6 +213,10 @@ def cloud_segmentation_test(epoch, net, test_loader, cfg, test_data, device, sav
             continue
         empty_count = 0
 
+        for blengths in batch.in_dict.lengths:
+            if blengths.item() < 20:
+                print(' ' * 70, blengths.item())
+
         # New time
         t = t[-1:]
         if 'cuda' in device.type:

@@ -400,6 +400,7 @@ class point_involution_v3(nn.Module):
                  delta_layers: int = 2,
                  delta_reduction: int = 1,
                  double_delta: bool = False,
+                 normalize_p: bool = False,
                  geom_mode: str = 'sub',
                  stride_mode: str = 'nearest',
                  dimension: int = 3,
@@ -421,6 +422,7 @@ class point_involution_v3(nn.Module):
             alpha_layers        (int=2): number of layers in MLP alpha.
             alpha_reduction     (int=1): Reduction ratio for MLP alpha.
             double_delta (bool = False): Are we using double delta network (v4)
+            normalize_p  (bool = False): Are we normalizing geometric data for encodings
             geom_mode       (str='add'): Mode for geometric encoding merge ('add', 'sub', 'mul', 'cat')
             stride_mode (str='nearest'): Mode for strided attention ('nearest', 'avg', 'max')
             dimension           (int=3): The dimension of the point space.
@@ -448,6 +450,7 @@ class point_involution_v3(nn.Module):
         self.delta_layers = delta_layers
         self.delta_reduction = delta_reduction
         self.double_delta = double_delta
+        self.normalize_p = normalize_p
         self.geom_mode = geom_mode
         self.stride_mode = stride_mode
         self.dimension = dimension
@@ -511,23 +514,29 @@ class point_involution_v3(nn.Module):
             q_feats (Tensor): output features carried by query points (M, C_out).
         """
 
+        # Handle case where M < H
+        # ***********************
+
+        # Therefore we do not have to care about shadow neighbors
+        M = int(neighb_inds.shape[0])
+        H = int(neighb_inds.shape[1])
+        if M < H:
+            neighb_inds = torch.clone(neighb_inds[:, :M])
+            print((M, H), '->', (M, M))
+            H = M
+
         # Get features for each neighbor
         # ******************************
 
-        # Add a zero feature for shadow neighbors
-        padded_s_feats = torch.cat((s_feats, torch.zeros_like(s_feats[:1, :])), 0)  # (N, C) -> (N+1, C)
-
         # Get the features of each neighborhood
-        neighbor_feats = index_select(padded_s_feats, neighb_inds, dim=0)  # -> (M, H, C)
+        # v_feats = self.linear_v(s_feats)
+        neighbor_feats = index_select(s_feats, neighb_inds, dim=0)  # -> (M, H, C)
 
 
         # Get geometric encoding features
         # *******************************
         
         with torch.no_grad():
-
-            # Add a fake point in the last row for shadow neighbors
-            s_pts = torch.cat((s_pts, torch.zeros_like(s_pts[:1, :]) + self.inf), 0)   # (N, 3) -> (N+1, 3)
 
             # Get neighbor points [n_points, n_neighbors, dim]
             neighbors = index_select(s_pts, neighb_inds, dim=0)  # (N+1, 3) -> (M, H, 3)
@@ -536,7 +545,8 @@ class point_involution_v3(nn.Module):
             neighbors = (neighbors - q_pts.unsqueeze(1))
 
             # Rescale for normalization
-            neighbors *= 1 / self.radius   # -> (M, H, 3)
+            if self.normalize_p:
+                neighbors *= 1 / self.radius   # -> (M, H, 3)
         
         # Generate geometric encodings
         geom_encodings = self.delta_mlp(neighbors) # (M, H, 3) -> (M, H, C)
@@ -747,6 +757,17 @@ class point_transformer(nn.Module):
             q_feats (Tensor): output features carried by query points (M, C_out).
         """
 
+        # Handle case where M < H
+        # ***********************
+
+        # Therefore we do not have to care about shadow neighbors
+        M = int(neighb_inds.shape[0])
+        H = int(neighb_inds.shape[1])
+        if M < H:
+            neighb_inds = torch.clone(neighb_inds[:, :M])
+            print((M, H), '->', (M, M))
+            H = M
+
         # Get features for each neighbor
         # ******************************
 
@@ -762,9 +783,6 @@ class point_transformer(nn.Module):
         # *******************************
         
         with torch.no_grad():
-
-            # Add a fake point in the last row for shadow neighbors
-            s_pts = torch.cat((s_pts, torch.zeros_like(s_pts[:1, :]) + self.inf), 0)   # (N, 3) -> (N+1, 3)
 
             # Get neighbor points [n_points, n_neighbors, dim]
             neighbors = index_select(s_pts, neighb_inds, dim=0)  # (N+1, 3) -> (M, H, 3)
@@ -782,7 +800,7 @@ class point_transformer(nn.Module):
             geom_encodings2 = self.delta2_mlp(neighbors) # (M, H, 3) -> (M, H, C)
         else:
             geom_encodings2 = geom_encodings
-            
+        
         # Merge with features
         if self.geom_mode == 'add':
             neighb_v_feats += geom_encodings  # -> (M, H, C)
@@ -834,7 +852,6 @@ class point_transformer(nn.Module):
         # ************************
 
         # Separate features in groups
-        H = int(neighb_v_feats.shape[1])
         neighb_v_feats = neighb_v_feats.view(-1, H, self.channels_per_group, self.groups)  # (M, H, C) -> (M, H, CpG, G)
         attention_weights = attention_weights.view(-1, H, self.channels_per_group, 1)  # (M, H*CpG) -> (M, H, CpG, 1)
 
