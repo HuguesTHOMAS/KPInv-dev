@@ -423,7 +423,7 @@ def exp_involution():
     """
 
     # Using the dates of the logs, you can easily gather consecutive ones. All logs should be of the same dataset.
-    start = 'Log_2022-08-19_15-09-59'
+    start = 'Log_2022-08-20_20-11-45'
     end = 'Log_2022-08-29_23-43-08'
 
     # Name of the result path
@@ -449,6 +449,23 @@ def exp_involution():
                   'inv-G1-1-sconv',
                   'inv-G1-2-sconv',
                   'inv-G1-3-sconv',]
+
+                  
+    # logs_names = ['baseline',
+    #               'inv_no_softmax',
+    #               'inv_softmax',
+    #               'trans_no_k',
+    #               'trans',
+    #               'trans_no_k_1e-3',
+    #               'trans-G8-0-sconv',
+    #               'trans-G1-0-sconv',
+    #               'trans-G1-2-sconv',
+    #               'inv-G1-0',
+    #               'inv-G8-0',
+    #               'inv-G1-0-sconv',
+    #               'inv-G1-1-sconv',
+    #               'inv-G1-2-sconv',
+    #               'inv-G1-3-sconv',]
 
     # safe check log names
     if len(logs) > len(logs_names):

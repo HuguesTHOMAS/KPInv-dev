@@ -106,11 +106,14 @@ def training_epoch(epoch, t0, net, optimizer, training_loader, cfg, PID_file, de
                 optimizer.zero_grad()
 
                 # Get CUDA memory stat to see what space is used on GPU
-                cuda_stats = torch.cuda.memory_stats(device)
-                used_GPU_MB = cuda_stats["allocated_bytes.all.peak"]
-                _, tot_GPU_MB = torch.cuda.mem_get_info(device)
-                gpu_usage = 100 * used_GPU_MB / tot_GPU_MB
-                torch.cuda.reset_peak_memory_stats(device)
+                if 'cuda' in device.type:
+                    cuda_stats = torch.cuda.memory_stats(device)
+                    used_GPU_MB = cuda_stats["allocated_bytes.all.peak"]
+                    _, tot_GPU_MB = torch.cuda.mem_get_info(device)
+                    gpu_usage = 100 * used_GPU_MB / tot_GPU_MB
+                    torch.cuda.reset_peak_memory_stats(device)
+                else:
+                    gpu_usage = 0
 
                 # # Empty GPU cache (helps avoiding OOM errors)
                 # # Loses ~10% of speed but allows batch 2 x bigger.

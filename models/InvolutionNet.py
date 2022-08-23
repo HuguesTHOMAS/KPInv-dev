@@ -182,15 +182,15 @@ class InvolutionFCNN(nn.Module):
             return self.get_conv_residual_block(in_C, out_C, radius, sigma, cfg, strided=strided)
         else:
             return InvolutionResidualBlock(in_C,
-                                        out_C,
-                                        radius,
-                                        cfg.model.neighbor_limits[layer],
-                                        cfg.model.kp_mode,
-                                        groups=cfg.model.inv_groups,
-                                        strided=strided,
-                                        dimension=cfg.data.dim,
-                                        norm_type=cfg.model.norm,
-                                        bn_momentum=cfg.model.bn_momentum)
+                                           out_C,
+                                           radius,
+                                           cfg.model.neighbor_limits[layer],
+                                           cfg.model.kp_mode,
+                                           groups=cfg.model.inv_groups,
+                                           strided=strided,
+                                           dimension=cfg.data.dim,
+                                           norm_type=cfg.model.norm,
+                                           bn_momentum=cfg.model.bn_momentum)
 
     def get_conv_residual_block(self, in_C, out_C, radius, sigma, cfg, deformable=False, strided=False):
 

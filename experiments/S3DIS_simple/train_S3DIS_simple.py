@@ -97,11 +97,8 @@ def my_config():
     # cfg.model.neighbor_limits = [35, 40, 50, 50, 50]    # Use empty list to let calibration get the values
     cfg.model.neighbor_limits = [16, 16, 16, 16, 16]    # List for point_transformer
 
-    cfg.model.kpinv_grp_ch = 1          #   Int, number of channels per group in involutions
-    cfg.model.kpinv_reduc = 1           #   Int, reduction ration for kpinv gen mlp
-
     cfg.model.use_strided_conv = True           # Use convolution op for strided layers instead of involution
-    cfg.model.first_inv_layer = 0               # Use involution layers only from this layer index
+    cfg.model.first_inv_layer = 1               # Use involution layers only from this layer index
 
 
 
@@ -135,11 +132,11 @@ def my_config():
     cfg.train.weight_decay = 0.0001     # for transformer
 
     # Cyclic lr 
-    cfg.train.cyc_lr0 = 1e-4                # Float, Start (minimum) learning rate of 1cycle decay
+    cfg.train.cyc_lr0 = 1e-3                # Float, Start (minimum) learning rate of 1cycle decay
     cfg.train.cyc_lr1 = 1e-2                # Float, Maximum learning rate of 1cycle decay
-    cfg.train.cyc_raise10 = 5               #   Int, Raise rate for first part of 1cycle = number of epoch to multiply lr by 10
+    cfg.train.cyc_raise10 = 2               #   Int, Raise rate for first part of 1cycle = number of epoch to multiply lr by 10
     cfg.train.cyc_decrease10 = 80           #   Int, Decrease rate for second part of 1cycle = number of epoch to divide lr by 10
-    cfg.train.cyc_plateau = 20              #   Int, Number of epoch for plateau at maximum lr
+    cfg.train.cyc_plateau = 1               #   Int, Number of epoch for plateau at maximum lr
     raise_rate = 10**(1 / cfg.train.cyc_raise10)
     decrease_rate = 0.1**(1 / cfg.train.cyc_decrease10)
     cfg.train.lr = cfg.train.cyc_lr0
@@ -179,12 +176,14 @@ def my_config():
 
     cfg.test.val_momentum = 0.95  # momentum for averaging predictions during validation. 0 for no averaging at all
 
-    cfg.test.steps_per_epoch = 50    # Size of one validation epoch (should be small)
+    cfg.test.steps_per_epoch = 200    # Size of one validation epoch (should be small)
 
-    cfg.test.in_radius = cfg.train.in_radius
+    
+    cfg.test.in_radius = cfg.train.in_radius * 2
+    cfg.test.batch_limit = 1
+    cfg.test.batch_size = 1
+
     cfg.test.num_workers = cfg.train.num_workers
-    cfg.test.batch_size = cfg.train.batch_size
-    cfg.test.batch_limit = cfg.train.batch_limit
     cfg.test.max_points = cfg.train.max_points
 
     return cfg
@@ -290,7 +289,7 @@ if __name__ == '__main__':
                                 precompute_pyramid=True)
     
     # Calib from training data
-    training_dataset.calib_batch(cfg)
+    training_dataset.calib_batch(cfg, update_test=False)
     training_dataset.calib_neighbors(cfg)
     test_dataset.b_n = cfg.test.batch_size
     test_dataset.b_lim = cfg.test.batch_limit

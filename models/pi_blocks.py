@@ -405,7 +405,8 @@ class point_involution_v3(nn.Module):
                  stride_mode: str = 'nearest',
                  dimension: int = 3,
                  norm_type: str = 'batch',
-                 bn_momentum: float = 0.98):
+                 bn_momentum: float = 0.98,
+                 activation: nn.Module = nn.LeakyReLU(0.1)):
         """
         v3 of point involution. It includes geometric encodings in both features and attention branches
 
@@ -428,6 +429,7 @@ class point_involution_v3(nn.Module):
             dimension           (int=3): The dimension of the point space.
             norm_type     (str='batch'): type of normalization used in layer ('group', 'batch', 'none')
             bn_momentum    (float=0.98): Momentum for batch normalization
+            activation (nn.Module|None=nn.LeakyReLU(0.1)): Activation function. Use None for no activation.
         """
         super(point_involution_v3, self).__init__()
 
@@ -454,6 +456,7 @@ class point_involution_v3(nn.Module):
         self.geom_mode = geom_mode
         self.stride_mode = stride_mode
         self.dimension = dimension
+        self.activation = activation
 
         # Define MLP alpha
         C = channels
@@ -464,11 +467,16 @@ class point_involution_v3(nn.Module):
         else:
             Cin = C
         if alpha_layers < 2:
-            self.alpha_mlp = nn.Linear(Cin, CpG)
+            self.alpha_mlp = nn.Sequential(NormBlock(Cin),
+                                           activation,
+                                           nn.Linear(Cin, CpG))
+
         else:
-            self.alpha_mlp = nn.Sequential(UnaryBlock(Cin, C // R, norm_type, bn_momentum))
+            self.alpha_mlp = nn.Sequential(NormBlock(Cin),
+                                           activation,
+                                           UnaryBlock(Cin, C // R, norm_type, bn_momentum, activation))
             for _ in range(alpha_layers - 2):
-                self.alpha_mlp.append(UnaryBlock(C // R, C // R, norm_type, bn_momentum))
+                self.alpha_mlp.append(UnaryBlock(C // R, C // R, norm_type, bn_momentum, activation))
             self.alpha_mlp.append(nn.Linear(C // R, CpG))
 
         # Define MLP delta
@@ -477,26 +485,34 @@ class point_involution_v3(nn.Module):
         if delta_layers < 2:
             self.delta_mlp = nn.Linear(D, C)
         else:
-            self.delta_mlp = nn.Sequential(UnaryBlock(D, C // R, norm_type, bn_momentum))
+            self.delta_mlp = nn.Sequential(UnaryBlock(D, C // R, norm_type, bn_momentum, activation))
             for _ in range(delta_layers - 2):
-                self.delta_mlp.append(UnaryBlock(C // R, C // R, norm_type, bn_momentum))
+                self.delta_mlp.append(UnaryBlock(C // R, C // R, norm_type, bn_momentum, activation))
             self.delta_mlp.append(nn.Linear(C // R, C))
         if double_delta:
             if delta_layers < 2:
                 self.delta2_mlp = nn.Linear(D, C)
             else:
-                self.delta2_mlp = nn.Sequential(UnaryBlock(D, C // R, norm_type, bn_momentum))
+                self.delta2_mlp = nn.Sequential(UnaryBlock(D, C // R, norm_type, bn_momentum, activation))
                 for _ in range(delta_layers - 2):
-                    self.delta2_mlp.append(UnaryBlock(C // R, C // R, norm_type, bn_momentum))
+                    self.delta2_mlp.append(UnaryBlock(C // R, C // R, norm_type, bn_momentum, activation))
                 self.delta2_mlp.append(nn.Linear(C // R, C))
 
+
         # Define MLP gamma
+        use_gamma_mlp = True
         if geom_mode == 'cat':
-            self.gamma_mlp = nn.Linear(2 * C, C)
+            self.gamma_mlp = nn.Sequential(NormBlock(2 * C),
+                                           activation,
+                                           nn.Linear(2 * C, C))
+        elif use_gamma_mlp:
+            self.gamma_mlp = nn.Sequential(NormBlock(C),
+                                           activation,
+                                           nn.Linear(C, C))
         else:
-            self.gamma_mlp = nn.Linear(C, C)
+            self.gamma_mlp = nn.Identity()
         
-        self.inf = 1e6
+        self.softmax = nn.Softmax(dim=1)
 
         return
 
@@ -514,29 +530,29 @@ class point_involution_v3(nn.Module):
             q_feats (Tensor): output features carried by query points (M, C_out).
         """
 
-        # Handle case where M < H
-        # ***********************
+        # Shadow neighbors have to be handled via a mask
+        # **********************************************
 
-        # Therefore we do not have to care about shadow neighbors
-        M = int(neighb_inds.shape[0])
-        H = int(neighb_inds.shape[1])
-        if M < H:
-            neighb_inds = torch.clone(neighb_inds[:, :M])
-            print((M, H), '->', (M, M))
-            H = M
+        with torch.no_grad():
+            valid_mask = neighb_inds >= int(s_feats.shape[0])
+            shadow_bool = not torch.all(valid_mask).item()
+
 
         # Get features for each neighbor
         # ******************************
 
         # Get the features of each neighborhood
-        # v_feats = self.linear_v(s_feats)
-        neighbor_feats = index_select(s_feats, neighb_inds, dim=0)  # -> (M, H, C)
+        padded_s_feats = torch.cat((s_feats, torch.zeros_like(s_feats[:1, :])), 0)  # (N, C) -> (N+1, C)
+        neighb_v_feats = index_select(padded_s_feats, neighb_inds, dim=0)  # -> (M, H, C)
 
 
         # Get geometric encoding features
         # *******************************
         
         with torch.no_grad():
+
+            # Add a fake point in the last row for shadow neighbors
+            s_pts = torch.cat((s_pts, torch.zeros_like(s_pts[:1, :])), 0)   # (N, 3) -> (N+1, 3)
 
             # Get neighbor points [n_points, n_neighbors, dim]
             neighbors = index_select(s_pts, neighb_inds, dim=0)  # (N+1, 3) -> (M, H, 3)
@@ -557,55 +573,68 @@ class point_involution_v3(nn.Module):
             
         # Merge with features
         if self.geom_mode == 'add':
-            neighbor_feats += geom_encodings  # -> (M, H, C)
+            neighb_v_feats += geom_encodings  # -> (M, H, C)
         elif self.geom_mode == 'sub':
-            neighbor_feats -= geom_encodings  # -> (M, H, C)
+            neighb_v_feats -= geom_encodings  # -> (M, H, C)
         elif self.geom_mode == 'mul':
-            neighbor_feats *= geom_encodings  # -> (M, H, C)
+            neighb_v_feats *= geom_encodings  # -> (M, H, C)
         elif self.geom_mode == 'cat':
-            neighbor_feats = torch.cat((neighbor_feats, geom_encodings), dim=2)  # -> (M, H, 2C)
+            neighb_v_feats = torch.cat((neighb_v_feats, geom_encodings), dim=2)  # -> (M, H, 2C)
 
         # Final linear transform
-        neighbor_feats = self.gamma_mlp(neighbor_feats) # (M, H, C) -> (M, H, C)
+        neighb_v_feats = self.gamma_mlp(neighb_v_feats) # (M, H, C) -> (M, H, C)
 
 
         # Get attention weights
         # *********************
 
+        # Get query features from the center point
+        if q_pts.shape[0] == s_pts.shape[0]:
+            q_feats = s_feats
+
         # Get features form the center point
         if q_pts.shape[0] == s_pts.shape[0]:
-            pooled_feats = s_feats  # In case M == N, supports and queries are the same
+            q_feats = s_feats  # In case M == N, supports and queries are the same
         elif self.stride_mode == 'nearest':
-            pooled_feats = neighbor_feats[:, 0, :]  # nearest pool (M, H, C) -> (M, C)
+            q_feats = neighb_v_feats[:, 0, :]  # nearest pool (M, H, C) -> (M, C)
         elif self.stride_mode == 'max':
-            pooled_feats = torch.max(neighbor_feats, dim=1)  # max pool (M, H, C) -> (M, C)
+            q_feats = torch.max(neighb_v_feats, dim=1)  # max pool (M, H, C) -> (M, C)
         elif self.stride_mode == 'avg':
-            pooled_feats = torch.mean(neighbor_feats, dim=1)  # avg pool (M, H, C) -> (M, C)
+            q_feats = torch.mean(neighb_v_feats, dim=1)  # avg pool (M, H, C) -> (M, C)
         
         # Merge geometric encodings with feature
+        q_feats = q_feats.unsqueeze(1)    # -> (M, 1, C)
         if self.geom_mode == 'add':
-            pooled_feats = pooled_feats.unsqueeze(1) + geom_encodings2  # -> (M, H, C)
+            q_feats = q_feats + geom_encodings2  # -> (M, H, C)
         elif self.geom_mode == 'sub':
-            pooled_feats = pooled_feats.unsqueeze(1) - geom_encodings2  # -> (M, H, C)
+            q_feats = q_feats - geom_encodings2  # -> (M, H, C)
         elif self.geom_mode == 'mul':
-            pooled_feats = pooled_feats.unsqueeze(1) * geom_encodings2  # -> (M, H, C)
+            q_feats = q_feats * geom_encodings2  # -> (M, H, C)
         elif self.geom_mode == 'cat':
-            pooled_feats = torch.cat((pooled_feats.unsqueeze(1), geom_encodings2), dim=2)  # -> (M, H, 2C)
+            q_feats = torch.cat((q_feats, geom_encodings2), dim=2)  # -> (M, H, 2C)
 
         # Generate attention weights
-        attention_weights = self.alpha_mlp(pooled_feats) # (M, H, C) -> (M, H, G)
+        attention_weights = self.alpha_mlp(q_feats) # (M, H, C) -> (M, H, G)
+        attention_weights = self.softmax(attention_weights)
 
 
         # Apply attention weights
         # ************************
 
         # Separate features in groups
-        H = int(neighbor_feats.shape[1])
-        neighbor_feats = neighbor_feats.view(-1, H, self.channels_per_group, self.groups)  # (M, H, C) -> (M, H, CpG, G)
-        attention_weights = attention_weights.view(-1, H, self.channels_per_group)  # (M, H*CpG) -> (M, H, CpG)
+        H = int(neighb_inds.shape[1])
+        neighb_v_feats = neighb_v_feats.view(-1, H, self.channels_per_group, self.groups)  # (M, H, C) -> (M, H, CpG, G)
+        attention_weights = attention_weights.view(-1, H, self.channels_per_group, 1)  # (M, H*CpG) -> (M, H, CpG, 1)
 
-        # Multiply and sum
-        output_feats = torch.sum(neighbor_feats * attention_weights.unsqueeze(-1), dim=1)  # -> (M, CpG, G)
+        # Multiply features with attention
+        neighb_v_feats *= attention_weights  # -> (M, H, CpG, G)
+
+        # Apply shadow mask (every gradient for shadow neighbors will be zero)
+        if shadow_bool:
+            neighb_v_feats *= valid_mask.type(torch.float32).unsqueeze(2).unsqueeze(3)
+
+        # Sum over neighbors
+        output_feats = torch.sum(neighb_v_feats, dim=1)  # -> (M, CpG, G)
         
         # Reshape
         output_feats = output_feats.view(-1, self.channels)  # -> (M, C)
@@ -638,7 +667,8 @@ class point_transformer(nn.Module):
                  stride_mode: str = 'nearest',
                  dimension: int = 3,
                  norm_type: str = 'batch',
-                 bn_momentum: float = 0.98):
+                 bn_momentum: float = 0.98,
+                 activation: nn.Module = nn.LeakyReLU(0.1)):
         """
         Reimplementation of point_transformer. Basically a point_involution_v3, with keys that introduce features in the attention process.
 
@@ -686,6 +716,7 @@ class point_transformer(nn.Module):
         self.geom_mode = geom_mode
         self.stride_mode = stride_mode
         self.dimension = dimension
+        self.activation = activation
 
         # Define first linear transforms
         Cin = in_channels
@@ -702,12 +733,14 @@ class point_transformer(nn.Module):
             Cin = C
         if alpha_layers < 2:
             self.alpha_mlp = nn.Sequential(NormBlock(Cin),
+                                           activation,
                                            nn.Linear(Cin, CpG))
         else:
             self.alpha_mlp = nn.Sequential(NormBlock(Cin),
-                                           UnaryBlock(Cin, CpG, norm_type, bn_momentum))
+                                           activation,
+                                           UnaryBlock(Cin, CpG, norm_type, bn_momentum, activation))
             for _ in range(alpha_layers - 2):
-                self.alpha_mlp.append(UnaryBlock(CpG, CpG, norm_type, bn_momentum))
+                self.alpha_mlp.append(UnaryBlock(CpG, CpG, norm_type, bn_momentum, activation))
             self.alpha_mlp.append(nn.Linear(CpG, CpG))
 
         # Define MLP delta
@@ -716,17 +749,17 @@ class point_transformer(nn.Module):
         if delta_layers < 2:
             self.delta_mlp = nn.Linear(D, C)
         else:
-            self.delta_mlp = nn.Sequential(UnaryBlock(D, C // R, norm_type, bn_momentum))
+            self.delta_mlp = nn.Sequential(UnaryBlock(D, C // R, norm_type, bn_momentum, activation))
             for _ in range(delta_layers - 2):
-                self.delta_mlp.append(UnaryBlock(C // R, C // R, norm_type, bn_momentum))
+                self.delta_mlp.append(UnaryBlock(C // R, C // R, norm_type, bn_momentum, activation))
             self.delta_mlp.append(nn.Linear(C // R, C))
         if double_delta:
             if delta_layers < 2:
                 self.delta2_mlp = nn.Linear(D, C)
             else:
-                self.delta2_mlp = nn.Sequential(UnaryBlock(D, C // R, norm_type, bn_momentum))
+                self.delta2_mlp = nn.Sequential(UnaryBlock(D, C // R, norm_type, bn_momentum, activation))
                 for _ in range(delta_layers - 2):
-                    self.delta2_mlp.append(UnaryBlock(C // R, C // R, norm_type, bn_momentum))
+                    self.delta2_mlp.append(UnaryBlock(C // R, C // R, norm_type, bn_momentum, activation))
                 self.delta2_mlp.append(nn.Linear(C // R, C))
 
         # Define MLP gamma
@@ -738,8 +771,10 @@ class point_transformer(nn.Module):
         else:
             self.gamma_mlp = nn.Identity()
         
-        self.inf = 1e6
         self.softmax = nn.Softmax(dim=1)
+        
+        # Set this to false to have something very similar to involution (some additional linears)
+        self.use_k_feats = True
 
         return
 
@@ -757,32 +792,35 @@ class point_transformer(nn.Module):
             q_feats (Tensor): output features carried by query points (M, C_out).
         """
 
-        # Handle case where M < H
-        # ***********************
+        # Shadow neighbors have to be handled via a mask
+        # **********************************************
 
-        # Therefore we do not have to care about shadow neighbors
-        M = int(neighb_inds.shape[0])
-        H = int(neighb_inds.shape[1])
-        if M < H:
-            neighb_inds = torch.clone(neighb_inds[:, :M])
-            print((M, H), '->', (M, M))
-            H = M
+        with torch.no_grad():
+            valid_mask = neighb_inds >= int(s_feats.shape[0])
+            shadow_bool = not torch.all(valid_mask).item()
+
 
         # Get features for each neighbor
         # ******************************
 
         # Get the features of each neighborhood
         v_feats = self.linear_v(s_feats)
-        neighb_v_feats = index_select(v_feats, neighb_inds, dim=0)  # -> (M, H, C)
+        padded_v_feats = torch.cat((v_feats, torch.zeros_like(v_feats[:1, :])), 0)  # (N, C) -> (N+1, C)
+        neighb_v_feats = index_select(padded_v_feats, neighb_inds, dim=0)  # -> (M, H, C)
 
         # Get keys features from neighbors
-        k_feats = self.linear_k(s_feats)
-        neighb_k_feats = index_select(k_feats, neighb_inds, dim=0)  # -> (M, H, C)
+        if self.use_k_feats:
+            k_feats = self.linear_k(s_feats)
+            padded_k_feats = torch.cat((k_feats, torch.zeros_like(k_feats[:1, :])), 0)  # (N, C) -> (N+1, C)
+            neighb_k_feats = index_select(padded_k_feats, neighb_inds, dim=0)  # -> (M, H, C)
 
         # Get geometric encoding features
         # *******************************
         
         with torch.no_grad():
+
+            # Add a fake point in the last row for shadow neighbors
+            s_pts = torch.cat((s_pts, torch.zeros_like(s_pts[:1, :])), 0)   # (N, 3) -> (N+1, 3)
 
             # Get neighbor points [n_points, n_neighbors, dim]
             neighbors = index_select(s_pts, neighb_inds, dim=0)  # (N+1, 3) -> (M, H, 3)
@@ -818,21 +856,23 @@ class point_transformer(nn.Module):
         # Get attention weights
         # *********************
 
-        # query features
+        # Get query features from the center point
         q_feats = self.linear_q(s_feats)
 
-        # Get features form the center point
-        if q_pts.shape[0] == s_pts.shape[0]:
-            q_feats = q_feats  # In case M == N, supports and queries are the same
-        elif self.stride_mode == 'nearest':
-            q_feats = index_select(q_feats, neighb_inds[:, 0], dim=0)  # nearest pool -> (M, C)
-        elif self.stride_mode == 'max':
-            q_feats = torch.max(index_select(q_feats, neighb_inds, dim=0), dim=1)  # max pool (M, H, C) -> (M, C)
-        elif self.stride_mode == 'avg':
-            q_feats = torch.mean(index_select(q_feats, neighb_inds, dim=0), dim=1)  # avg pool (M, H, C) -> (M, C)
+        # In case M != N, pool features to query positions
+        if q_pts.shape[0] != s_pts.shape[0]:
+            padded_q_feats = torch.cat((q_feats, torch.zeros_like(q_feats[:1, :])), 0)  # (N, C) -> (N+1, C)
+            if self.stride_mode == 'nearest':
+                q_feats = index_select(padded_q_feats, neighb_inds[:, 0], dim=0)  # nearest pool -> (M, C)
+            elif self.stride_mode == 'max':
+                q_feats = torch.max(index_select(padded_q_feats, neighb_inds, dim=0), dim=1)  # max pool (M, H, C) -> (M, C)
+            elif self.stride_mode == 'avg':
+                q_feats = torch.mean(index_select(padded_q_feats, neighb_inds, dim=0), dim=1)  # avg pool (M, H, C) -> (M, C)
 
         # Merge with keys
-        qk_feats = q_feats.unsqueeze(1) - neighb_k_feats  # -> (M, H, C)
+        qk_feats = q_feats.unsqueeze(1)    # -> (M, 1, C)
+        if self.use_k_feats:
+            qk_feats = qk_feats - neighb_k_feats  # -> (M, H, C)
 
         # Merge geometric encodings with feature
         if self.geom_mode == 'add':
@@ -852,11 +892,19 @@ class point_transformer(nn.Module):
         # ************************
 
         # Separate features in groups
+        H = int(neighb_inds.shape[1])
         neighb_v_feats = neighb_v_feats.view(-1, H, self.channels_per_group, self.groups)  # (M, H, C) -> (M, H, CpG, G)
         attention_weights = attention_weights.view(-1, H, self.channels_per_group, 1)  # (M, H*CpG) -> (M, H, CpG, 1)
 
-        # Multiply and sum
-        output_feats = torch.sum(neighb_v_feats * attention_weights, dim=1)  # -> (M, CpG, G)
+        # Multiply features with attention
+        neighb_v_feats *= attention_weights  # -> (M, H, CpG, G)
+
+        # Apply shadow mask (every gradient for shadow neighbors will be zero)
+        if shadow_bool:
+            neighb_v_feats *= valid_mask.type(torch.float32).unsqueeze(2).unsqueeze(3)
+
+        # Sum over neighbors
+        output_feats = torch.sum(neighb_v_feats, dim=1)  # -> (M, CpG, G)
         
         # Reshape
         output_feats = output_feats.view(-1, self.out_channels)  # -> (M, C)
