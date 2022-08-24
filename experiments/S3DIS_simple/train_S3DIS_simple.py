@@ -85,7 +85,7 @@ def my_config():
     cfg.model.kp_aggregation = 'sum'
 
     cfg.model.conv_groups = 1
-    cfg.model.inv_groups = 8
+    cfg.model.inv_groups = 1
 
     cfg.data.sub_size = 0.02          # -1.0 so that dataset point clouds are not initially subsampled
     cfg.model.init_sub_size = 0.04    # Adapt this with train.in_radius. Try to keep a ratio of ~50
@@ -99,7 +99,6 @@ def my_config():
 
     cfg.model.use_strided_conv = True           # Use convolution op for strided layers instead of involution
     cfg.model.first_inv_layer = 1               # Use involution layers only from this layer index
-
 
 
     # Training parameters
@@ -129,20 +128,19 @@ def my_config():
     cfg.train.adam_b = (0.9, 0.999)
     cfg.train.adam_eps = 1e-08
     # cfg.train.weight_decay = 0.01     # for KPConv
-    cfg.train.weight_decay = 0.0001     # for transformer
+    cfg.train.weight_decay = 0.001     # for transformer
 
     # Cyclic lr 
-    cfg.train.cyc_lr0 = 1e-3                # Float, Start (minimum) learning rate of 1cycle decay
-    cfg.train.cyc_lr1 = 1e-2                # Float, Maximum learning rate of 1cycle decay
-    cfg.train.cyc_raise10 = 2               #   Int, Raise rate for first part of 1cycle = number of epoch to multiply lr by 10
+    cfg.train.cyc_lr0 = 5e-4                # Float, Start (minimum) learning rate of 1cycle decay
+    cfg.train.cyc_lr1 = 5e-3                # Float, Maximum learning rate of 1cycle decay
+    cfg.train.cyc_raise_n = 1               #   Int, Raise rate for first part of 1cycle = number of epoch to multiply lr by 10
     cfg.train.cyc_decrease10 = 80           #   Int, Decrease rate for second part of 1cycle = number of epoch to divide lr by 10
-    cfg.train.cyc_plateau = 1               #   Int, Number of epoch for plateau at maximum lr
-    raise_rate = 10**(1 / cfg.train.cyc_raise10)
+    cfg.train.cyc_plateau = 5               #   Int, Number of epoch for plateau at maximum lr
+    raise_rate = (cfg.train.cyc_lr1 / cfg.train.cyc_lr0)**(1/cfg.train.cyc_raise_n)
     decrease_rate = 0.1**(1 / cfg.train.cyc_decrease10)
     cfg.train.lr = cfg.train.cyc_lr0
-    n_raise = int(np.ceil(np.log(cfg.train.cyc_lr1/cfg.train.cyc_lr0) / np.log(raise_rate)))
-    cfg.train.lr_decays = {str(i): raise_rate for i in range(1, n_raise)}
-    for i in range(n_raise + cfg.train.cyc_plateau, cfg.train.max_epoch):
+    cfg.train.lr_decays = {str(i): raise_rate for i in range(1, cfg.train.cyc_raise_n + 1)}
+    for i in range(cfg.train.cyc_raise_n + 1 + cfg.train.cyc_plateau, cfg.train.max_epoch):
         cfg.train.lr_decays[str(i)] = decrease_rate
 
     # import matplotlib.pyplot as plt

@@ -19,16 +19,8 @@ training_script="experiments/S3DIS_simple/train_S3DIS_simple.py"
 # Declare an array variable
 # *************************
 
-declare -a arg_arr=("--inv_groups 8 --use_strided_conv 0 --first_inv_layer 0 --kp_mode transformer"
-                    "--inv_groups 8 --use_strided_conv 1 --first_inv_layer 0 --kp_mode transformer"
-                    "--inv_groups 1 --use_strided_conv 1 --first_inv_layer 0 --kp_mode transformer"
-                    "--inv_groups 1 --use_strided_conv 1 --first_inv_layer 2 --kp_mode transformer"
-                    "--inv_groups 1 --use_strided_conv 0 --first_inv_layer 0 --kp_mode inv_v3"
-                    "--inv_groups 8 --use_strided_conv 0 --first_inv_layer 0 --kp_mode inv_v3"
-                    "--inv_groups 1 --use_strided_conv 1 --first_inv_layer 0 --kp_mode inv_v3"
-                    "--inv_groups 1 --use_strided_conv 1 --first_inv_layer 1 --kp_mode inv_v3"
-                    "--inv_groups 1 --use_strided_conv 1 --first_inv_layer 2 --kp_mode inv_v3"
-                    "--inv_groups 1 --use_strided_conv 1 --first_inv_layer 3 --kp_mode inv_v3")
+declare -a arg_arr=("--use_strided_conv 1 --first_inv_layer 1 --kp_mode inv_v3"
+                    "--use_strided_conv 1 --first_inv_layer 3 --kp_mode inv_v3")
 
 
 echo ""

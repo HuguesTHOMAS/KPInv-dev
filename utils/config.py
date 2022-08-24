@@ -146,7 +146,7 @@ def init_cfg():
                                             
     cfg.train.cyc_lr0 = 1e-4                # Float, Start (minimum) learning rate of 1cycle decay
     cfg.train.cyc_lr1 = 1e-2                # Float, Maximum learning rate of 1cycle decay
-    cfg.train.cyc_raise10 = 5               #   Int, Raise rate for first part of 1cycle = number of epoch to multiply lr by 10
+    cfg.train.cyc_raise_n = 5               #   Int, Raise rate for first part of 1cycle = number of epoch to multiply lr by 10
     cfg.train.cyc_decrease10 = 50           #   Int, Decrease rate for second part of 1cycle = number of epoch to divide lr by 10
     cfg.train.cyc_plateau = 20              #   Int, Number of epoch for plateau at maximum lr
 

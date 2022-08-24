@@ -439,33 +439,13 @@ def exp_involution():
     
     # Give names to the logs (for plot legends)
     logs_names = ['baseline',
-                  'trans-G8-0',
-                  'trans-G8-0-sconv',
-                  'trans-G1-0-sconv',
-                  'trans-G1-2-sconv',
-                  'inv-G1-0',
-                  'inv-G8-0',
-                  'inv-G1-0-sconv',
-                  'inv-G1-1-sconv',
-                  'inv-G1-2-sconv',
-                  'inv-G1-3-sconv',]
-
-                  
-    # logs_names = ['baseline',
-    #               'inv_no_softmax',
-    #               'inv_softmax',
-    #               'trans_no_k',
-    #               'trans',
-    #               'trans_no_k_1e-3',
-    #               'trans-G8-0-sconv',
-    #               'trans-G1-0-sconv',
-    #               'trans-G1-2-sconv',
-    #               'inv-G1-0',
-    #               'inv-G8-0',
-    #               'inv-G1-0-sconv',
-    #               'inv-G1-1-sconv',
-    #               'inv-G1-2-sconv',
-    #               'inv-G1-3-sconv',]
+                  'trans-G1-1-sconv(fast)',
+                  'trans-G8-1-sconv(fast)',
+                  'trans-G1-1-sconv-no_k',
+                  'inv_3-G1-1-sconv-smax',
+                  'inv_3-G1-1-sconv-sigm',
+                  'trans-G1-1-sconv-no_k-no_smax',
+                  'inv_3-G1-1-sconv-none']
 
     # safe check log names
     if len(logs) > len(logs_names):
