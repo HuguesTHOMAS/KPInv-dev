@@ -177,7 +177,7 @@ def my_config():
     cfg.test.steps_per_epoch = 100    # Size of one validation epoch (should be small)
 
     
-    cfg.test.in_radius = cfg.train.in_radius * 2
+    cfg.test.in_radius = cfg.train.in_radius * 3
     cfg.test.batch_limit = 1
     cfg.test.batch_size = 1
 
