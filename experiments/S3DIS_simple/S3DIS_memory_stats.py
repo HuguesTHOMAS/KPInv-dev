@@ -99,12 +99,12 @@ def my_config():
 
     cfg.train.class_w = []
 
-    cfg.train.augment_anisotropic = True
-    cfg.train.augment_scale = [0.8, 1.2]
-    cfg.train.augment_flips = [0.5, 0, 0]
-    cfg.train.augment_rotation = 'vertical'
-    cfg.train.augment_noise = 0.005
-    cfg.train.augment_color = 0.7
+    cfg.augment_train.anisotropic = True
+    cfg.augment_train.scale = [0.8, 1.2]
+    cfg.augment_train.flips = [0.5, 0, 0]
+    cfg.augment_train.rotations = 'vertical'
+    cfg.augment_train.jitter = 0.005
+    cfg.augment_train.color_drop = 0.2
 
 
     # Test parameters

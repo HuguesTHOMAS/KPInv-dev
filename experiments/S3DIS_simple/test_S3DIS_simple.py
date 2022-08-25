@@ -192,13 +192,14 @@ if __name__ == '__main__':
     new_cfg.test.chkp_idx = -1
 
     # Augmentations
-    new_cfg.train.augment_anisotropic = True
-    new_cfg.train.augment_scale = [0.99, 1.01]
-    new_cfg.train.augment_flips = [0.5, 0, 0]
-    new_cfg.train.augment_rotation = 'vertical'
-    new_cfg.train.augment_noise = 0.0001
-    new_cfg.train.augment_color = 1.0
-    cfg.train.augment_chromatic = False
+    new_cfg.augment_train.anisotropic = True
+    new_cfg.augment_train.scale = [0.99, 1.01]
+    new_cfg.augment_train.flips = [0.5, 0, 0]
+    new_cfg.augment_train.rotations = 'vertical'
+    new_cfg.augment_train.jitter = 0
+    new_cfg.augment_train.color_drop = 0.0
+    cfg.augment_train.chromatic_contrast = False
+    cfg.augment_train.chromatic_norm = False
 
 
     test_log(chosen_log, new_cfg)

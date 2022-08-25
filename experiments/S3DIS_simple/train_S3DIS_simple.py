@@ -159,14 +159,15 @@ def my_config():
     # plt.show()
     # a = 1/0
 
-    # Augmentations
-    cfg.train.augment_anisotropic = True
-    cfg.train.augment_scale = [0.9, 1.1]
-    cfg.train.augment_flips = [0.5, 0, 0]
-    cfg.train.augment_rotation = 'vertical'
-    cfg.train.augment_noise = 0.001
-    cfg.train.augment_color = 0.7
-    cfg.train.augment_chromatic = False
+    # Train Augmentations
+    cfg.augment_train.anisotropic = True
+    cfg.augment_train.scale = [0.9, 1.1]
+    cfg.augment_train.flips = [0.5, 0, 0]
+    cfg.augment_train.rotations = 'vertical'
+    cfg.augment_train.jitter = 0.005
+    cfg.augment_train.color_drop = 0.2
+    cfg.augment_train.chromatic_contrast = False
+    cfg.augment_train.chromatic_norm = False
 
     
     # Test parameters
@@ -176,13 +177,22 @@ def my_config():
 
     cfg.test.steps_per_epoch = 100    # Size of one validation epoch (should be small)
 
-    
     cfg.test.in_radius = cfg.train.in_radius * 3
     cfg.test.batch_limit = 1
     cfg.test.batch_size = 1
 
     cfg.test.num_workers = cfg.train.num_workers
     cfg.test.max_points = cfg.train.max_points
+
+    # Test Augmentations
+    cfg.augment_test.anisotropic = False
+    cfg.augment_test.scale = [0.99, 1.01]
+    cfg.augment_test.flips = [0.5, 0, 0]
+    cfg.augment_test.rotations = 'vertical'
+    cfg.augment_test.jitter = 0
+    cfg.augment_test.color_drop = 0.0
+    cfg.augment_test.chromatic_contrast = False
+    cfg.augment_test.chromatic_norm = False
 
     return cfg
 

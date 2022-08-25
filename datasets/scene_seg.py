@@ -125,19 +125,36 @@ class SceneSegDataset(Dataset):
         self.reg_sample_clouds = None
 
         # Get augmentation transform
+        if self.set == 'training':
+            a_cfg = cfg.augment_train
+        else:
+            a_cfg = cfg.augment_test
         augment_list = []
-        augment_list.append(RandomScaleFlip(scale=cfg.train.augment_scale,
-                                        anisotropic=cfg.train.augment_anisotropic,
-                                        flip_p=cfg.train.augment_flips))
-        augment_list.append(RandomJitter(sigma=cfg.train.augment_noise,
-                                      clip=cfg.train.augment_noise * 5))
-        augment_list.append(RandomDropColor(p=cfg.train.augment_color))
+        augment_list.append(RandomScaleFlip(scale=a_cfg.scale,
+                                        anisotropic=a_cfg.anisotropic,
+                                        flip_p=a_cfg.flips))
+        augment_list.append(RandomJitter(sigma=a_cfg.jitter,
+                                      clip=a_cfg.jitter * 5))
+        augment_list.append(RandomDropColor(p=a_cfg.color_drop))
 
-        if cfg.train.augment_chromatic:
-            augment_list = augment_list + [ChromaticAutoContrast(),
-                                           ChromaticTranslation(),
-                                           ChromaticJitter(),
-                                           HueSaturationTranslation()]
+        # augment_list.append(FloorCentering())
+
+        if a_cfg.chromatic_contrast:
+            augment_list += + [ChromaticAutoContrast(),
+                               ChromaticTranslation(),
+                               ChromaticJitter(),
+                               HueSaturationTranslation()]
+
+        if a_cfg.chromatic_norm:
+            augment_list += [ChromaticNormalize()]
+
+        # TRAIN AUGMENT
+        # Transformer: no drop color and chromatic_contrast
+        #   PointNext: floor centering, drop color and chromatic_norm
+
+        # TEST AUGMENT
+        # Transformer: no augment at all
+        #   PointNext: floor centering and chromatic_norm (drop color if vote)
 
         self.augmentation_transform = ComposeAugment(augment_list)
 
@@ -487,7 +504,7 @@ class SceneSegDataset(Dataset):
                 continue
             
             # Color augmentation
-            if np.random.rand() > self.cfg.train.augment_color:
+            if np.random.rand() > self.cfg.augment_train.color_drop:
                 in_features *= 0
             
             # Add original height as additional feature

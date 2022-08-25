@@ -47,6 +47,10 @@ class RandomRotate(object):
         return coord, feat, label
 
 
+
+
+
+
 class RandomScaleFlip(object):
     def __init__(self, scale=[0.9, 1.1], anisotropic=False, flip_p=[0.0, 0.0, 0.0]):
         self.scale = scale
@@ -67,6 +71,21 @@ class RandomScaleFlip(object):
         coord *= scale.astype(np.float32)
         return coord, feat, label
 
+        
+@DataTransforms.register_module()
+class FloorCentering(object):
+    """
+    Centering the point cloud in the xy plane
+    """
+    def __init__(self, gravity_dim=2):
+        self.gravity_dim = gravity_dim
+
+    def __call__(self, coord, feat, label):
+        coord -= np.mean(coord, axis=0, keepdims=True)
+        coord[:, self.gravity_dim] -= np.min(coord[:, self.gravity_dim])
+        return coord, feat, label
+
+
 
 class RandomJitter(object):
     def __init__(self, sigma=0.01, clip=0.05):
@@ -75,8 +94,8 @@ class RandomJitter(object):
         assert (self.clip > 0)
 
     def __call__(self, coord, feat, label):
-        jitter = np.clip(self.sigma * np.random.randn(coord.shape[0], 3), -self.clip, self.clip)
-        coord += jitter
+        jitter = np.random.randn(coord.shape[0], 3) * self.sigma
+        coord += np.clip(jitter, -self.clip, self.clip)
         return coord, feat, label
 
 
@@ -191,3 +210,31 @@ class RandomDropColor(object):
         if np.random.rand() < self.p:
             feat[:, :3] = 0
         return coord, feat, label
+
+
+class ChromaticNormalize(object):
+    def __init__(self,
+                 color_mean=[0.5136457, 0.49523646, 0.44921124],
+                 color_std=[0.18308958, 0.18415008, 0.19252081],
+                 **kwargs):
+        self.color_mean = np.array(color_mean, dtype=np.float32)
+        self.color_std = np.array(color_std, dtype=np.float32)
+
+
+    def __call__(self, coord, feat, label):
+        
+        if np.max(coord[:, :3]) > 1:
+            coord[:, :3] *= 1.0 / 255
+
+        coord[:, :3] = (coord[:, :3] - self.color_mean) / self.color_std
+
+
+        return coord, feat, label
+
+    def __call__(self, data):
+
+        device = data['x'].device
+        if data['x'][:, :3].max() > 1:
+            data['x'][:, :3] /= 255.
+        data['x'][:, :3] = (data['x'][:, :3] - self.color_mean.to(device)) / self.color_std.to(device)
+        return data

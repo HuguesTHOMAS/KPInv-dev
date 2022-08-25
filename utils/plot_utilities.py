@@ -1134,13 +1134,14 @@ def compare_on_test_set(list_of_cfg,
         cfg.test.chkp_idx = -1
 
         # Augmentations
-        cfg.train.augment_anisotropic = True
-        cfg.train.augment_scale = [0.99, 1.01]
-        cfg.train.augment_flips = [0.5, 0, 0]
-        cfg.train.augment_rotation = 'vertical'
-        cfg.train.augment_noise = 0.0001
-        cfg.train.augment_color = 1.0
-        cfg.train.augment_chromatic = False
+        cfg.augment_test.anisotropic = False
+        cfg.augment_test.scale = [0.99, 1.01]
+        cfg.augment_test.flips = [0.5, 0, 0]
+        cfg.augment_test.rotations = 'vertical'
+        cfg.augment_test.jitter = 0
+        cfg.augment_test.color_drop = 0.0
+        cfg.augment_test.chromatic_contrast = False
+        cfg.augment_test.chromatic_norm = False
 
         
         # Read test results if available

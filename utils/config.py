@@ -133,14 +133,6 @@ def init_cfg():
     cfg.train.grad_clip = 100.0         #   Int, gradient clipping value (negative means no clipping)
     cfg.train.class_w = []              #  List, weight for each class in the segmentation loss
 
-    cfg.train.augment_anisotropic = True    #  Bool, Should he scale augmentatio nbe anisotropic
-    cfg.train.augment_scale = [0.9, 1.1]    #  List, min and max scaling value
-    cfg.train.augment_flips = []            #  List, flip probabilities (empty or full of zeros for no flips)
-    cfg.train.augment_rotation = 'none'     #   Str, type of rotation augmentation ('none', 'vertical', 'all')
-    cfg.train.augment_noise = 0.005         # Float, normal offset noise sigma value
-    cfg.train.augment_color = 0.7           # Float, probability to drop input features
-    cfg.train.augment_chromatic = False     #  Bool, Are we using chromatic augments from Transformer paper?
-
     cfg.train.segloss_balance = 'none'      #   Str, Respectively each point, class, or cloud in the batch has
                                             #        the same loss contribution ('none', 'class', 'batch'). 
                                             
@@ -154,6 +146,7 @@ def init_cfg():
     cfg.train.deform_lr_factor = 1.0        # Float, multiplier for deformation lr. Higher so that feformation are learned faster (especially if deform_loss_factor i low)
     cfg.train.deform_fit_rep_ratio = 2.0    # Float, ratio between fitting loss and regularization loss
     
+
     # Test parameters
     # ---------------
 
@@ -172,6 +165,30 @@ def init_cfg():
     cfg.test.val_momentum = 0.95        # Float, momentum for averaging predictions during validation.
     cfg.test.test_momentum = 0.95       # Float, momentum for averaging predictions during test.
     cfg.test.chkp_idx = None            #   Int, index of the checkpoint used for test
+
+
+    # Augmentation parameters
+    # -----------------------
+    
+    # Train Augmentations
+    cfg.augment_train.anisotropic = True
+    cfg.augment_train.scale = [0.9, 1.1]
+    cfg.augment_train.flips = [0.5, 0, 0]
+    cfg.augment_train.rotations = 'vertical'
+    cfg.augment_train.jitter = 0.005
+    cfg.augment_train.color_drop = 0.2
+    cfg.augment_train.chromatic_contrast = False
+    cfg.augment_train.chromatic_norm = False
+
+    # Test Augmentations
+    cfg.augment_test.anisotropic = False
+    cfg.augment_test.scale = [0.99, 1.01]
+    cfg.augment_test.flips = [0.5, 0, 0]
+    cfg.augment_test.rotations = 'vertical'
+    cfg.augment_test.jitter = 0
+    cfg.augment_test.color_drop = 0
+    cfg.augment_test.chromatic_contrast = False
+    cfg.augment_test.chromatic_norm = False
 
 
     return cfg
