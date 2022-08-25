@@ -22,7 +22,7 @@ from torch.nn.init import kaiming_uniform_
 
 
 from kernels.kernel_points import load_kernels
-from models.generic_blocks import index_select, radius_gaussian, local_maxpool, UnaryBlock, BatchNormBlock, GroupNormBlock
+from models.generic_blocks import index_select, radius_gaussian, local_maxpool, UnaryBlock, BatchNormBlock, GroupNormBlock, NormBlock
 
 # ----------------------------------------------------------------------------------------------------------------------
 #
@@ -48,11 +48,15 @@ class KPConv(nn.Module):
                  radius: float,
                  sigma: float,
                  modulated: bool = False,
+                 use_geom: bool = False,
                  groups: int = 1,
                  dimension: int = 3,
                  influence_mode: str = 'linear',
                  aggregation_mode: str = 'sum',
                  fixed_kernel_points: str = 'center',
+                 norm_type: str = 'batch',
+                 bn_momentum: float = 0.98,
+                 activation: nn.Module = nn.LeakyReLU(0.1),
                  inf: float = 1e6):
         """
         Rigid KPConv.
@@ -64,11 +68,15 @@ class KPConv(nn.Module):
             radius (float): The radius used for kernel point init.
             sigma (float): The influence radius of each kernel point.
             modulated (bool=False): Use modulations (self-attention)
+            use_geom (bool=False): Use geometric encodings
             groups (int=1): Groups in convolution (=in_channels for depthwise conv).
             dimension (int=3): The dimension of the point space.
             influence_mode (str='linear'): Influence function ('constant', 'linear', 'gaussian').
             aggregation_mode (str='sum'): Aggregation mode ('nearest', 'sum').
             fixed_kernel_points (str='center'): kernel points whose position is fixed ('none', 'center' or 'verticals').
+            norm_type     (str='batch'): type of normalization used in layer ('group', 'batch', 'none')
+            bn_momentum    (float=0.98): Momentum for batch normalization
+            activation (nn.Module|None=nn.LeakyReLU(0.1)): Activation function. Use None for no activation.
             inf (float=1e6): The value of infinity to generate the padding point.
         """
         super(KPConv, self).__init__()
@@ -94,6 +102,8 @@ class KPConv(nn.Module):
         self.inf = inf
         self.in_channels_per_group = in_channels_per_group
         self.out_channels_per_group = out_channels_per_group
+        self.use_geom = use_geom
+        self.normalize_p = True
 
         # Initialize weights
         if self.groups == 1:
@@ -106,6 +116,28 @@ class KPConv(nn.Module):
         self.modulated = modulated
         if self.modulated:
             self.gen_mlp = nn.Linear(in_channels, self.kernel_size, bias=True)
+            
+        # Define MLP delta
+        delta_layers = 2
+        delta_reduction = 1
+        C = in_channels
+        D = self.dimension
+        R = delta_reduction
+        if use_geom:
+            if delta_layers < 2:
+                self.delta_mlp = nn.Linear(D, C)
+            else:
+                self.delta_mlp = nn.Sequential(UnaryBlock(D, C // R, norm_type, bn_momentum, activation))
+                for _ in range(delta_layers - 2):
+                    self.delta_mlp.append(UnaryBlock(C // R, C // R, norm_type, bn_momentum, activation))
+                self.delta_mlp.append(nn.Linear(C // R, C, bias=False))
+             
+            # Define MLP gamma
+            self.use_gamma_mlp = True
+            if self.use_gamma_mlp:
+                self.init_linear = nn.Linear(C, C, bias=False)
+                self.gamma_mlp = nn.Sequential(NormBlock(C),
+                                            activation)
 
         # Reset parameters
         self.reset_parameters()
@@ -156,8 +188,7 @@ class KPConv(nn.Module):
             neighbors = neighbors - q_pts.unsqueeze(1)  # (M, H, 3)
         
             # Get Kernel point distances to neigbors
-            neighbors = neighbors.unsqueeze(2)  # (M, H, 3) -> (M, H, 1, 3)
-            differences = neighbors - self.kernel_points  # (M, H, 1, 3) x (K, 3) -> (M, H, K, 3)
+            differences = neighbors.unsqueeze(2) - self.kernel_points  # (M, H, 1, 3) x (K, 3) -> (M, H, K, 3)
             sq_distances = torch.sum(differences ** 2, dim=3)  # (M, H, K)
 
             # Get Kernel point influences
@@ -185,7 +216,7 @@ class KPConv(nn.Module):
             elif self.aggregation_mode != 'sum':
                 raise ValueError("Unknown aggregation mode: '{:s}'. Should be 'nearest' or 'sum'".format(self.aggregation_mode))
 
-        return neighbor_weights
+        return neighbor_weights, neighbors
 
     def forward(self, q_pts: Tensor,
                 s_pts: Tensor,
@@ -210,14 +241,38 @@ class KPConv(nn.Module):
 
         # Get the features of each neighborhood
         # neighbor_feats = gather(padded_s_feats, neighb_inds)  # (N+1, C) -> (M, H, C)
-        neighbor_feats = index_select(padded_s_feats, neighb_inds, dim=0) 
+        neighbor_feats = index_select(padded_s_feats, neighb_inds, dim=0)
+
+        
+        # Get geometric encoding features
+        # *******************************
+        
+        # Get Kernel point influences (M, K, H)
+        neighbor_weights, neighbors = self.get_neighbors_influences(q_pts, s_pts, neighb_inds)
+
+        if self.use_geom:
+
+            # Rescale for normalization
+            if self.normalize_p:
+                neighbors *= 1 / self.radius   # -> (M, H, 3)
+            
+            # Generate geometric encodings
+            geom_encodings = self.delta_mlp(neighbors) # (M, H, 3) -> (M, H, C)
+            
+            if self.use_gamma_mlp:
+                # Init linear transform
+                neighbor_feats = self.init_linear(neighbor_feats) # (M, H, C) -> (M, H, C)
+                
+            # Merge with features (we use add or sub mode, both are equivalent)
+            neighbor_feats += geom_encodings  # -> (M, H, C)
+
+            if self.use_gamma_mlp:
+                # Final activation (+optional mlp)
+                neighbor_feats = self.gamma_mlp(neighbor_feats) # (M, H, C) -> (M, H, C)
 
         
         # Transfer features to kernel points
         # **********************************
-        
-        # Get Kernel point influences (M, K, H)
-        neighbor_weights = self.get_neighbors_influences(q_pts, s_pts, neighb_inds)
 
         # Apply distance weights
         weighted_feats = torch.matmul(neighbor_weights, neighbor_feats)  # (M, K, H) x (M, H, C) -> (M, K, C)
@@ -606,6 +661,7 @@ class KPConvBlock(nn.Module):
                  sigma: float,
                  modulated: bool = False,
                  deformable: bool = False,
+                 use_geom: bool = False,
                  influence_mode: str = 'linear',
                  aggregation_mode: str = 'sum',
                  dimension: int = 3,
@@ -616,19 +672,20 @@ class KPConvBlock(nn.Module):
         """
         KPConv block with normalization and activation.  
         Args:
-            in_channels (int): dimension input features
-            out_channels (int): dimension input features
-            kernel_size (int): number of kernel points
-            radius (float): convolution radius
-            sigma (float): influence radius of each kernel point
-            modulated (bool=False): Use modulations (self-attention)
-            deformable (bool=False): Use deformable KPConv
+            in_channels             (int): dimension input features
+            out_channels            (int): dimension input features
+            kernel_size             (int): number of kernel points
+            radius                (float): convolution radius
+            sigma                 (float): influence radius of each kernel point
+            modulated        (bool=False): Use modulations (self-attention)
+            use_geom         (bool=False): Use geometric encodings
+            deformable       (bool=False): Use deformable KPConv
             influence_mode (str='linear'): Influence function ('constant', 'linear', 'gaussian')
-            aggregation_mode (str='sum'): Aggregation mode ('nearest', 'sum')
-            dimension (int=3): dimension of input
-            groups (int=1): Number of groups in KPConv
-            norm_type (str='batch'): type of normalization used in layer ('group', 'batch', 'none')
-            bn_momentum (float=0.98): Momentum for batch normalization
+            aggregation_mode  (str='sum'): Aggregation mode ('nearest', 'sum')
+            dimension             (int=3): dimension of input
+            groups                (int=1): Number of groups in KPConv
+            norm_type       (str='batch'): type of normalization used in layer ('group', 'batch', 'none')
+            bn_momentum      (float=0.98): Momentum for batch normalization
             activation (nn.Module|None=nn.LeakyReLU(0.1)): Activation function. Use None for no activation.
         """
         super(KPConvBlock, self).__init__()
@@ -676,6 +733,7 @@ class KPConvBlock(nn.Module):
                                radius,
                                sigma,
                                modulated=modulated,
+                               use_geom=use_geom,
                                groups=groups,
                                dimension=dimension,
                                influence_mode=influence_mode,
@@ -708,6 +766,7 @@ class KPConvResidualBlock(nn.Module):
                  sigma: float,
                  modulated: bool = False,
                  deformable: bool = False,
+                 use_geom: bool = False,
                  influence_mode: str = 'linear',
                  aggregation_mode: str = 'sum',
                  dimension: int = 3,
@@ -719,20 +778,21 @@ class KPConvResidualBlock(nn.Module):
         """
         KPConv residual bottleneck block.
         Args:
-            in_channels (int): dimension input features
-            out_channels (int): dimension input features
-            kernel_size (int): number of kernel points
-            radius (float): convolution radius
-            sigma (float): influence radius of each kernel point
-            modulated (bool=False): Use modulations (self-attention)
-            deformable (bool=False): Use deformable KPConv
+            in_channels             (int): dimension input features
+            out_channels            (int): dimension input features
+            kernel_size             (int): number of kernel points
+            radius                (float): convolution radius
+            sigma                 (float): influence radius of each kernel point
+            modulated        (bool=False): Use modulations (self-attention)
+            deformable       (bool=False): Use deformable KPConv
+            use_geom         (bool=False): Use geometric encodings
             influence_mode (str='linear'): Influence function ('constant', 'linear', 'gaussian')
-            aggregation_mode (str='sum'): Aggregation mode ('nearest', 'sum')
-            dimension (int=3): dimension of input
-            groups (int=1): Number of groups in KPConv
-            strided (bool=False): strided or not
-            norm_type (str='batch'): type of normalization used in layer ('group', 'batch', 'none')
-            bn_momentum (float=0.98): Momentum for batch normalization
+            aggregation_mode  (str='sum'): Aggregation mode ('nearest', 'sum')
+            dimension             (int=3): dimension of input
+            groups                (int=1): Number of groups in KPConv
+            strided          (bool=False): strided or not
+            norm_type       (str='batch'): type of normalization used in layer ('group', 'batch', 'none')
+            bn_momentum      (float=0.98): Momentum for batch normalization
             activation (nn.Module|None=nn.LeakyReLU(0.1)): Activation function. Use None for no activation.
         """
         super(KPConvResidualBlock, self).__init__()
@@ -760,6 +820,7 @@ class KPConvResidualBlock(nn.Module):
                                 sigma,
                                 modulated=modulated,
                                 deformable=deformable,
+                                use_geom=use_geom,
                                 influence_mode=influence_mode,
                                 aggregation_mode=aggregation_mode,
                                 dimension=dimension,

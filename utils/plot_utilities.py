@@ -113,8 +113,9 @@ def IoU_class_metrics(all_IoUs, smooth_n):
     # Get mean IoU per class for consecutive epochs to directly get a mean without further smoothing
     smoothed_IoUs = []
     for epoch in range(len(all_IoUs)):
-        i0 = max(epoch - smooth_n, 0)
-        i1 = min(epoch + smooth_n + 1, len(all_IoUs))
+        s_n = min(smooth_n, epoch)
+        i0 = max(epoch - s_n, 0)
+        i1 = min(epoch + s_n + 1, len(all_IoUs))
         smoothed_IoUs += [np.mean(np.vstack(all_IoUs[i0:i1]), axis=0)]
     smoothed_IoUs = np.vstack(smoothed_IoUs)
     smoothed_mIoUs = np.mean(smoothed_IoUs, axis=1)
@@ -252,7 +253,7 @@ def load_snap_clouds(path, cfg, only_last=False):
                 dataset_dict = {'S3DIS': S3DISDataset}
                 if cfg.data.name not in dataset_dict:
                     raise ValueError('Add your dataset "{:s}" to the dataset_dict just above'.format(cfg.data.name))
-                dataset = dataset_dict[cfg.data.name](cfg, chosen_set='validation', calib=False)
+                dataset = dataset_dict[cfg.data.name](cfg, chosen_set='validation')
 
             # Load vote predictions
             with open(preds_path, 'rb') as f:
@@ -383,8 +384,6 @@ def print_cfg_diffs(logs_names, log_cfgs, show_params=[], hide_params=[], max_co
 
         # Get all the string we want in this column
         col_strings = [k1, k2, '']
-        if col_strings[1] == 'augment_symmetries':
-            col_strings[1] = 'augm_sym'
 
         for v in values:
 
@@ -758,7 +757,7 @@ def compare_convergences_segment(list_of_cfg, list_of_paths, list_of_names=None)
         s += '{:^10}'.format(c)
     print(s)
     print(10*'-' + '|' + 10*num_classes*'-')
-    for mIoUs in all_mIoUs:
+    for mIoUs, class_IoUs in zip(all_mIoUs, all_class_IoUs):
         s = '{:^10.1f}|'.format(100*mIoUs[-1])
         for IoU in class_IoUs[-1]:
             s += '{:^10.1f}'.format(100*IoU)
@@ -1101,9 +1100,8 @@ def compare_on_test_set(list_of_cfg,
 
         # Augmentations
         cfg.train.augment_anisotropic = True
-        cfg.train.augment_min_scale = 0.99
-        cfg.train.augment_max_scale = 1.01
-        cfg.train.augment_symmetries =  [True, False, False]
+        cfg.train.augment_scale = [0.99, 1.01]
+        cfg.train.augment_flips = [0.5, 0, 0]
         cfg.train.augment_rotation = 'vertical'
         cfg.train.augment_noise = 0.0001
         cfg.train.augment_color = 1.0
@@ -1150,7 +1148,6 @@ def compare_on_test_set(list_of_cfg,
 
         # Read confision matrix
         all_conf_pathes = np.sort([join(found_test, f) for f in listdir(found_test) if f.startswith('full_conf_')])
-        
         log_confs = []
         for conf_path in all_conf_pathes:
             if isfile(conf_path):

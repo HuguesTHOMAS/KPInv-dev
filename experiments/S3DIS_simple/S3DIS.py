@@ -81,7 +81,7 @@ def S3DIS_cfg(cfg):
 
 class S3DISDataset(SceneSegDataset):
 
-    def __init__(self, cfg, chosen_set='training', regular_sampling=False, precompute_pyramid=False, load_data=True, calib=True):
+    def __init__(self, cfg, chosen_set='training', regular_sampling=False, precompute_pyramid=False, load_data=True):
         """
         Class to handle S3DIS dataset.
         Simple implementation.
@@ -111,55 +111,17 @@ class S3DISDataset(SceneSegDataset):
                                    f_properties=['red', 'green', 'blue'],
                                    f_scales=[1/255, 1/255, 1/255])
 
+        ###########################
+        # Sampling data preparation
+        ###########################
 
-        # Stop data is not needed
-        if not calib:
-            return
-
-        ############################
-        # Batch selection parameters
-        ############################
-
-        # To pick points randomly per class, we need every point index from each class
-        self.prepare_label_inds()
-
-        # In case regular sampling, generate the first sampling points
         if self.regular_sampling:
+            # In case regular sampling, generate the first sampling points
             self.new_reg_sampling_pts()
 
-        return
-
-        
-    def calib_batch(self, cfg, update_test=True):
-
-        ###################
-        # Quick calibration
-        ###################
-
-        if self.b_lim > 0:
-            # If the batch limit is already set, update the corresponding batch size
-            print('\nWARNING: batch_limit is set by user and batch_size is ignored.\n')
-            self.calib_batch_size()
         else:
-            # If the batch limit is not set, use batch size to find it
-            self.b_lim = self.calib_batch_limit(self.b_n)
-
-        # Update configuration
-        if self.set == 'training':
-            cfg.train.batch_size = self.b_n
-            cfg.train.batch_limit = self.b_lim
-            if update_test:
-                cfg.test.batch_size = self.b_n
-                cfg.test.batch_limit = self.b_lim
-
-        else:
-            cfg.test.batch_size = self.b_n
-            cfg.test.batch_limit = self.b_lim
-
-        # After calibration reset counters for regular sampling
-        self.reg_sampling_i *= 0
-
-        print('\n')
+            # To pick points randomly per class, we need every point index from each class
+            self.prepare_label_inds()
 
         return
 

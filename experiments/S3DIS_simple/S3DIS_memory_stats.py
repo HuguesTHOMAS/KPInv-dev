@@ -100,9 +100,8 @@ def my_config():
     cfg.train.class_w = []
 
     cfg.train.augment_anisotropic = True
-    cfg.train.augment_min_scale = 0.8
-    cfg.train.augment_max_scale = 1.2
-    cfg.train.augment_symmetries =  [True, False, False]
+    cfg.train.augment_scale = [0.8, 1.2]
+    cfg.train.augment_flips = [0.5, 0, 0]
     cfg.train.augment_rotation = 'vertical'
     cfg.train.augment_noise = 0.005
     cfg.train.augment_color = 0.7

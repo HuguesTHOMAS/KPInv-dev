@@ -123,7 +123,7 @@ def test_log(chosen_log, new_cfg, save_visu=False):
     chosen_chkp = os.path.join(chosen_log, 'checkpoints', chosen_chkp)
 
     # Load previous checkpoint
-    checkpoint = torch.load(chosen_chkp)
+    checkpoint = torch.load(chosen_chkp, map_location=torch.device('cpu'))
     net.load_state_dict(checkpoint['model_state_dict'])
     net.eval()
     print("\nModel and training state restored from:")
@@ -161,7 +161,7 @@ if __name__ == '__main__':
     #       > 'last_XXX': Automatically retrieve the last trained model on dataset XXX
     #       > '(old_)results/Log_YYYY-MM-DD_HH-MM-SS': Directly provide the path of a trained model
 
-    chosen_log = 'results/Log_2022-08-19_15-09-59'
+    chosen_log = 'results/Log_2022-08-23_18-48-07'
 
     # Add argument here to handle it
     parser = argparse.ArgumentParser()
@@ -193,9 +193,8 @@ if __name__ == '__main__':
 
     # Augmentations
     new_cfg.train.augment_anisotropic = True
-    new_cfg.train.augment_min_scale = 0.99
-    new_cfg.train.augment_max_scale = 1.01
-    new_cfg.train.augment_symmetries =  [True, False, False]
+    new_cfg.train.augment_scale = [0.99, 1.01]
+    new_cfg.train.augment_flips = [0.5, 0, 0]
     new_cfg.train.augment_rotation = 'vertical'
     new_cfg.train.augment_noise = 0.0001
     new_cfg.train.augment_color = 1.0

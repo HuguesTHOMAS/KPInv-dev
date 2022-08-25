@@ -134,9 +134,8 @@ def init_cfg():
     cfg.train.class_w = []              #  List, weight for each class in the segmentation loss
 
     cfg.train.augment_anisotropic = True    #  Bool, Should he scale augmentatio nbe anisotropic
-    cfg.train.augment_min_scale = 0.9       # Float, min scaling value
-    cfg.train.augment_max_scale = 1.1       # Float, max scaling value
-    cfg.train.augment_symmetries = []       #  List, symmetries (boolean for each dimension)
+    cfg.train.augment_scale = [0.9, 1.1]    #  List, min and max scaling value
+    cfg.train.augment_flips = []            #  List, flip probabilities (empty or full of zeros for no flips)
     cfg.train.augment_rotation = 'none'     #   Str, type of rotation augmentation ('none', 'vertical', 'all')
     cfg.train.augment_noise = 0.005         # Float, normal offset noise sigma value
     cfg.train.augment_color = 0.7           # Float, probability to drop input features

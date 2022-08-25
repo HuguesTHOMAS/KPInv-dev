@@ -416,10 +416,11 @@ def exp_kp_groups():
     return logs, logs_names
 
 
-
-def exp_involution():
+def exp_transformer():
     """
-     
+    Tested and did not work:
+    - trans-no_smax
+    - trans-ReLU
     """
 
     # Using the dates of the logs, you can easily gather consecutive ones. All logs should be of the same dataset.
@@ -442,10 +443,7 @@ def exp_involution():
                   'trans-G1-1-sconv(fast)',
                   'trans-G8-1-sconv(fast)',
                   'trans-G1-1-sconv-no_k',
-                  'inv_3-G1-1-sconv-smax',
-                  'inv_3-G1-1-sconv-sigm',
-                  'trans-G1-1-sconv-no_k-no_smax',
-                  'inv_3-G1-1-sconv-none']
+                  'inv_3-G1-1-sconv-smax',]
 
     # safe check log names
     if len(logs) > len(logs_names):
@@ -455,10 +453,91 @@ def exp_involution():
     return logs, logs_names
 
 
+def exp_involution():
+    """
+    Tested and did not work:
+    - trans-no_smax
+    - trans-ReLU
+    - inv_3-none
+    - inv_3-ReLU
+    """
+
+    # Using the dates of the logs, you can easily gather consecutive ones. All logs should be of the same dataset.
+    start = 'Log_2022-08-23_18-48-07'
+    end = 'Log_2022-08-29_23-43-08'
+
+    # Name of the result path
+    res_path = 'results'
+
+    # Gather logs and sort by date
+    logs = np.sort([join(res_path, l) for l in listdir_str(res_path) if start <= l <= end])
+
+    
+    # Give names to the logs (for plot legends)
+    logs_names = ['inv_3-G1-1-sconv-smax',
+                  'inv_3-G1-1-sconv-sigm',
+                  'inv_2-G1-1-sconv(smax)',
+                  'inv_1-G1-1-sconv(smax)',]
 
 
+    # TODO:
+    # "--kp_mode kpconv-geom"
+    # "--kp_mode kpconv-geom --neighbor_limits 10 10"
+    # "--kp_mode kpconv-mod"
+    # "--kp_mode kpconv-mod --neighbor_limits 10 10"
+    # "--kp_mode kpconv --neighbor_limits 10 10"
+    # Separate in different exp and comment on the last ones
+
+    # safe check log names
+    if len(logs) > len(logs_names):
+        logs = logs[:len(logs_names)]
+    logs_names = np.array(logs_names[:len(logs)])
+
+    return logs, logs_names
 
 
+def exp_kpconv_geom():
+    """
+    """
+
+    # Using the dates of the logs, you can easily gather consecutive ones. All logs should be of the same dataset.
+    start = 'Log_2022-08-24_16-33-45'
+    end = 'Log_2022-08-29_23-43-08'
+
+    # Name of the result path
+    res_path = 'results'
+
+    # Gather logs and sort by date
+    logs = np.sort([join(res_path, l) for l in listdir_str(res_path) if start <= l <= end])
+
+    # Optionally add a specific log at a specific place in the log list
+    logs = logs.astype('<U50')
+    logs = np.insert(logs, 0, 'results/Log_2022-08-23_08-43-18')
+
+    
+    # Give names to the logs (for plot legends)
+    logs_names = ['transformer',
+                  'kpconv+geom16',
+                  'kpconv+geom',
+                  'kpconv',
+                  '...',
+                  'do_KP_inv', ]
+
+
+    # TODO:
+    # "--kp_mode kpconv-geom"
+    # "--kp_mode kpconv-geom --neighbor_limits 10 10"
+    # "--kp_mode kpconv-mod"
+    # "--kp_mode kpconv-mod --neighbor_limits 10 10"
+    # "--kp_mode kpconv --neighbor_limits 10 10"
+    # Separate in different exp and comment on the last ones
+
+    # safe check log names
+    if len(logs) > len(logs_names):
+        logs = logs[:len(logs_names)]
+    logs_names = np.array(logs_names[:len(logs)])
+
+    return logs, logs_names
 
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -467,6 +546,7 @@ def exp_involution():
 #       \***************/
 #
 
+
 if __name__ == '__main__':
 
     ######################################################
@@ -474,7 +554,7 @@ if __name__ == '__main__':
     ######################################################
 
     # My logs: choose the logs to show
-    logs, logs_names = exp_involution()
+    logs, logs_names = exp_transformer()
 
     frame_lines_1(["Plot S3DIS experiments"])
 

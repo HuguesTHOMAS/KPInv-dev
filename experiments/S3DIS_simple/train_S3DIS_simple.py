@@ -76,7 +76,7 @@ def my_config():
     # cfg.model.layer_blocks = (4,  6,  8,  8,  6)
     # cfg.model.layer_blocks = (4,  6,  8, 12,  6)  # Strong architecture
 
-    cfg.model.kp_mode = 'transformer'       # Choose ['kpconv', 'kpdef', 'kpinv']. And ['kpconv-mod', 'kpdef-mod'] for modulations
+    cfg.model.kp_mode = 'kpconv-geom'       # Choose ['kpconv', 'kpdef', 'kpinv']. And ['kpconv-mod', 'kpdef-mod', 'kpconv-geom'] for modulations
                                             # Choose ['inv_v1', 'inv_v2', 'inv_v3', 'inv_v4', 'transformer']
     cfg.model.kernel_size = 15
     cfg.model.kp_radius = 2.5
@@ -128,7 +128,7 @@ def my_config():
     cfg.train.adam_b = (0.9, 0.999)
     cfg.train.adam_eps = 1e-08
     # cfg.train.weight_decay = 0.01     # for KPConv
-    cfg.train.weight_decay = 0.001     # for transformer
+    cfg.train.weight_decay = 0.0001     # for transformer
 
     # Cyclic lr 
     cfg.train.cyc_lr0 = 5e-4                # Float, Start (minimum) learning rate of 1cycle decay
@@ -161,9 +161,8 @@ def my_config():
 
     # Augmentations
     cfg.train.augment_anisotropic = True
-    cfg.train.augment_min_scale = 0.9
-    cfg.train.augment_max_scale = 1.1
-    cfg.train.augment_symmetries =  [True, False, False]
+    cfg.train.augment_scale = [0.9, 1.1]
+    cfg.train.augment_flips = [0.5, 0, 0]
     cfg.train.augment_rotation = 'vertical'
     cfg.train.augment_noise = 0.003
     cfg.train.augment_color = 0.7
@@ -213,7 +212,8 @@ if __name__ == '__main__':
 
     bool_args = ['model.use_strided_conv']
 
-    list_args = ['model.layer_blocks']
+    list_args = ['model.layer_blocks',
+                 'model.neighbor_limits']
     
     parser = argparse.ArgumentParser()
     for str_arg_name in str_args:

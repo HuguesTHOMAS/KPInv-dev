@@ -44,13 +44,15 @@ from torch.multiprocessing import Lock
 #     pass
 
 
-from kernels.kernel_points import get_random_rotations
 
 from utils.printing import frame_lines_1
 from utils.ply import read_ply, write_ply
 from utils.gpu_init import init_gpu
-from utils.gpu_subsampling import  subsample_numpy, subsample_pack_batch, subsample_cloud
+from utils.gpu_subsampling import subsample_numpy, subsample_pack_batch, subsample_cloud
 from utils.torch_pyramid import build_full_pyramid, pyramid_neighbor_stats, build_base_pyramid
+
+from util.transform import ComposeAugment, RandomRotate, RandomScaleFlip, RandomShift, RandomJitter, \
+    ChromaticAutoContrast, ChromaticTranslation, ChromaticJitter, HueSaturationTranslation, RandomDropColor
 
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -120,6 +122,21 @@ class SceneSegDataset(Dataset):
 
         self.reg_sample_pts = None
         self.reg_sample_clouds = None
+
+        # Get augmentation transform
+        scale_augment = RandomScaleFlip(scale=cfg.train.augment_scale,
+                                        anisotropic=cfg.train.augment_anisotropic,
+                                        flip_p=cfg.train.augment_flips)
+        jitter_augment = RandomJitter(sigma=cfg.train.augment_noise,
+                                      clip=cfg.train.augment_noise * 5)
+        colordrop_augment = RandomDropColor(p=cfg.train.augment_color)
+        self.augmentation_transform = ComposeAugment([scale_augment,
+                                                      jitter_augment,
+                                                      colordrop_augment,
+                                                      ChromaticAutoContrast(),
+                                                      ChromaticTranslation(),
+                                                      ChromaticJitter(),
+                                                      HueSaturationTranslation()])
 
         return
 
@@ -446,8 +463,6 @@ class SceneSegDataset(Dataset):
         pi_list = []
         pinv_list = []
         ci_list = []
-        s_list = []
-        R_list = []
         batch_n_pts = 0
 
         while True:
@@ -472,11 +487,11 @@ class SceneSegDataset(Dataset):
             # Add original height as additional feature
             in_features = np.hstack((in_features, in_points[:, 2:] + c_point[:, 2:])).astype(np.float32)
 
+            # Data augmentation
+            in_points, in_features, in_labels = self.augmentation_transform(in_points, in_features, in_labels)
+
             # Select features for the network
             in_features = self.select_features(in_features)
-
-            # Data augmentation
-            in_points, scale, R = self.augmentation_transform(in_points)
 
             # View the arrays as torch tensors
             torch_points = torch.from_numpy(in_points)
@@ -500,8 +515,6 @@ class SceneSegDataset(Dataset):
             pinv_list += [inv_inds]
             i_list += [torch.from_numpy(c_point)]
             ci_list += [cloud_ind]
-            s_list += [torch.from_numpy(scale)]
-            R_list += [torch.from_numpy(R)]
 
             # Update batch size
             batch_n_pts += int(in_points.shape[0])
@@ -538,8 +551,6 @@ class SceneSegDataset(Dataset):
         input_invs = torch.cat(pinv_list, dim=0)
         stack_lengths = torch.LongTensor([int(pp.shape[0]) for pp in p_list])
         stack_lengths0 = torch.LongTensor([int(pp.shape[0]) for pp in pi_list])
-        scales = torch.stack(s_list, dim=0)
-        rots = torch.stack(R_list, dim=0)
 
 
         #######################
@@ -569,8 +580,6 @@ class SceneSegDataset(Dataset):
         input_dict.features = stacked_features
         input_dict.labels = stacked_labels
         input_dict.lengths0 = stack_lengths0
-        input_dict.scales = scales
-        input_dict.rots = rots
         input_dict.cloud_inds = cloud_inds
         input_dict.center_points = center_points
         input_dict.input_inds = input_inds
@@ -719,7 +728,40 @@ class SceneSegDataset(Dataset):
 
 
         return new_b_lim
+   
+    def calib_batch(self, cfg, update_test=True):
 
+        ###################
+        # Quick calibration
+        ###################
+
+        if self.b_lim > 0:
+            # If the batch limit is already set, update the corresponding batch size
+            print('\nWARNING: batch_limit is set by user and batch_size is ignored.\n')
+            self.calib_batch_size()
+        else:
+            # If the batch limit is not set, use batch size to find it
+            self.b_lim = self.calib_batch_limit(self.b_n)
+
+        # Update configuration
+        if self.set == 'training':
+            cfg.train.batch_size = self.b_n
+            cfg.train.batch_limit = self.b_lim
+            if update_test:
+                cfg.test.batch_size = self.b_n
+                cfg.test.batch_limit = self.b_lim
+
+        else:
+            cfg.test.batch_size = self.b_n
+            cfg.test.batch_limit = self.b_lim
+
+        # After calibration reset counters for regular sampling
+        self.reg_sampling_i *= 0
+
+        print('\n')
+
+        return
+        
     def calib_neighbors(self, cfg, samples=100, verbose=True):
 
         t0 = time.time()
@@ -823,74 +865,6 @@ class SceneSegDataset(Dataset):
         self.reg_sampling_i *= 0
 
         return
-
-    def augmentation_transform(self, points, normals=None):
-        """Implementation of an augmentation transform for point clouds."""
-
-        ##########
-        # Rotation
-        ##########
-
-        # Initialize rotation matrix
-        R = np.eye(points.shape[1])
-
-        if points.shape[1] == 3:
-            if self.cfg.train.augment_rotation == 'vertical':
-
-                # Create random rotations
-                theta = np.random.rand() * 2 * np.pi
-                c, s = np.cos(theta), np.sin(theta)
-                R = np.array([[c, -s, 0], [s, c, 0], [0, 0, 1]], dtype=np.float32)
-
-            elif self.cfg.train.augment_rotation == 'all':
-
-                    R = get_random_rotations(shape=None)
-
-        R = R.astype(np.float32)
-
-        #######
-        # Scale
-        #######
-
-        # Choose random scales for each example
-        min_s = self.cfg.train.augment_min_scale
-        max_s = self.cfg.train.augment_max_scale
-        if self.cfg.train.augment_anisotropic:
-            scale = np.random.rand(points.shape[1]) * (max_s - min_s) + min_s
-        else:
-            scale = np.random.rand() * (max_s - min_s) + min_s
-
-        # Add random symmetries to the scale factor
-        symmetries = np.array(self.cfg.train.augment_symmetries).astype(np.int32)
-        symmetries *= np.random.randint(2, size=points.shape[1])
-        scale = (scale * (1 - symmetries * 2)).astype(np.float32)
-
-        #######
-        # Noise
-        #######
-
-        noise = (np.random.randn(points.shape[0], points.shape[1]) * self.cfg.train.augment_noise).astype(np.float32)
-
-        ##################
-        # Apply transforms
-        ##################
-
-        # Do not use np.dot because it is multi-threaded
-        #augmented_points = np.dot(points, R) * scale + noise
-        augmented_points = np.sum(np.expand_dims(points, 2) * R, axis=1) * scale + noise
-
-
-        if normals is None:
-            return augmented_points, scale, R
-        else:
-            # Anisotropic scale of the normals thanks to cross product formula
-            normal_scale = scale[[1, 2, 0]] * scale[[2, 0, 1]]
-            #augmented_normals = np.dot(normals, R) * normal_scale
-            augmented_normals = np.sum(np.expand_dims(normals, 2) * R, axis=1) * normal_scale
-            # Renormalise
-            augmented_normals *= 1 / (np.linalg.norm(augmented_normals, axis=1, keepdims=True) + 1e-6)
-
-            return augmented_points, augmented_normals, scale, R
 
 
 

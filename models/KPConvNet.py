@@ -349,6 +349,8 @@ class KPFCNN(nn.Module):
 
     def get_residual_block(self, in_C, out_C, radius, sigma, cfg, deformable=False, strided=False):
 
+        use_geom = 'geom' in cfg.model.kp_mode
+
         return KPConvResidualBlock(in_C,
                                out_C,
                                cfg.model.kernel_size,
@@ -356,6 +358,7 @@ class KPFCNN(nn.Module):
                                sigma,
                                modulated=self.modulated,
                                deformable=deformable,
+                               use_geom=use_geom,
                                influence_mode=cfg.model.kp_influence,
                                aggregation_mode=cfg.model.kp_aggregation,
                                dimension=cfg.data.dim,
