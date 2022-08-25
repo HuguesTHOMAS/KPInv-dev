@@ -503,10 +503,6 @@ class SceneSegDataset(Dataset):
             if in_points.shape[0] < 1:
                 continue
             
-            # Color augmentation
-            if np.random.rand() > self.cfg.augment_train.color_drop:
-                in_features *= 0
-            
             # Add original height as additional feature
             in_features = np.hstack((in_features, in_points[:, 2:] + c_point[:, 2:])).astype(np.float32)
 
