@@ -46,7 +46,7 @@ class RandomRotate(object):
 
         return coord, feat, label
 
-        
+
 class RandomScaleFlip(object):
     def __init__(self, scale=[0.9, 1.1], anisotropic=False, flip_p=[0.0, 0.0, 0.0]):
         self.scale = scale
@@ -79,7 +79,6 @@ class FloorCentering(object):
         coord -= np.mean(coord, axis=0, keepdims=True)
         coord[:, self.gravity_dim] -= np.min(coord[:, self.gravity_dim])
         return coord, feat, label
-
 
 
 class RandomJitter(object):
