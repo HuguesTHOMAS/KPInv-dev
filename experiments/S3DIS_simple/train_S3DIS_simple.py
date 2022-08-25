@@ -93,9 +93,9 @@ def my_config():
 
     cfg.model.input_channels = 5    # This value has to be compatible with one of the dataset input features definition
 
-    # cfg.model.neighbor_limits = []                      # Use empty list to let calibration get the values
+    cfg.model.neighbor_limits = []                      # Use empty list to let calibration get the values
     # cfg.model.neighbor_limits = [35, 40, 50, 50, 50]    # Use empty list to let calibration get the values
-    cfg.model.neighbor_limits = [16, 16, 16, 16, 16]    # List for point_transformer
+    # cfg.model.neighbor_limits = [16, 16, 16, 16, 16]    # List for point_transformer
 
     cfg.model.use_strided_conv = True           # Use convolution op for strided layers instead of involution
     cfg.model.first_inv_layer = 1               # Use involution layers only from this layer index
@@ -164,8 +164,9 @@ def my_config():
     cfg.train.augment_scale = [0.9, 1.1]
     cfg.train.augment_flips = [0.5, 0, 0]
     cfg.train.augment_rotation = 'vertical'
-    cfg.train.augment_noise = 0.003
+    cfg.train.augment_noise = 0.001
     cfg.train.augment_color = 0.7
+    cfg.train.augment_chromatic = False
 
     
     # Test parameters
@@ -173,7 +174,7 @@ def my_config():
 
     cfg.test.val_momentum = 0.95  # momentum for averaging predictions during validation. 0 for no averaging at all
 
-    cfg.test.steps_per_epoch = 200    # Size of one validation epoch (should be small)
+    cfg.test.steps_per_epoch = 100    # Size of one validation epoch (should be small)
 
     
     cfg.test.in_radius = cfg.train.in_radius * 2

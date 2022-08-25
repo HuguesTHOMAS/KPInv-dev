@@ -139,6 +139,7 @@ def init_cfg():
     cfg.train.augment_rotation = 'none'     #   Str, type of rotation augmentation ('none', 'vertical', 'all')
     cfg.train.augment_noise = 0.005         # Float, normal offset noise sigma value
     cfg.train.augment_color = 0.7           # Float, probability to drop input features
+    cfg.train.augment_chromatic = False     #  Bool, Are we using chromatic augments from Transformer paper?
 
     cfg.train.segloss_balance = 'none'      #   Str, Respectively each point, class, or cloud in the batch has
                                             #        the same loss contribution ('none', 'class', 'batch'). 
@@ -168,7 +169,8 @@ def init_cfg():
     cfg.test.batch_limit = -1           #   Int, maximum number of points in total in a batch
     cfg.test.max_points = -1            #   Int, maximum number of points per element (randomly drop the excedent)
 
-    cfg.test.val_momentum = 0.5         # Float, momentum for averaging predictions during validation.
+    cfg.test.val_momentum = 0.95        # Float, momentum for averaging predictions during validation.
+    cfg.test.test_momentum = 0.95       # Float, momentum for averaging predictions during test.
     cfg.test.chkp_idx = None            #   Int, index of the checkpoint used for test
 
 

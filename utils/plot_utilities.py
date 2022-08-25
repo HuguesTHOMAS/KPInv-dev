@@ -197,8 +197,8 @@ def load_snap_clouds_old(path, cfg, only_last=False):
                     data = read_ply(join(cloud_folder, f))
                     labels = data['class']
                     preds = data['preds']
-                    label_values = np.array(cfg.data.label_values, dtype=np.int32)
-                    Confs[c_i] += fast_confusion(labels, preds, label_values).astype(np.int32)
+                    pred_values = np.array(cfg.data.pred_values, dtype=np.int32)
+                    Confs[c_i] += fast_confusion(labels, preds, pred_values).astype(np.int32)
 
             np.savetxt(conf_file, Confs[c_i], '%12d')
 
@@ -207,12 +207,6 @@ def load_snap_clouds_old(path, cfg, only_last=False):
             for f in listdir_str(cloud_folder):
                 if f.endswith('.ply'):
                     remove(join(cloud_folder, f))
-
-    # Remove ignored labels from confusions
-    for l_ind, label_value in reversed(list(enumerate(cfg.data.label_values))):
-        if label_value in cfg.data.ignored_labels:
-            Confs = np.delete(Confs, l_ind, axis=1)
-            Confs = np.delete(Confs, l_ind, axis=2)
 
     return cloud_epochs, IoU_from_confusions(Confs)
 
@@ -271,8 +265,8 @@ def load_snap_clouds(path, cfg, only_last=False):
                 preds = (val_preds[c_i][dataset.test_proj[c_i]]).astype(np.int32)
 
                 # Confusion matrix
-                label_values = np.array(cfg.data.label_values, dtype=np.int32)
-                scene_confs += fast_confusion(labels, preds, label_values).astype(np.int32)
+                pred_values = np.array(cfg.data.pred_values, dtype=np.int32)
+                scene_confs += fast_confusion(labels, preds, pred_values).astype(np.int32)
 
             # Save confusion for future use
             np.savetxt(conf_path, scene_confs, '%12d')
@@ -292,17 +286,21 @@ def load_snap_clouds(path, cfg, only_last=False):
     conf_epochs = np.array([int(f[:-4].split('_')[-1]) for f in conf_names])
     conf_votes = np.array([int(f.split('_')[1]) for f in conf_names])
     
-    Confs = np.zeros((len(conf_epochs), cfg.data.num_classes, cfg.data.num_classes), dtype=np.int32)
+    confs = np.zeros((len(conf_epochs), cfg.data.num_classes, cfg.data.num_classes), dtype=np.int32)
     for v_i, conf_path in enumerate(conf_paths):
-        Confs[v_i] += np.loadtxt(conf_path, dtype=np.int32)
+        confs[v_i] += np.loadtxt(conf_path, dtype=np.int32)
+ 
+    vote_conf_names = np.array(['vote_' + f for f in conf_names])
+    vote_conf_paths = np.array([join(val_path, f) for f in vote_conf_names])
+    vote_confs = np.zeros((len(conf_epochs), cfg.data.num_classes, cfg.data.num_classes), dtype=np.int32)
+    for v_i, conf_path in enumerate(vote_conf_paths):
+        if exists(conf_path):
+            vote_confs[v_i] += np.loadtxt(conf_path, dtype=np.int32)
+        else:
+            vote_confs[v_i] += confs[v_i]
 
-    # Remove ignored labels from confusions
-    for l_ind, label_value in reversed(list(enumerate(cfg.data.label_values))):
-        if label_value in cfg.data.ignored_labels:
-            Confs = np.delete(Confs, l_ind, axis=1)
-            Confs = np.delete(Confs, l_ind, axis=2)
 
-    return conf_epochs, IoU_from_confusions(Confs)
+    return conf_epochs, IoU_from_confusions(confs), IoU_from_confusions(vote_confs)
 
 
 def cfg_differences(list_of_cfg, ignore_params=[]):
@@ -711,6 +709,7 @@ def compare_convergences_segment(list_of_cfg, list_of_paths, list_of_names=None)
     all_class_IoUs = []
     all_snap_epochs = []
     all_snap_IoUs = []
+    all_snap_vote_IoUs = []
 
     class_list = [name for label, name in list_of_cfg[0].data.label_and_names
                   if label not in list_of_cfg[0].data.ignored_labels]
@@ -732,7 +731,7 @@ def compare_convergences_segment(list_of_cfg, list_of_paths, list_of_names=None)
         all_class_IoUs += [class_IoUs]
 
         # Get optional full validation on clouds
-        snap_epochs, snap_IoUs = load_snap_clouds(path, cfg)
+        snap_epochs, snap_IoUs, snap_vote_IoUs = load_snap_clouds(path, cfg)
 
         # smooth_full_n
         # # Get mean IoU per class for consecutive epochs to directly get a mean without further smoothing
@@ -747,11 +746,13 @@ def compare_convergences_segment(list_of_cfg, list_of_paths, list_of_names=None)
         # return smoothed_IoUs, smoothed_mIoUs
         all_snap_epochs += [snap_epochs]
         all_snap_IoUs += [snap_IoUs]
+        all_snap_vote_IoUs += [snap_vote_IoUs]
 
     print('Done in {:.3f} s'.format(time.time() - t0))
-    print('\n')
 
     # Print spheres validation
+    print('\n')
+    print('Spheres IoUs\n')
     s = '{:^10}|'.format('mean')
     for c in class_list:
         s += '{:^10}'.format(c)
@@ -764,10 +765,16 @@ def compare_convergences_segment(list_of_cfg, list_of_paths, list_of_names=None)
         print(s)
 
     # Print clouds validation (average over the last ten validations)
+    print('\n')
+    print('Average no-vote IoUs\n')
+    s = '{:^10}|'.format('mean')
+    for c in class_list:
+        s += '{:^10}'.format(c)
+    print(s)
     print(10*'-' + '|' + 10*num_classes*'-')
     for snap_IoUs in all_snap_IoUs:
         if len(snap_IoUs) > 0:
-            last_avg_n = 3
+            last_avg_n = 10
             if snap_IoUs.shape[0] > last_avg_n:
                 last_snaps = snap_IoUs[-last_avg_n:]
             else:
@@ -781,28 +788,56 @@ def compare_convergences_segment(list_of_cfg, list_of_paths, list_of_names=None)
             for _ in range(num_classes):
                 s += '{:^10s}'.format('-')
         print(s)
+        
+    # Print clouds validation (average over the last ten validations)
+    print('\n')
+    print('Last vote IoUs\n')
+    s = '{:^10}|'.format('mean')
+    for c in class_list:
+        s += '{:^10}'.format(c)
+    print(s)
+    print(10*'-' + '|' + 10*num_classes*'-')
+    for snap_vote_IoUs in all_snap_vote_IoUs:
+        if len(snap_vote_IoUs) > 0:
+            last_avg_n = 2
+            if snap_vote_IoUs.shape[0] > last_avg_n:
+                last_snaps = snap_vote_IoUs[-last_avg_n:]
+            else:
+                last_snaps = snap_vote_IoUs
+            mean_IoUs = np.mean(last_snaps, axis=0)
+            s = '{:^10.1f}|'.format(100*np.mean(mean_IoUs))
+            for IoU in mean_IoUs:
+                s += '{:^10.1f}'.format(100*IoU)
+        else:
+            s = '{:^10s}'.format('-')
+            for _ in range(num_classes):
+                s += '{:^10s}'.format('-')
+        print(s)
+    print('\n')
 
     # Plots
     # *****
 
     # Figure
-    fig = plt.figure('mIoUs')
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=[8.4, 4.8], sharey=True)
     for i, name in enumerate(list_of_names):
-        p = plt.plot(all_pred_epochs[i], all_mIoUs[i], '--', linewidth=1, label=name)
-        plt.plot(all_snap_epochs[i], np.mean(all_snap_IoUs[i], axis=1), linewidth=1, color=p[-1].get_color())
-    plt.xlabel('epochs')
-    plt.ylabel('IoU')
+        p = ax1.plot(all_pred_epochs[i], all_mIoUs[i], '--', linewidth=1, label=name)
+        ax1.plot(all_snap_epochs[i], np.mean(all_snap_vote_IoUs[i], axis=1), linewidth=1, color=p[-1].get_color())
+    ax1.set_xlabel('epochs')
+    ax1.set_ylabel('IoU')
+
+    ax1.set_xlabel('epochs')
+    ax2.plot(all_pred_epochs[i], np.mean(all_snap_IoUs[i], axis=1), linewidth=1, label=name)
 
     # Set limits for y axis
     #plt.ylim(0.55, 0.95)
 
     # Display legends and title
-    plt.legend(loc=4)
+    ax1.legend(loc=4)
 
     # Customize the graph
-    ax = fig.gca()
-    ax.grid(linestyle='-.', which='both')
-    #ax.set_yticks(np.arange(0.8, 1.02, 0.02))
+    ax1.grid(linestyle='-.', which='both')
+    ax2.grid(linestyle='-.', which='both')
 
     displayed_classes = [0, 1, 2, 3, 4, 5, 6, 7]
     displayed_classes = []
@@ -1105,6 +1140,7 @@ def compare_on_test_set(list_of_cfg,
         cfg.train.augment_rotation = 'vertical'
         cfg.train.augment_noise = 0.0001
         cfg.train.augment_color = 1.0
+        cfg.train.augment_chromatic = False
 
         
         # Read test results if available

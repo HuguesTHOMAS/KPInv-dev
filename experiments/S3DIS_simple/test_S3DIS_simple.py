@@ -198,6 +198,7 @@ if __name__ == '__main__':
     new_cfg.train.augment_rotation = 'vertical'
     new_cfg.train.augment_noise = 0.0001
     new_cfg.train.augment_color = 1.0
+    cfg.train.augment_chromatic = False
 
 
     test_log(chosen_log, new_cfg)

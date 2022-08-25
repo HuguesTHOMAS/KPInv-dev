@@ -89,13 +89,15 @@ def cloud_segmentation_validation(epoch, net, val_loader, cfg, val_data, device,
     # Initiate global prediction over validation clouds
     if 'probs' not in val_data:
         val_data.probs = [np.zeros((l.shape[0], nc_model))
-                                    for l in val_loader.dataset.input_labels]
+                          for l in val_loader.dataset.input_labels]
+        val_data.vote_probs = [np.zeros((l.shape[0], nc_model))
+                               for l in val_loader.dataset.input_labels]
         val_data.proportions = np.zeros(nc_model, dtype=np.float32)
         i = 0
         for label_value in val_loader.dataset.label_values:
             if label_value not in val_loader.dataset.ignored_labels:
                 val_data.proportions[i] = np.sum([np.sum(val_lbls == label_value)
-                                                    for val_lbls in val_loader.dataset.val_labels])
+                                                  for val_lbls in val_loader.dataset.val_labels])
                 i += 1
 
     #####################
@@ -160,8 +162,10 @@ def cloud_segmentation_validation(epoch, net, val_loader, cfg, val_data, device,
             c_i = cloud_inds[b_i]
 
             # Update current probs in whole cloud
-            val_data.probs[c_i][inds] *= val_smooth
-            val_data.probs[c_i][inds] += (1 - val_smooth) * probs[invs]
+            new_probs = probs[invs]
+            val_data.probs[c_i][inds] = new_probs
+            val_data.vote_probs[c_i][inds] *= val_smooth
+            val_data.vote_probs[c_i][inds] += (1 - val_smooth) * new_probs
 
             # Stack all prediction for this epoch
             predictions.append(probs[invs])
@@ -209,29 +213,14 @@ def cloud_segmentation_validation(epoch, net, val_loader, cfg, val_data, device,
     # Confusions for our subparts of validation set
     Confs = np.zeros((len(predictions), nc_tot, nc_tot), dtype=np.int32)
     for i, (probs, truth) in enumerate(zip(predictions, targets)):
-
-        # Insert false columns for ignored labels
-        for l_ind, label_value in enumerate(val_loader.dataset.label_values):
-            if label_value in val_loader.dataset.ignored_labels:
-                probs = np.insert(probs, l_ind, 0, axis=1)
-
-        # Predicted labels
-        preds = val_loader.dataset.label_values[np.argmax(probs, axis=1)]
-
-        # Confusions
-        Confs[i, :, :] = fast_confusion(truth, preds, val_loader.dataset.label_values).astype(np.int32)
+        preds = val_loader.dataset.probs_to_preds(probs)
+        Confs[i, :, :] = fast_confusion(truth, preds, val_loader.dataset.pred_values).astype(np.int32)
 
 
     t3 = time.time()
 
     # Sum all confusions
     sum_Confs = np.sum(Confs, axis=0).astype(np.float32)
-
-    # Remove ignored labels from confusions
-    for l_ind, label_value in reversed(list(enumerate(val_loader.dataset.label_values))):
-        if label_value in val_loader.dataset.ignored_labels:
-            sum_Confs = np.delete(sum_Confs, l_ind, axis=0)
-            sum_Confs = np.delete(sum_Confs, l_ind, axis=1)
 
     # Balance with real validation proportions
     sum_Confs *= np.expand_dims(val_data.proportions / (np.sum(sum_Confs, axis=1) + 1e-6), 1)
@@ -295,14 +284,16 @@ def cloud_segmentation_validation(epoch, net, val_loader, cfg, val_data, device,
     last_vote = int(np.floor(current_votes))
 
     # Check if vote has already been saved
-    all_sub_preds = []
     saved_votes = np.sort([int(l.split('_')[1]) for l in listdir(val_path) if  l.startswith('preds_')])
     if last_vote not in saved_votes:
 
-        preds_path = join(val_path, 'preds_{:d}_{:d}.pkl'.format(last_vote, epoch))
+        conf_path = join(val_path, 'conf_{:d}_{:d}.txt'.format(preds_votes[v_i], preds_epochs[v_i]))
+        conf_vote_path = join(val_path, 'vote_conf_{:d}_{:d}.txt'.format(preds_votes[v_i], preds_epochs[v_i]))
 
         # Save the subsampled input clouds with latest predictions
         files = val_loader.dataset.scene_files
+        scene_confs = np.zeros((cfg.data.num_classes, cfg.data.num_classes), dtype=np.int32)
+        scene_vote_confs = np.zeros((cfg.data.num_classes, cfg.data.num_classes), dtype=np.int32)
         for c_i, file_path in enumerate(files):
 
             # Get subsampled points from tree structure
@@ -310,15 +301,11 @@ def cloud_segmentation_validation(epoch, net, val_loader, cfg, val_data, device,
 
             # Get probs on our own ply points
             sub_probs = val_data.probs[c_i]
+            sub_vote_probs = val_data.vote_probs[c_i]
 
-            # Insert false columns for ignored labels
-            for l_ind, label_value in enumerate(val_loader.dataset.label_values):
-                if label_value in val_loader.dataset.ignored_labels:
-                    sub_probs = np.insert(sub_probs, l_ind, 0, axis=1)
-
-            # Get the predicted labels
-            sub_preds = val_loader.dataset.label_values[np.argmax(sub_probs, axis=1).astype(np.int32)]
-            all_sub_preds.append(sub_preds.astype(np.int32))
+            # Get predictions
+            sub_preds = val_loader.dataset.probs_to_preds(sub_probs)
+            sub_vote_preds = val_loader.dataset.probs_to_preds(sub_vote_probs)
 
             # Path of saved validation file
             cloud_name = file_path.split('/')[-1]
@@ -327,15 +314,27 @@ def cloud_segmentation_validation(epoch, net, val_loader, cfg, val_data, device,
             # Save file
             labels = val_loader.dataset.input_labels[c_i]
             write_ply(val_name,
-                      [points, all_sub_preds[-1], labels.astype(np.int32)],
-                      ['x', 'y', 'z', 'preds', 'class'])
+                      [points, sub_vote_preds, sub_preds, labels.astype(np.int32)],
+                      ['x', 'y', 'z', 'vote_pre', 'last_pre', 'class'])
 
+            # Get full groundtruth labels
+            labels = dataset.val_labels[c_i].astype(np.int32)
 
-        # Save the vote predictions as pickle obj
-        with open(preds_path, 'wb') as f:
-            pickle.dump(all_sub_preds, f)
+            # Reproject preds on the evaluations points
+            preds = sub_preds[dataset.test_proj[c_i]].astype(np.int32)
+            vote_preds = sub_vote_preds[dataset.test_proj[c_i]].astype(np.int32)
 
+            # Confusion matrix
+            pred_values = np.array(cfg.data.pred_values, dtype=np.int32)
+            scene_confs += fast_confusion(labels, preds, pred_values).astype(np.int32)
+            scene_vote_confs += fast_confusion(labels, vote_preds, pred_values).astype(np.int32)
 
+        # Save confusion for future use
+        np.savetxt(conf_path, scene_confs, '%12d')
+        
+        # Save confusion for future use
+        np.savetxt(conf_vote_path, scene_vote_confs, '%12d')
+        
 
     # Display timings
     t7 = time.time()

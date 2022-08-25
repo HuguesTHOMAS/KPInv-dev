@@ -174,7 +174,7 @@ def cloud_segmentation_test(epoch, net, test_loader, cfg, test_data, device, sav
     t0 = time.time()
 
     # Choose validation smoothing parameter (0 for no smothing, 0.99 for big smoothing)
-    test_smooth = cfg.test.val_momentum
+    test_smooth = cfg.test.test_momentum
     softmax = torch.nn.Softmax(1)
 
     # Number of classes predicted by the model
@@ -328,13 +328,8 @@ def cloud_segmentation_test(epoch, net, test_loader, cfg, test_data, device, sav
         # Get probs on subsampled points
         sub_probs = test_data.probs[c_i].cpu().numpy()
 
-        # Insert false columns for ignored labels
-        for l_ind, label_value in enumerate(test_loader.dataset.label_values):
-            if label_value in test_loader.dataset.ignored_labels:
-                sub_probs = np.insert(sub_probs, l_ind, 0, axis=1)
-
         # Get the predicted labels
-        sub_preds = test_loader.dataset.label_values[np.argmax(sub_probs, axis=1).astype(np.int32)]
+        sub_preds = val_loader.dataset.probs_to_preds(sub_probs)
         all_sub_preds.append(sub_preds.astype(np.int32))
         
     # Check if test labels are available
@@ -348,8 +343,8 @@ def cloud_segmentation_test(epoch, net, test_loader, cfg, test_data, device, sav
             all_sub_labels.append(sub_labels)
 
             # Confs
-            label_values = np.array(cfg.data.label_values, dtype=np.int32)
-            sub_confs += [fast_confusion(sub_labels, all_sub_preds[c_i], label_values).astype(np.int64)]
+            pred_values = np.array(cfg.data.pred_values, dtype=np.int32)
+            sub_confs += [fast_confusion(sub_labels, all_sub_preds[c_i], pred_values).astype(np.int64)]
 
     t3 = time.time()
     print('Done in {:.1f}s\n'.format(t3 - t2))
@@ -385,8 +380,8 @@ def cloud_segmentation_test(epoch, net, test_loader, cfg, test_data, device, sav
             labels = test_loader.dataset.val_labels[c_i].astype(np.int32)
 
             # Confusion matrix
-            label_values = np.array(cfg.data.label_values, dtype=np.int32)
-            full_confs.append(fast_confusion(labels, preds, label_values).astype(np.int64))
+            pred_values = np.array(cfg.data.pred_values, dtype=np.int32)
+            full_confs.append(fast_confusion(labels, preds, pred_values).astype(np.int64))
 
     t5 = time.time()
     if available_labels:

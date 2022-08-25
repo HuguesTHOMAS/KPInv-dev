@@ -68,6 +68,7 @@ def S3DIS_cfg(cfg):
 
     # Ignored labels
     cfg.data.ignored_labels = []
+    cfg.data.pred_values = [k for k in cfg.data.label_values if k not in cfg.data.ignored_labels]
 
     return cfg
 

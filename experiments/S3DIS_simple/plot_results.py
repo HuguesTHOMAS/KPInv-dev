@@ -521,6 +521,8 @@ def exp_kpconv_geom():
                   'kpconv+geom',
                   'kpconv',
                   '...',
+                  'test transformer with larger radius and new augment',
+                  '...',
                   'do_KP_inv', ]
 
 
@@ -554,7 +556,7 @@ if __name__ == '__main__':
     ######################################################
 
     # My logs: choose the logs to show
-    logs, logs_names = exp_transformer()
+    logs, logs_names = exp_kpconv_geom()
 
     frame_lines_1(["Plot S3DIS experiments"])
 

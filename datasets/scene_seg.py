@@ -51,7 +51,7 @@ from utils.gpu_init import init_gpu
 from utils.gpu_subsampling import subsample_numpy, subsample_pack_batch, subsample_cloud
 from utils.torch_pyramid import build_full_pyramid, pyramid_neighbor_stats, build_base_pyramid
 
-from util.transform import ComposeAugment, RandomRotate, RandomScaleFlip, RandomShift, RandomJitter, \
+from utils.transform import ComposeAugment, RandomRotate, RandomScaleFlip, RandomJitter, \
     ChromaticAutoContrast, ChromaticTranslation, ChromaticJitter, HueSaturationTranslation, RandomDropColor
 
 
@@ -101,6 +101,7 @@ class SceneSegDataset(Dataset):
         self.label_to_names = {k: v for k, v in cfg.data.label_and_names}
         self.label_to_idx = {v: i for i, v in enumerate(cfg.data.label_values)}
         self.ignored_labels = np.array(cfg.data.ignored_labels, dtype=np.int32)
+        self.pred_values = np.array(cfg.data.pred_values, dtype=np.int32)
 
         # Variables you need to populate for your own dataset
         self.scene_files = []
@@ -124,19 +125,21 @@ class SceneSegDataset(Dataset):
         self.reg_sample_clouds = None
 
         # Get augmentation transform
-        scale_augment = RandomScaleFlip(scale=cfg.train.augment_scale,
+        augment_list = []
+        augment_list.append(RandomScaleFlip(scale=cfg.train.augment_scale,
                                         anisotropic=cfg.train.augment_anisotropic,
-                                        flip_p=cfg.train.augment_flips)
-        jitter_augment = RandomJitter(sigma=cfg.train.augment_noise,
-                                      clip=cfg.train.augment_noise * 5)
-        colordrop_augment = RandomDropColor(p=cfg.train.augment_color)
-        self.augmentation_transform = ComposeAugment([scale_augment,
-                                                      jitter_augment,
-                                                      colordrop_augment,
-                                                      ChromaticAutoContrast(),
-                                                      ChromaticTranslation(),
-                                                      ChromaticJitter(),
-                                                      HueSaturationTranslation()])
+                                        flip_p=cfg.train.augment_flips))
+        augment_list.append(RandomJitter(sigma=cfg.train.augment_noise,
+                                      clip=cfg.train.augment_noise * 5))
+        augment_list.append(RandomDropColor(p=cfg.train.augment_color))
+
+        if cfg.train.augment_chromatic:
+            augment_list = augment_list + [ChromaticAutoContrast(),
+                                           ChromaticTranslation(),
+                                           ChromaticJitter(),
+                                           HueSaturationTranslation()]
+
+        self.augmentation_transform = ComposeAugment(augment_list)
 
         return
 
@@ -320,6 +323,9 @@ class SceneSegDataset(Dataset):
             self.label_indices.append(l_inds)
 
         return
+
+    def probs_to_preds(self, probs):
+        return self.pred_values[np.argmax(probs, axis=1).astype(np.int32)]
 
     def new_reg_sampling_pts(self, subsample_ratio=1.0):
 
@@ -593,6 +599,9 @@ class SceneSegDataset(Dataset):
 
         # Get gpu for faster calibration
         device = init_gpu()
+
+        # Get augmentation transform
+        calib_augment = ComposeAugment(self.augmentation_transform.transforms[:2])
         
         all_batch_n = []
         all_batch_n_pts = []
@@ -603,7 +612,7 @@ class SceneSegDataset(Dataset):
             while True:
                 cloud_ind, center_p = self.sample_random_sphere()
                 _, in_points, _, _ = self.get_sphere(cloud_ind, center_p)
-                in_points, _, _ = self.augmentation_transform(in_points)
+                in_points, _, _ = calib_augment(in_points, None, None)
                 if in_points.shape[0] > 0:
                     gpu_points = torch.from_numpy(in_points).to(device)
                     sub_points, _ = subsample_pack_batch(gpu_points,
@@ -654,6 +663,9 @@ class SceneSegDataset(Dataset):
         # Get gpu for faster calibration
         device = init_gpu()
 
+        # Get augmentation transform
+        calib_augment = ComposeAugment(self.augmentation_transform.transforms[:2])
+
         # Advanced display
         pi = 0
         pN = samples
@@ -670,7 +682,7 @@ class SceneSegDataset(Dataset):
             _, in_points, _, _ = self.get_sphere(cloud_ind, center_p)
 
             if in_points.shape[0] > 0:
-                in_points, _, _ = self.augmentation_transform(in_points)
+                in_points, _, _ = calib_augment(in_points, None, None)
                 gpu_points = torch.from_numpy(in_points).to(device)
 
                 sub_points, _ = subsample_pack_batch(gpu_points,
@@ -761,13 +773,16 @@ class SceneSegDataset(Dataset):
         print('\n')
 
         return
-        
+
     def calib_neighbors(self, cfg, samples=100, verbose=True):
 
         t0 = time.time()
 
         # Get gpu for faster calibration
         device = init_gpu()
+
+        # Get augmentation transform
+        calib_augment = ComposeAugment(self.augmentation_transform.transforms[:2])
         
         # Advanced display
         pi = 0
@@ -792,7 +807,7 @@ class SceneSegDataset(Dataset):
             _, in_points, _, _ = self.get_sphere(cloud_ind, center_p)
             
             if in_points.shape[0] > 0:
-                in_points, _, _ = self.augmentation_transform(in_points)
+                in_points, _, _ = calib_augment(in_points, None, None)
                 gpu_points = torch.from_numpy(in_points).to(device)
                 sub_points, _ = subsample_pack_batch(gpu_points,
                                                     [gpu_points.shape[0]],
