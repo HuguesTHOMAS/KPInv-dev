@@ -818,6 +818,8 @@ def compare_convergences_segment(list_of_cfg, list_of_paths, list_of_names=None)
     # Plots
     # *****
 
+
+
     # Figure
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=[8.4, 4.8], sharey=True)
     for i, name in enumerate(list_of_names):
@@ -827,7 +829,8 @@ def compare_convergences_segment(list_of_cfg, list_of_paths, list_of_names=None)
     ax1.set_ylabel('IoU')
 
     ax1.set_xlabel('epochs')
-    ax2.plot(all_pred_epochs[i], np.mean(all_snap_IoUs[i], axis=1), linewidth=1, label=name)
+    for i, name in enumerate(list_of_names):
+        ax2.plot(all_snap_epochs[i], np.mean(all_snap_IoUs[i], axis=1), linewidth=1, label=name)
 
     # Set limits for y axis
     #plt.ylim(0.55, 0.95)

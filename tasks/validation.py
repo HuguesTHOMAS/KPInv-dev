@@ -104,6 +104,7 @@ def cloud_segmentation_validation(epoch, net, val_loader, cfg, val_data, device,
     # Network predictions
     #####################
 
+    run_batch_size = 0
     predictions = []
     targets = []
 
@@ -125,6 +126,11 @@ def cloud_segmentation_validation(epoch, net, val_loader, cfg, val_data, device,
 
         if 'cuda' in device.type:
             batch.to(device)
+
+        # Update effective batch size
+        mean_f = max(0.02, 1.0 / (step + 1))
+        run_batch_size *= 1 - mean_f
+        run_batch_size += mean_f * len(batch.in_dict.lengths0)
 
         if 'cuda' in device.type:
             torch.cuda.synchronize(device)
@@ -193,16 +199,16 @@ def cloud_segmentation_validation(epoch, net, val_loader, cfg, val_data, device,
         if step < 5:
             mean_dt = np.array(t[1:]) - np.array(t[:-1])
         else:
-            mean_dt = 0.8 * mean_dt + 0.2 * (np.array(t[1:]) - np.array(t[:-1]))
+            mean_dt = 0.9 * mean_dt + 0.1 * (np.array(t[1:]) - np.array(t[:-1]))
 
         # Display
         if (t[-1] - last_display) > 1.0:
             last_display = t[-1]
-            message = ' {:5d} | {:9.2f} | {:7.1f} % | {:7.1f} stp/min | {:6.1f} {:5.1f} {:5.1f} {:5.1f}'
+            message = ' {:5d} | {:9.2f} | {:7.1f} % | {:7.1f} ins/sec | {:6.1f} {:5.1f} {:5.1f} {:5.1f}'
             print(message.format(step,
                                  val_loader.dataset.get_votes(),
                                  gpu_usage,
-                                 60 / np.sum(mean_dt),
+                                 run_batch_size / np.sum(mean_dt),
                                  1000 * mean_dt[0],
                                  1000 * mean_dt[1],
                                  1000 * mean_dt[2],
@@ -284,7 +290,7 @@ def cloud_segmentation_validation(epoch, net, val_loader, cfg, val_data, device,
     last_vote = int(np.floor(current_votes))
 
     # Check if vote has already been saved
-    saved_votes = np.sort([int(l.split('_')[1]) for l in listdir(val_path) if  l.startswith('preds_')])
+    saved_votes = np.sort([int(l.split('_')[1]) for l in listdir(val_path) if  l.startswith('conf_')])
     if last_vote not in saved_votes:
 
         conf_path = join(val_path, 'conf_{:d}_{:d}.txt'.format(last_vote, epoch + 1))
@@ -318,11 +324,11 @@ def cloud_segmentation_validation(epoch, net, val_loader, cfg, val_data, device,
                       ['x', 'y', 'z', 'vote_pre', 'last_pre', 'class'])
 
             # Get full groundtruth labels
-            labels = dataset.val_labels[c_i].astype(np.int32)
+            labels = val_loader.dataset.val_labels[c_i].astype(np.int32)
 
             # Reproject preds on the evaluations points
-            preds = sub_preds[dataset.test_proj[c_i]].astype(np.int32)
-            vote_preds = sub_vote_preds[dataset.test_proj[c_i]].astype(np.int32)
+            preds = sub_preds[val_loader.dataset.test_proj[c_i]].astype(np.int32)
+            vote_preds = sub_vote_preds[val_loader.dataset.test_proj[c_i]].astype(np.int32)
 
             # Confusion matrix
             pred_values = np.array(cfg.data.pred_values, dtype=np.int32)

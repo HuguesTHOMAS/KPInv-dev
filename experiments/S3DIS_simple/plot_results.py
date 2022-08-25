@@ -517,7 +517,7 @@ def exp_kpconv_geom():
     
     # Give names to the logs (for plot legends)
     logs_names = ['transformer',
-                  'kpconv+geom16',
+                  'kpconv+geom16 (old)',
                   'kpconv+geom',
                   'kpconv',
                   '...',
@@ -525,14 +525,6 @@ def exp_kpconv_geom():
                   '...',
                   'do_KP_inv', ]
 
-
-    # TODO:
-    # "--kp_mode kpconv-geom"
-    # "--kp_mode kpconv-geom --neighbor_limits 10 10"
-    # "--kp_mode kpconv-mod"
-    # "--kp_mode kpconv-mod --neighbor_limits 10 10"
-    # "--kp_mode kpconv --neighbor_limits 10 10"
-    # Separate in different exp and comment on the last ones
 
     # safe check log names
     if len(logs) > len(logs_names):

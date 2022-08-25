@@ -334,13 +334,15 @@ class KPFCNN(nn.Module):
 
     def get_conv_block(self, in_C, out_C, radius, sigma, cfg, deformable=False):
 
+        # First layer is the most simple convolution possible
         return KPConvBlock(in_C,
                            out_C,
                            cfg.model.kernel_size,
                            radius,
                            sigma,
-                           modulated=self.modulated,
-                           deformable=deformable,
+                           modulated=False,
+                           deformable=False,
+                           use_geom=False,
                            influence_mode=cfg.model.kp_influence,
                            aggregation_mode=cfg.model.kp_aggregation,
                            dimension=cfg.data.dim,

@@ -83,9 +83,7 @@ def my_config():
     cfg.model.kp_sigma = 1.2
     cfg.model.kp_influence = 'linear'
     cfg.model.kp_aggregation = 'sum'
-
     cfg.model.conv_groups = 1
-    cfg.model.inv_groups = 1
 
     cfg.data.sub_size = 0.02          # -1.0 so that dataset point clouds are not initially subsampled
     cfg.model.init_sub_size = 0.04    # Adapt this with train.in_radius. Try to keep a ratio of ~50
@@ -97,8 +95,11 @@ def my_config():
     # cfg.model.neighbor_limits = [35, 40, 50, 50, 50]    # Use empty list to let calibration get the values
     # cfg.model.neighbor_limits = [16, 16, 16, 16, 16]    # List for point_transformer
 
+
+    # Specific parameters for involution and transformers
     cfg.model.use_strided_conv = True           # Use convolution op for strided layers instead of involution
     cfg.model.first_inv_layer = 1               # Use involution layers only from this layer index
+    cfg.model.inv_groups = 1
 
 
     # Training parameters
@@ -173,14 +174,12 @@ def my_config():
     # Test parameters
     # ---------------
 
-    cfg.test.val_momentum = 0.95  # momentum for averaging predictions during validation. 0 for no averaging at all
-
-    cfg.test.steps_per_epoch = 100    # Size of one validation epoch (should be small)
-
+    cfg.test.steps_per_epoch = 50    # Size of one validation epoch (should be small)
     cfg.test.in_radius = cfg.train.in_radius * 3
     cfg.test.batch_limit = 1
     cfg.test.batch_size = 1
 
+    cfg.test.val_momentum = 0.95
     cfg.test.num_workers = cfg.train.num_workers
     cfg.test.max_points = cfg.train.max_points
 

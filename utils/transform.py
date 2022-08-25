@@ -85,11 +85,12 @@ class RandomJitter(object):
     def __init__(self, sigma=0.01, clip=0.05):
         self.sigma = sigma
         self.clip = clip
-        assert (self.clip > 0)
+        
 
     def __call__(self, coord, feat, label):
-        jitter = np.random.randn(coord.shape[0], 3) * self.sigma
-        coord += np.clip(jitter, -self.clip, self.clip)
+        if self.clip > 0: 
+            jitter = np.random.randn(coord.shape[0], 3) * self.sigma
+            coord += np.clip(jitter, -self.clip, self.clip)
         return coord, feat, label
 
 

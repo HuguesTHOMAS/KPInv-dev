@@ -119,10 +119,11 @@ class KPConv(nn.Module):
             
         # Define MLP delta
         delta_layers = 2
-        delta_reduction = 1
+        delta_reduction = 4
         C = in_channels
         D = self.dimension
         R = delta_reduction
+        self.use_gamma_mlp = False
         if use_geom:
             if delta_layers < 2:
                 self.delta_mlp = nn.Linear(D, C)
@@ -235,6 +236,10 @@ class KPConv(nn.Module):
 
         # Get features for each neighbor
         # ******************************
+        
+        if self.use_gamma_mlp:
+            # Init linear transform
+            s_feats = self.init_linear(s_feats) # (N, C) -> (N, C)
 
         # Add a zero feature for shadow neighbors
         padded_s_feats = torch.cat((s_feats, torch.zeros_like(s_feats[:1, :])), 0)  # (N, C) -> (N+1, C)
@@ -258,10 +263,6 @@ class KPConv(nn.Module):
             
             # Generate geometric encodings
             geom_encodings = self.delta_mlp(neighbors) # (M, H, 3) -> (M, H, C)
-            
-            if self.use_gamma_mlp:
-                # Init linear transform
-                neighbor_feats = self.init_linear(neighbor_feats) # (M, H, C) -> (M, H, C)
                 
             # Merge with features (we use add or sub mode, both are equivalent)
             neighbor_feats += geom_encodings  # -> (M, H, C)

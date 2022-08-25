@@ -171,6 +171,7 @@ def init_cfg():
     # -----------------------
     
     # Train Augmentations
+    cfg.augment_train = EasyDict()
     cfg.augment_train.anisotropic = True
     cfg.augment_train.scale = [0.9, 1.1]
     cfg.augment_train.flips = [0.5, 0, 0]
@@ -181,6 +182,7 @@ def init_cfg():
     cfg.augment_train.chromatic_norm = False
 
     # Test Augmentations
+    cfg.augment_test = EasyDict()
     cfg.augment_test.anisotropic = False
     cfg.augment_test.scale = [0.99, 1.01]
     cfg.augment_test.flips = [0.5, 0, 0]
@@ -233,7 +235,8 @@ def load_cfg(log_path):
         cfg2 =json.load(jsonfile)
 
     for k, v in cfg.items():
-        cfg[k].update(cfg2[k])
+        if k in cfg2:
+            cfg[k].update(cfg2[k])
 
     return cfg
 

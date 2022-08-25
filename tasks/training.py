@@ -24,6 +24,7 @@ from utils.printing import underline
 
 def training_epoch(epoch, t0, net, optimizer, training_loader, cfg, PID_file, device):
 
+    run_batch_size = 0
     mini_step = 0
     accum_loss = 0
     step = 0
@@ -64,6 +65,12 @@ def training_epoch(epoch, t0, net, optimizer, training_loader, cfg, PID_file, de
             # Move batch to GPU
             if 'cuda' in device.type:
                 batch.to(device)
+
+            # Update effective batch size
+            mean_f = max(0.02, 1.0 / (step + 1))
+            run_batch_size *= 1 - mean_f
+            run_batch_size += mean_f * len(batch.in_dict.lengths0)
+
 
             if 'cuda' in device.type:
                 torch.cuda.synchronize(device)
@@ -139,11 +146,11 @@ def training_epoch(epoch, t0, net, optimizer, training_loader, cfg, PID_file, de
                 if (t[-1] - last_display) > 1.0:
                     last_display = t[-1]
 
-                    message = '{:5d} {:4d} | {:8.3f} | {:7.1f} % | {:7.1f} stp/min | {:6.1f} {:5.1f} {:5.1f} {:5.1f} {:5.1f}'
+                    message = '{:5d} {:4d} | {:8.3f} | {:7.1f} % | {:7.1f} ins/sec | {:6.1f} {:5.1f} {:5.1f} {:5.1f} {:5.1f}'
                     print(message.format(epoch, step,
                                             accum_loss,
                                             gpu_usage,
-                                            60 / np.sum(mean_dt),
+                                            cfg.train.accum_batch * run_batch_size / np.sum(mean_dt),
                                             1000 * mean_dt[0],
                                             1000 * mean_dt[1],
                                             1000 * mean_dt[2],
