@@ -287,8 +287,8 @@ def cloud_segmentation_validation(epoch, net, val_loader, cfg, val_data, device,
     saved_votes = np.sort([int(l.split('_')[1]) for l in listdir(val_path) if  l.startswith('preds_')])
     if last_vote not in saved_votes:
 
-        conf_path = join(val_path, 'conf_{:d}_{:d}.txt'.format(preds_votes[v_i], preds_epochs[v_i]))
-        conf_vote_path = join(val_path, 'vote_conf_{:d}_{:d}.txt'.format(preds_votes[v_i], preds_epochs[v_i]))
+        conf_path = join(val_path, 'conf_{:d}_{:d}.txt'.format(last_vote, epoch + 1))
+        conf_vote_path = join(val_path, 'vote_conf_{:d}_{:d}.txt'.format(last_vote, epoch + 1))
 
         # Save the subsampled input clouds with latest predictions
         files = val_loader.dataset.scene_files
