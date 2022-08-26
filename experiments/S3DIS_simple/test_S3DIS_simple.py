@@ -198,8 +198,9 @@ if __name__ == '__main__':
     new_cfg.augment_train.rotations = 'vertical'
     new_cfg.augment_train.jitter = 0
     new_cfg.augment_train.color_drop = 0.0
-    cfg.augment_train.chromatic_contrast = False
-    cfg.augment_train.chromatic_norm = False
+    new_cfg.augment_train.chromatic_contrast = False
+    new_cfg.augment_train.chromatic_all = False
+    new_cfg.augment_test.chromatic_norm = new_cfg.augment_train.chromatic_norm
 
 
     test_log(chosen_log, new_cfg)

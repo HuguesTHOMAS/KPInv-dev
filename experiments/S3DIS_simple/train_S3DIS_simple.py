@@ -79,7 +79,7 @@ def my_config():
     cfg.model.kp_mode = 'kpconv'       # Choose ['kpconv', 'kpdef', 'kpinv']. And ['kpconv-mod', 'kpdef-mod', 'kpconv-geom'] for modulations
                                             # Choose ['inv_v1', 'inv_v2', 'inv_v3', 'inv_v4', 'transformer']
     cfg.model.kernel_size = 15
-    cfg.model.kp_radius = 2.5
+    cfg.model.kp_radius = 1.5
     cfg.model.kp_sigma = 0.7 * cfg.model.kp_radius
     cfg.model.kp_influence = 'linear'
     cfg.model.kp_aggregation = 'sum'
@@ -93,7 +93,7 @@ def my_config():
 
     cfg.model.neighbor_limits = []                      # Use empty list to let calibration get the values
     # cfg.model.neighbor_limits = [35, 40, 50, 50, 50]    # Use empty list to let calibration get the values
-    # cfg.model.neighbor_limits = [16, 16, 16, 16, 16]    # List for point_transformer
+    cfg.model.neighbor_limits = [16, 16, 16, 16, 16]    # List for point_transformer
 
 
     # Specific parameters for involution and transformers
@@ -104,6 +104,9 @@ def my_config():
 
     # Training parameters
     # -------------------
+    
+    cfg.data.use_cubes = False
+    cfg.data.cylindric_input = False
 
     # Input threads
     cfg.train.num_workers = 16
@@ -162,12 +165,13 @@ def my_config():
 
     # Train Augmentations
     cfg.augment_train.anisotropic = True
-    cfg.augment_train.scale = [0.8, 1.2]
+    cfg.augment_train.scale = [0.9, 1.1]
     cfg.augment_train.flips = [0.5, 0, 0]
     cfg.augment_train.rotations = 'vertical'
     cfg.augment_train.jitter = 0.005
     cfg.augment_train.color_drop = 0.2
     cfg.augment_train.chromatic_contrast = False
+    cfg.augment_train.chromatic_all = False
     cfg.augment_train.chromatic_norm = False
 
     
@@ -191,7 +195,8 @@ def my_config():
     cfg.augment_test.jitter = 0
     cfg.augment_test.color_drop = 0.0
     cfg.augment_test.chromatic_contrast = False
-    cfg.augment_test.chromatic_norm = False
+    cfg.augment_test.chromatic_all = False
+    cfg.augment_test.chromatic_norm = cfg.augment_train.chromatic_norm
 
     return cfg
 

@@ -14,8 +14,9 @@ class ComposeAugment(object):
 
 
 class RandomRotate(object):
-    def __init__(self, dim, mode='vertical', single_thread=True):
+    def __init__(self, mode='vertical', single_thread=True):
         self.mode = mode
+        self.single_thread = single_thread
 
     def __call__(self, coord, feat, label):
 
@@ -28,21 +29,13 @@ class RandomRotate(object):
             elif self.mode == 'all':
                 R = get_random_rotations(shape=None).astype(np.float32)
 
-            coord1 = np.sum(np.expand_dims(coord, 2) * R, axis=1)
-            coord2 = np.dot(coord, np.transpose(R))
-
-            print(np.max(np.abs(coord1 - coord2)))
-
-            a = 1/0
-
-            if single_thread:
-                coord = np.sum(np.expand_dims(coord, 2) * R, axis=1)
+            if self.single_thread:
+                coord = np.sum(np.expand_dims(coord, 2) * np.transpose(R), axis=1)
             else:
                 coord = np.dot(coord, np.transpose(R))
 
         else:
             raise ValueError('Unsupported random rotation augment for point dimension: {:d}'.format(coord.shape[1]))
-
 
         return coord, feat, label
 
@@ -95,15 +88,18 @@ class RandomJitter(object):
 
 
 class ChromaticAutoContrast(object):
-    def __init__(self, p=0.2, blend_factor=None):
+    def __init__(self, p=0.2, blend_factor=None, uint8_colors=False):
         self.p = p
         self.blend_factor = blend_factor
+        self.uint8_colors = uint8_colors
 
     def __call__(self, coord, feat, label):
         if np.random.rand() < self.p:
-            lo = np.min(feat, 0, keepdims=True)
-            hi = np.max(feat, 0, keepdims=True)
-            scale = 255 / (hi - lo)
+            lo = np.min(feat[:, :3], 0, keepdims=True)
+            hi = np.max(feat[:, :3], 0, keepdims=True)
+            scale = 1.0 / (hi - lo)
+            if self.uint8_colors:
+                scale *= 255
             contrast_feat = (feat[:, :3] - lo) * scale
             blend_factor = np.random.rand() if self.blend_factor is None else self.blend_factor
             feat[:, :3] = (1 - blend_factor) * feat[:, :3] + blend_factor * contrast_feat
@@ -111,27 +107,36 @@ class ChromaticAutoContrast(object):
 
 
 class ChromaticTranslation(object):
-    def __init__(self, p=0.95, ratio=0.05):
+    def __init__(self, p=0.95, ratio=0.05, uint8_colors=False):
         self.p = p
         self.ratio = ratio
+        self.uint8_colors = uint8_colors
 
     def __call__(self, coord, feat, label):
         if np.random.rand() < self.p:
-            tr = (np.random.rand(1, 3) - 0.5) * 255 * 2 * self.ratio
-            feat[:, :3] = np.clip(tr + feat[:, :3], 0, 255)
+            tr = (np.random.rand(1, 3) * 2 - 1) * self.ratio
+            if self.uint8_colors:
+                tr *= 255
+                feat[:, :3] = np.clip(tr + feat[:, :3], 0, 255)
+            else:
+                feat[:, :3] = np.clip(tr + feat[:, :3], 0, 1.0)
         return coord, feat, label
 
 
 class ChromaticJitter(object):
-    def __init__(self, p=0.95, std=0.005):
+    def __init__(self, p=0.95, std=0.005, uint8_colors=False):
         self.p = p
         self.std = std
+        self.uint8_colors = uint8_colors
 
     def __call__(self, coord, feat, label):
         if np.random.rand() < self.p:
-            noise = np.random.randn(feat.shape[0], 3)
-            noise *= self.std * 255
-            feat[:, :3] = np.clip(noise + feat[:, :3], 0, 255)
+            noise = np.random.randn(feat.shape[0], 3) * self.std
+            if self.uint8_colors:
+                noise *= 255
+                feat[:, :3] = np.clip(noise + feat[:, :3], 0, 255)
+            else:
+                feat[:, :3] = np.clip(noise + feat[:, :3], 0, 1.0)
         return coord, feat, label
 
 
@@ -182,18 +187,24 @@ class HueSaturationTranslation(object):
         rgb[..., 2] = np.select(conditions, [v, p, t, v, v, q], default=p)
         return rgb.astype('uint8')
 
-    def __init__(self, hue_max=0.5, saturation_max=0.2):
+    def __init__(self, hue_max=0.5, saturation_max=0.2, uint8_colors=False):
         self.hue_max = hue_max
         self.saturation_max = saturation_max
+        self.uint8_colors = uint8_colors
 
     def __call__(self, coord, feat, label):
         # Assume feat[:, :3] is rgb
-        hsv = HueSaturationTranslation.rgb_to_hsv(feat[:, :3])
+        rgb = feat[:, :3]
+        if not self.uint8_colors:
+            rgb *= 255
+        hsv = HueSaturationTranslation.rgb_to_hsv(rgb)
         hue_val = (np.random.rand() - 0.5) * 2 * self.hue_max
         sat_ratio = 1 + (np.random.rand() - 0.5) * 2 * self.saturation_max
         hsv[..., 0] = np.remainder(hue_val + hsv[..., 0] + 1, 1)
         hsv[..., 1] = np.clip(sat_ratio * hsv[..., 1], 0, 1)
         feat[:, :3] = np.clip(HueSaturationTranslation.hsv_to_rgb(hsv), 0, 255)
+        if not self.uint8_colors:
+            feat[:, :3] *= 1 / 255
         return coord, feat, label
 
 
@@ -210,26 +221,26 @@ class RandomDropColor(object):
 class ChromaticNormalize(object):
     def __init__(self,
                  color_mean=[0.5136457, 0.49523646, 0.44921124],
-                 color_std=[0.18308958, 0.18415008, 0.19252081],
-                 **kwargs):
+                 color_std=[0.18308958, 0.18415008, 0.19252081]):
         self.color_mean = np.array(color_mean, dtype=np.float32)
         self.color_std = np.array(color_std, dtype=np.float32)
 
-
     def __call__(self, coord, feat, label):
-        
-        if np.max(coord[:, :3]) > 1:
-            coord[:, :3] *= 1.0 / 255
-
-        coord[:, :3] = (coord[:, :3] - self.color_mean) / self.color_std
-
-
+        if np.max(feat[:, :3]) > 1.0001:
+            feat[:, :3] *= 1.0 / 255
+        feat[:, :3] = (feat[:, :3] - self.color_mean) / self.color_std
         return coord, feat, label
 
-    def __call__(self, data):
+class HeightNormalize(object):
+    def __init__(self,
+                 height_mean=[1.39467324],
+                 height_std=[1.014554043]):
+        self.height_mean = np.array(height_mean, dtype=np.float32)
+        self.height_std = np.array(height_std, dtype=np.float32)
 
-        device = data['x'].device
-        if data['x'][:, :3].max() > 1:
-            data['x'][:, :3] /= 255.
-        data['x'][:, :3] = (data['x'][:, :3] - self.color_mean.to(device)) / self.color_std.to(device)
-        return data
+    def __call__(self, coord, feat, label):
+        feat[:, 3] = (feat[:, 3] - self.height_mean) / self.height_std
+        return coord, feat, label
+
+
+

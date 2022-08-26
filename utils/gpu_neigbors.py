@@ -209,4 +209,65 @@ def radius_search_list_mode(q_points, s_points, q_lengths, s_lengths, radius, ne
 
     return knn_indices
 
+@torch.no_grad()
+def tiled_knn(q_points: Tensor, s_points: Tensor, k: int, tile_size: float, margin: float) -> Tuple[Tensor, Tensor]:
+    """
+    Divide the query and support in tiles and .
+    Args:
+        q_points (Tensor): (*, N, C)
+        s_points (Tensor): (*, M, C)
+        k           (int): number of neighbors
+        tile_size (float): size of the square tiles
+        margin    (float): margin for tiling the support (must be > max_knn_dist)
+    Returns:
+        knn_distance (Tensor): (*, N, k)
+        knn_indices (LongTensor): (*, N, k)
+    """
 
+    # Get limits
+    min_q, _ = torch.min(q_points, dim=-2)
+    min_s, _ = torch.min(s_points, dim=-2)
+    min_p = torch.minimum(min_q, min_s) - margin
+    max_q, _ = torch.max(q_points, dim=-2)
+    max_s, _ = torch.max(s_points, dim=-2)
+    max_p = torch.maximum(max_q, max_s) + margin
+
+    # Create tiles
+    tile_N = torch.ceil((max_p - min_p) / tile_size).type(torch.long)
+
+    # Init neighbors and dists
+    knn_indices = torch.zeros((q_points.shape[0],), dtype=torch.long, device=q_points.device)
+    knn_distances = torch.zeros((q_points.shape[0],), dtype=q_points.dtype, device=q_points.device) + 1e8
+    s_inds = torch.arange(s_points.shape[0], dtype=torch.long, device=q_points.device)
+
+    # Loop on tiles
+    for xi in range(tile_N[0].item()):
+        for yi in range(tile_N[1].item()):
+            for zi in range(tile_N[2].item()):
+
+                # Get tile limits
+                tile_min = min_p + tile_size * torch.tensor([xi, yi, zi],
+                                                            dtype=q_points.dtype,
+                                                            device=q_points.device)
+                tile_max = tile_min + tile_size + 0.1* margin 
+                q_mask = torch.logical_and(torch.all(q_points > tile_min, dim=-1),
+                                           torch.all(q_points <= tile_max, dim=-1))
+                s_mask = torch.logical_and(torch.all(s_points > tile_min - margin, dim=-1),
+                                           torch.all(s_points <= tile_max + margin, dim=-1))
+                                           
+                # Get points in the tile
+                q_pts = q_points[q_mask]
+                s_pts = s_points[s_mask]
+                if q_pts.shape[0] < 1:
+                    continue
+                if s_pts.shape[0] < 1:
+                    raise ValueError('got queries but no support points')
+
+                # Get knn
+                knn_d, knn_i = keops_knn(q_pts, s_pts, k)
+
+                # (*, N_i),  (*, N_i) values in M_i
+                knn_distances[q_mask] = knn_d.view((-1))
+                knn_indices[q_mask] = s_inds[s_mask][knn_i.view((-1))]
+
+    return knn_distances, knn_indices

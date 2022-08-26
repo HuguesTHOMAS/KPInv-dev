@@ -65,6 +65,9 @@ def init_cfg():
 
     cfg.data.sub_size = -1.0            # Float, data subampling size, negative value means we use original data
 
+    cfg.data.use_cubes = False          #  Bool, do we use cube sampling instead of sphere samplings
+    cfg.data.cylindric_input = False         #  Bool, do we use infinite height for cube sampling
+
 
     # Network parameters
     # ------------------
@@ -179,6 +182,7 @@ def init_cfg():
     cfg.augment_train.jitter = 0.005
     cfg.augment_train.color_drop = 0.2
     cfg.augment_train.chromatic_contrast = False
+    cfg.augment_train.chromatic_all = False
     cfg.augment_train.chromatic_norm = False
 
     # Test Augmentations
@@ -190,6 +194,7 @@ def init_cfg():
     cfg.augment_test.jitter = 0
     cfg.augment_test.color_drop = 0
     cfg.augment_test.chromatic_contrast = False
+    cfg.augment_train.chromatic_all = False
     cfg.augment_test.chromatic_norm = False
 
 

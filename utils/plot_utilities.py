@@ -455,7 +455,7 @@ def compare_trainings(list_of_cfg, list_of_paths, list_of_labels=None):
     # **********
 
     plot_lr = True
-    smooth_epochs = 1.5
+    smooth_epochs = 1.2
 
     if list_of_labels is None:
         list_of_labels = [str(i) for i in range(len(list_of_paths))]
@@ -1144,7 +1144,8 @@ def compare_on_test_set(list_of_cfg,
         cfg.augment_test.jitter = 0
         cfg.augment_test.color_drop = 0.0
         cfg.augment_test.chromatic_contrast = False
-        cfg.augment_test.chromatic_norm = False
+        cfg.augment_test.chromatic_all = False
+        cfg.augment_test.chromatic_norm = cfg.augment_train.chromatic_norm
 
         
         # Read test results if available

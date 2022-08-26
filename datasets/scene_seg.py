@@ -43,16 +43,19 @@ from torch.multiprocessing import Lock
 # except RuntimeError:
 #     pass
 
+import pyvista as pv
 
 
 from utils.printing import frame_lines_1
 from utils.ply import read_ply, write_ply
 from utils.gpu_init import init_gpu
 from utils.gpu_subsampling import subsample_numpy, subsample_pack_batch, subsample_cloud
+from utils.gpu_neigbors import keops_knn, tiled_knn
 from utils.torch_pyramid import build_full_pyramid, pyramid_neighbor_stats, build_base_pyramid
 
-from utils.transform import ComposeAugment, RandomRotate, RandomScaleFlip, RandomJitter, \
-    ChromaticAutoContrast, ChromaticTranslation, ChromaticJitter, HueSaturationTranslation, RandomDropColor
+from utils.transform import ComposeAugment, RandomRotate, RandomScaleFlip, RandomJitter, FloorCentering, \
+    ChromaticAutoContrast, ChromaticTranslation, ChromaticJitter, HueSaturationTranslation, RandomDropColor, \
+    ChromaticNormalize, HeightNormalize
 
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -89,6 +92,10 @@ class SceneSegDataset(Dataset):
         self.b_lim = b_cfg.batch_limit
         self.max_p = b_cfg.max_points
 
+        # Cube sampling or sphere sampling
+        self.use_cubes = cfg.data.use_cubes
+        self.cylindric_input = cfg.data.cylindric_input
+
         # Dataset dimension
         self.dim = cfg.data.dim
 
@@ -110,6 +117,7 @@ class SceneSegDataset(Dataset):
         self.input_trees = []
         self.input_features = []
         self.input_labels = []
+        self.input_z = []
         self.test_proj = []
         self.val_labels = []
         self.label_indices = []
@@ -131,26 +139,27 @@ class SceneSegDataset(Dataset):
             a_cfg = cfg.augment_test
         augment_list = []
         augment_list.append(RandomScaleFlip(scale=a_cfg.scale,
-                                        anisotropic=a_cfg.anisotropic,
-                                        flip_p=a_cfg.flips))
+                                            anisotropic=a_cfg.anisotropic,
+                                            flip_p=a_cfg.flips))
         augment_list.append(RandomJitter(sigma=a_cfg.jitter,
-                                      clip=a_cfg.jitter * 5))
+                                         clip=a_cfg.jitter * 5))
+        augment_list.append(FloorCentering())
+        augment_list.append(RandomRotate(mode=a_cfg.rotations))
+        if a_cfg.chromatic_contrast:
+            augment_list += [ChromaticAutoContrast()]
+        if a_cfg.chromatic_all:
+            augment_list += [ChromaticTranslation(),
+                             ChromaticJitter(),
+                             HueSaturationTranslation()]
+        if a_cfg.chromatic_norm:
+            augment_list += [ChromaticNormalize(),
+                             HeightNormalize()]
         augment_list.append(RandomDropColor(p=a_cfg.color_drop))
 
-        # augment_list.append(FloorCentering())
-
-        if a_cfg.chromatic_contrast:
-            augment_list += + [ChromaticAutoContrast(),
-                               ChromaticTranslation(),
-                               ChromaticJitter(),
-                               HueSaturationTranslation()]
-
-        if a_cfg.chromatic_norm:
-            augment_list += [ChromaticNormalize()]
-
         # TRAIN AUGMENT
-        # Transformer: no drop color and chromatic_contrast
-        #   PointNext: floor centering, drop color and chromatic_norm
+        # Transformer: no drop color and chromatic contrast/transl/jitter/HSV
+        #   PointNext: floor centering, chromatic contrast/drop/norm
+        #        test: drop before or after norm? In theory it should be after norm
 
         # TEST AUGMENT
         # Transformer: no augment at all
@@ -193,7 +202,10 @@ class SceneSegDataset(Dataset):
             cloud_name = self.scene_names[i]
 
             # Name of the input files
-            KDTree_file = join(tree_path, '{:s}_KDTree.pkl'.format(cloud_name))
+            inf_str = ''
+            if self.cylindric_input:
+                inf_str = '_2D'
+            KDTree_file = join(tree_path, '{:s}_KDTree{:s}.pkl'.format(cloud_name, inf_str))
             sub_ply_file = join(tree_path, '{:s}.ply'.format(cloud_name))
 
             # Check if inputs have already been computed
@@ -214,7 +226,11 @@ class SceneSegDataset(Dataset):
 
                 # Read pkl with search tree
                 with open(KDTree_file, 'rb') as f:
-                    search_tree = pickle.load(f)
+                    if self.cylindric_input:
+                        search_tree, sub_z = pickle.load(f)
+                    else:
+                        search_tree = pickle.load(f)
+                        sub_z = None
 
             else:
                 print('\nPreparing KDTree for cloud {:s}, subsampled at {:.3f}'.format(cloud_name, dl))
@@ -254,12 +270,22 @@ class SceneSegDataset(Dataset):
                 else:
                     sub_points, sub_features, sub_labels = (points, features, labels)
                 
-                # Get chosen neighborhoods
+                # Project data in 2D if we want infinite height
+                if self.cylindric_input:
+                    sub_z = sub_points[:, 2:].astype(np.float32)
+                    sub_points = sub_points[:, :2]
+                else:
+                    sub_z = None
+
+                # Compute KD Tree
                 search_tree = KDTree(sub_points, leaf_size=10)
 
                 # Save KDTree
                 with open(KDTree_file, 'wb') as f:
-                    pickle.dump(search_tree, f)
+                    if self.cylindric_input:
+                        pickle.dump((search_tree, sub_z), f)
+                    else:
+                        pickle.dump(search_tree, f)
 
             # Check data types and scale features
             sub_features = sub_features.astype(np.float32)
@@ -272,6 +298,7 @@ class SceneSegDataset(Dataset):
             self.input_trees += [search_tree]
             self.input_features += [sub_features]
             self.input_labels += [sub_labels]
+            self.input_z += [sub_z]
 
             size = sub_features.shape[0] * 4 * 7
             print('{:.1f} MB loaded in {:.1f}s'.format(size * 1e-6, time.time() - t0))
@@ -300,6 +327,7 @@ class SceneSegDataset(Dataset):
                     with open(proj_file, 'rb') as f:
                         proj_inds, labels = pickle.load(f)
                 else:
+
                     data = read_ply(file_path)
                     points = np.vstack((data['x'], data['y'], data['z'])).T
                     if label_property in [p for p, _ in data.dtype.fields.items()]:
@@ -307,9 +335,17 @@ class SceneSegDataset(Dataset):
                     else:
                         labels = np.zeros((0,), dtype=np.int32)
 
-                    # Compute projection inds
-                    idxs = self.input_trees[i].query(points, return_distance=False)
-                    proj_inds = np.squeeze(idxs).astype(np.int32)
+                    # Get data on GPU
+                    device = init_gpu()
+                    support_points = np.array(self.input_trees[i].data, copy=False)
+                    if self.cylindric_input:
+                        support_points = np.hstack((support_points, self.input_z[i]))
+                    s_pts = torch.from_numpy(support_points).to(device).type(torch.float32)
+                    q_pts = torch.from_numpy(points).to(device).type(torch.float32)
+
+                    # Compute nearest neighbors per tiles
+                    _, idxs = tiled_knn(q_pts, s_pts, k=1, tile_size=3.5, margin=2 * dl)
+                    proj_inds = np.squeeze(idxs.cpu().numpy()).astype(np.int32)
 
                     # Save
                     with open(proj_file, 'wb') as f:
@@ -344,10 +380,18 @@ class SceneSegDataset(Dataset):
     def probs_to_preds(self, probs):
         return self.pred_values[np.argmax(probs, axis=1).astype(np.int32)]
 
-    def new_reg_sampling_pts(self, subsample_ratio=1.0):
+    def new_reg_sampling_pts(self, overlap_ratio=1.1):
 
-        # Subsampling size (subsample_ratio should be < sqrt(3)/2)
-        reg_dl = self.in_radius * subsample_ratio
+        # Subsampling size so that the overlap is reduced to the minimum
+        reg_dl = self.in_radius * 2
+        if not self.use_cubes:
+            if self.cylindric_input:
+                reg_dl *= 1 / np.sqrt(self.dim - 1)
+            else:
+                reg_dl *= 1 / np.sqrt(self.dim)
+
+        # Subsampling size with overlap (overlap_ratio should be > 1.0)
+        reg_dl *= 1 / max(overlap_ratio, 1.01)
 
         # Get data        
         all_reg_pts = []
@@ -355,7 +399,10 @@ class SceneSegDataset(Dataset):
         for cloud_ind, tree in enumerate(self.input_trees):
 
             # Random offset to vary the border effects
-            offset = torch.rand(1, self.dim) * reg_dl
+            if self.cylindric_input:
+                offset = torch.rand(1, self.dim - 1) * reg_dl
+            else:
+                offset = torch.rand(1, self.dim) * reg_dl
 
             # Subsample scene clouds
             points = np.array(tree.data, copy=False).astype(np.float32)
@@ -364,10 +411,17 @@ class SceneSegDataset(Dataset):
                                                 [cpu_points.shape[0]],
                                                 reg_dl,
                                                 method='grid')
+
+            # Re-adjust sampling points
+            reg_points = sub_points - offset
             
+            # Add z coordinate in case of cylindric input
+            if self.cylindric_input:
+                reg_points = torch.cat((reg_points, torch.zeros_like(reg_points[:, :1])), dim=1)
+
             # Stack points and cloud indices
-            all_reg_pts.append(sub_points - offset)
-            all_reg_clouds.append(torch.full((sub_points.shape[0],), cloud_ind, dtype=torch.long))
+            all_reg_pts.append(reg_points)
+            all_reg_clouds.append(torch.full((reg_points.shape[0],), cloud_ind, dtype=torch.long))
 
         # Shuffle
         all_reg_pts = torch.concat(all_reg_pts, dim=0)
@@ -434,25 +488,61 @@ class SceneSegDataset(Dataset):
 
             # Center point of input region
             center_point = points[point_ind, :].reshape(1, -1)
+            if self.cylindric_input:
+                center_point = np.hstack((center_point, self.input_z[cloud_ind][point_ind].reshape(1, 1)))
 
             # Add a small noise to center point
             center_point += np.random.normal(scale=center_noise * self.in_radius, size=center_point.shape)
 
         return cloud_ind, center_point
 
-    def get_sphere(self, cloud_ind, center_point, only_inds=False):
+    def get_input_area(self, cloud_ind, center_point, only_inds=False):
+        """
+        This function gets the input area. Depending on parameters, the area is:
+            > a sphere of radius R          IF  use_cube = False  and  cylindric_input = False
+            > a cylinder of radius R        IF  use_cube = False  and  cylindric_input = True
+            > a cube of size 2R             IF  use_cube = True   and  cylindric_input = False
+            > a cubic cylinder of size 2R   IF  use_cube = True   and  cylindric_input = True
+        """
+
+        # Indices of points in input region
+        q_point = center_point
+        if self.cylindric_input:
+            q_point = q_point[:, :2]
+
+        # Radius of query (larger in case we want a cube)
+        r = self.in_radius
+        if self.use_cubes:
+            if self.cylindric_input:
+                r *= np.sqrt(self.dim - 1)
+            else:
+                r *= np.sqrt(self.dim)
+
+        # Query points
+        input_inds = self.input_trees[cloud_ind].query_radius(q_point, r=r)[0]
 
         # Get points from tree structure
         points = np.array(self.input_trees[cloud_ind].data, copy=False)
-
-        # Indices of points in input region
-        input_inds = self.input_trees[cloud_ind].query_radius(center_point, r=self.in_radius)[0]
+        input_points = points[input_inds].astype(np.float32)
         
+        # Crop the cube if wanted
+        if self.use_cubes:
+            cube_mask = np.logical_and(np.all(input_points > q_point - self.in_radius, axis=-1),
+                                       np.all(input_points < q_point + self.in_radius, axis=-1))
+            input_points = input_points[cube_mask]
+            input_inds = input_inds[cube_mask]
+
         if only_inds:
             return input_inds
 
+        # Get neighbors
+        if self.cylindric_input:
+            input_points = np.hstack((input_points, self.input_z[cloud_ind][input_inds]))
+
+        # # Center neighbors actually useless here
+        # input_points = (query_points - center_point).astype(np.float32)
+
         # Collect labels and colors
-        input_points = (points[input_inds] - center_point).astype(np.float32)
         input_features = self.input_features[cloud_ind][input_inds]
 
         if self.set in ['test', 'ERF']:
@@ -498,7 +588,7 @@ class SceneSegDataset(Dataset):
                 break
 
             # Get the input sphere
-            in_inds, in_points, in_features, in_labels = self.get_sphere(cloud_ind, c_point)
+            in_inds, in_points, in_features, in_labels = self.get_input_area(cloud_ind, c_point)
             
             if in_points.shape[0] < 1:
                 continue
@@ -614,7 +704,7 @@ class SceneSegDataset(Dataset):
         device = init_gpu()
 
         # Get augmentation transform
-        calib_augment = ComposeAugment(self.augmentation_transform.transforms[:2])
+        calib_augment = ComposeAugment(self.augmentation_transform.transforms[:4])
         
         all_batch_n = []
         all_batch_n_pts = []
@@ -624,7 +714,7 @@ class SceneSegDataset(Dataset):
             batch_n_pts = 0
             while True:
                 cloud_ind, center_p = self.sample_random_sphere()
-                _, in_points, _, _ = self.get_sphere(cloud_ind, center_p)
+                _, in_points, _, _ = self.get_input_area(cloud_ind, center_p)
                 in_points, _, _ = calib_augment(in_points, None, None)
                 if in_points.shape[0] > 0:
                     gpu_points = torch.from_numpy(in_points).to(device)
@@ -677,7 +767,7 @@ class SceneSegDataset(Dataset):
         device = init_gpu()
 
         # Get augmentation transform
-        calib_augment = ComposeAugment(self.augmentation_transform.transforms[:2])
+        calib_augment = ComposeAugment(self.augmentation_transform.transforms[:4])
 
         # Advanced display
         pi = 0
@@ -692,12 +782,20 @@ class SceneSegDataset(Dataset):
             cloud_ind, center_p = self.sample_random_sphere()
             if cloud_ind is None:
                 break
-            _, in_points, _, _ = self.get_sphere(cloud_ind, center_p)
+            _, in_points, feat, label = self.get_input_area(cloud_ind, center_p)
 
             if in_points.shape[0] > 0:
-                in_points, _, _ = calib_augment(in_points, None, None)
-                gpu_points = torch.from_numpy(in_points).to(device)
+                in_points, feat, label = calib_augment(in_points, feat, label)
+                # pl = pv.Plotter(window_size=[1600, 900])
+                # pl.add_points(in_points,
+                #               render_points_as_spheres=False,
+                #               scalars=label,
+                #               point_size=8.0)
 
+                # pl.set_background('white')
+                # pl.enable_eye_dome_lighting()
+                # pl.show()
+                gpu_points = torch.from_numpy(in_points).to(device)
                 sub_points, _ = subsample_pack_batch(gpu_points,
                                                     [gpu_points.shape[0]],
                                                     self.cfg.model.init_sub_size,
@@ -795,7 +893,7 @@ class SceneSegDataset(Dataset):
         device = init_gpu()
 
         # Get augmentation transform
-        calib_augment = ComposeAugment(self.augmentation_transform.transforms[:2])
+        calib_augment = ComposeAugment(self.augmentation_transform.transforms[:4])
         
         # Advanced display
         pi = 0
@@ -817,7 +915,7 @@ class SceneSegDataset(Dataset):
         all_n = [0 for _ in range(num_layers)]
         while len(all_neighbor_counts[0]) < samples:
             cloud_ind, center_p = self.sample_random_sphere()
-            _, in_points, _, _ = self.get_sphere(cloud_ind, center_p)
+            _, in_points, _, _ = self.get_input_area(cloud_ind, center_p)
             
             if in_points.shape[0] > 0:
                 in_points, _, _ = calib_augment(in_points, None, None)

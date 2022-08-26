@@ -41,7 +41,7 @@ def init_gpu(gpu_id='auto'):
             a = 1 / 0
 
         else:
-            print('\nUsing GPU:', gpu_id, '\n')
+            print('Using GPU:', gpu_id, '\n')
 
         # Set GPU visible device
         USED_GPU = gpu_id

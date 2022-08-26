@@ -29,8 +29,8 @@ from sklearn.neighbors import KDTree
 from os import makedirs, remove, rename, listdir
 from os.path import exists, join
 import time
-
 import sys
+
 
 # PLY reader
 from utils.ply import write_ply, read_ply

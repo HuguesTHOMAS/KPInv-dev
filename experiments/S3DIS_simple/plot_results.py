@@ -502,7 +502,7 @@ def exp_kpconv_geom():
     """
 
     # Using the dates of the logs, you can easily gather consecutive ones. All logs should be of the same dataset.
-    start = 'Log_2022-08-24_16-33-45'
+    start = 'Log_2022-08-25_16-33-45'
     end = 'Log_2022-08-29_23-43-08'
 
     # Name of the result path
@@ -511,18 +511,18 @@ def exp_kpconv_geom():
     # Gather logs and sort by date
     logs = np.sort([join(res_path, l) for l in listdir_str(res_path) if start <= l <= end])
 
-    # Optionally add a specific log at a specific place in the log list
-    logs = logs.astype('<U50')
-    logs = np.insert(logs, 0, 'results/Log_2022-08-23_08-43-18')
+    # # Optionally add a specific log at a specific place in the log list
+    # logs = logs.astype('<U50')
+    # logs = np.insert(logs, 0, 'results/Log_2022-08-23_08-43-18')
 
     # Give names to the logs (for plot legends)
-    logs_names = ['transformer',
-                  'kpconv+geom16 (old)',
-                  'kpconv+geom',
-                  'kpconv',
-                  'kpconv+geom16',
-                  'kpconv-1.5(16)-bignet',
-                  'kpconv-2.5-bignet',
+    logs_names = ['kpconv-1.5(16)-bignet (no_rot)',
+                  'kpconv-2.5-bignet (no_rot)',
+                  'kpconv-1.5(16)-bignet-rot',
+                  'kpconv-1.5(16)-bignet-chroma',
+                  'kpconv-1.5(16)-bignet-full-augment',
+                  'kpconv-1.5(16)-bignet-cube',
+                  'kpconv-1.5(16)-bignet-cylinder',
                   '...',
                   'test a last kpconv+geom with our best kpconv params',
                   '...',
