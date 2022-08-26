@@ -71,16 +71,16 @@ def my_config():
     # cfg.model.layer_blocks = (2, 3, 8, 32, 4)
 
     
-    cfg.model.layer_blocks = (2,  3,  4,  6,  3)    # Same as point transformers
+    # cfg.model.layer_blocks = (2,  3,  4,  6,  3)    # Same as point transformers
     # cfg.model.layer_blocks = (3,  4,  6,  8,  4)
     # cfg.model.layer_blocks = (4,  6,  8,  8,  6)
-    # cfg.model.layer_blocks = (4,  6,  8, 12,  6)  # Strong architecture
+    cfg.model.layer_blocks = (4,  6,  8, 12,  6)  # Strong architecture
 
-    cfg.model.kp_mode = 'kpconv-geom'       # Choose ['kpconv', 'kpdef', 'kpinv']. And ['kpconv-mod', 'kpdef-mod', 'kpconv-geom'] for modulations
+    cfg.model.kp_mode = 'kpconv'       # Choose ['kpconv', 'kpdef', 'kpinv']. And ['kpconv-mod', 'kpdef-mod', 'kpconv-geom'] for modulations
                                             # Choose ['inv_v1', 'inv_v2', 'inv_v3', 'inv_v4', 'transformer']
     cfg.model.kernel_size = 15
     cfg.model.kp_radius = 2.5
-    cfg.model.kp_sigma = 1.2
+    cfg.model.kp_sigma = 0.7 * cfg.model.kp_radius
     cfg.model.kp_influence = 'linear'
     cfg.model.kp_aggregation = 'sum'
     cfg.model.conv_groups = 1
@@ -128,8 +128,8 @@ def my_config():
     cfg.train.optimizer = 'AdamW'
     cfg.train.adam_b = (0.9, 0.999)
     cfg.train.adam_eps = 1e-08
-    # cfg.train.weight_decay = 0.01     # for KPConv
-    cfg.train.weight_decay = 0.0001     # for transformer
+    cfg.train.weight_decay = 0.01     # for KPConv
+    # cfg.train.weight_decay = 0.0001     # for transformer
 
     # Cyclic lr 
     cfg.train.cyc_lr0 = 5e-4                # Float, Start (minimum) learning rate of 1cycle decay
@@ -162,7 +162,7 @@ def my_config():
 
     # Train Augmentations
     cfg.augment_train.anisotropic = True
-    cfg.augment_train.scale = [0.9, 1.1]
+    cfg.augment_train.scale = [0.8, 1.2]
     cfg.augment_train.flips = [0.5, 0, 0]
     cfg.augment_train.rotations = 'vertical'
     cfg.augment_train.jitter = 0.005

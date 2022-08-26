@@ -498,6 +498,7 @@ def exp_involution():
 
 def exp_kpconv_geom():
     """
+    Adding geom nearly doubles the processing time, but improves the performances. Although we do not reach the same score as before
     """
 
     # Using the dates of the logs, you can easily gather consecutive ones. All logs should be of the same dataset.
@@ -514,12 +515,16 @@ def exp_kpconv_geom():
     logs = logs.astype('<U50')
     logs = np.insert(logs, 0, 'results/Log_2022-08-23_08-43-18')
 
-    
     # Give names to the logs (for plot legends)
     logs_names = ['transformer',
                   'kpconv+geom16 (old)',
                   'kpconv+geom',
                   'kpconv',
+                  'kpconv+geom16',
+                  'kpconv-1.5(16)-bignet',
+                  'kpconv-2.5-bignet',
+                  '...',
+                  'test a last kpconv+geom with our best kpconv params',
                   '...',
                   'test transformer with larger radius and new augment',
                   '...',
