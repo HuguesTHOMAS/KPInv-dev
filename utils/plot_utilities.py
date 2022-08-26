@@ -346,6 +346,8 @@ def print_cfg_diffs(logs_names, log_cfgs, show_params=[], hide_params=[], max_co
     some parameters even if no differences are seen.
     """
 
+    'augment_test'
+
     # Get differences between configs
     diff_params, diff_values = cfg_differences(log_cfgs, ignore_params=hide_params)
     
@@ -382,6 +384,11 @@ def print_cfg_diffs(logs_names, log_cfgs, show_params=[], hide_params=[], max_co
 
         # Get all the string we want in this column
         col_strings = [k1, k2, '']
+        col_strings[0] = col_strings[0].replace("augment_train", "aug_tr")
+        col_strings[0] = col_strings[0].replace("augment_test", "aug_te")
+        col_strings[1] = col_strings[1].replace("chromatic", "c")
+        col_strings[1] = col_strings[1].replace("color", "c")
+        col_strings[1] = col_strings[1].replace("anisotropic", "ani")
 
         for v in values:
 

@@ -19,8 +19,8 @@ training_script="experiments/S3DIS_simple/train_S3DIS_simple.py"
 # Declare an array variable
 # *************************
 
-declare -a arg_arr=("--kp_mode kpconv-geom --neighbor_limits 16 16 16 16 16"
-                    "--kp_mode kpconv --neighbor_limits 16 16 16 16 16")
+declare -a arg_arr=("--use_cubes 0 --cylindric_input 1"
+                    "--use_cubes 1 --cylindric_input 1")
 
 
 echo ""

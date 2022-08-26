@@ -105,6 +105,7 @@ def my_config():
     # Training parameters
     # -------------------
     
+    # Are we using spheres/cubes/cylinders/cubic_cylinders as input
     cfg.data.use_cubes = False
     cfg.data.cylindric_input = False
 
@@ -113,6 +114,11 @@ def my_config():
 
     # Input spheres radius. Adapt this with model.init_sub_size. Try to keep a ratio of ~50
     cfg.train.in_radius = 1.8
+    if cfg.data.use_cubes:
+        if cfg.data.cylindric_input:
+            cfg.train.in_radius *= np.pi**(1/2) / 2  # ratio between square and circle area
+        else:
+            cfg.train.in_radius *= (4 / 3 * np.pi)**(1/3) / 2  # ratio between cube and sphere volume
 
     # Batch related_parames
     cfg.train.batch_size = 4            # Target batch size. If you don't want calibration, you can directly set train.batch_limit
@@ -170,9 +176,9 @@ def my_config():
     cfg.augment_train.rotations = 'vertical'
     cfg.augment_train.jitter = 0.005
     cfg.augment_train.color_drop = 0.2
-    cfg.augment_train.chromatic_contrast = False
+    cfg.augment_train.chromatic_contrast = True
     cfg.augment_train.chromatic_all = False
-    cfg.augment_train.chromatic_norm = False
+    cfg.augment_train.chromatic_norm = True
 
     
     # Test parameters
@@ -225,7 +231,13 @@ if __name__ == '__main__':
                 'model.inv_groups',
                 'model.first_inv_layer']
 
-    bool_args = ['model.use_strided_conv']
+    bool_args = ['model.use_strided_conv',
+                 'data.use_cubes',
+                 'data.cylindric_input',
+                 'augment_train.chromatic_contrast',
+                 'augment_train.chromatic_all',
+                 'augment_train.chromatic_norm']
+                 
 
     list_args = ['model.layer_blocks',
                  'model.neighbor_limits']
