@@ -194,7 +194,7 @@ def batch_radius_neighbors(queries, supports, q_batches, s_batches, radius, neig
     return neighbors
 
 
-def batch_knn_neighbors(queries, supports, q_batches, s_batches, radius, neighbor_limit):
+def batch_knn_neighbors(queries, supports, q_batches, s_batches, radius, neighbor_limit, return_dist=False):
     """
     Computes neighbors for a batch of queries and supports
     :param queries: (N1, 3) the query points
@@ -216,11 +216,17 @@ def batch_knn_neighbors(queries, supports, q_batches, s_batches, radius, neighbo
         s_batches = s_batches.numpy().astype(np.int32)
 
     # Get radius neighbors
-    neighbors = cpp_neighbors.batch_knn_neighbors(queries, supports, q_batches, s_batches, n_neighbors=neighbor_limit)
+    neighbors, sq_dists = cpp_neighbors.batch_knn_neighbors(queries, supports, q_batches, s_batches, n_neighbors=neighbor_limit)
     
     # Reconvert to tensor if needed
     if from_torch:
         neighbors = torch.from_numpy(neighbors).to(torch.long)
+
+    if return_dist:
+        dists = np.sqrt(sq_dists)
+        if from_torch:
+            dists = torch.from_numpy(dists)
+        return neighbors, dists
 
     return neighbors
 

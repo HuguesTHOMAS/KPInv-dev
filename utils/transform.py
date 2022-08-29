@@ -227,7 +227,7 @@ class ChromaticNormalize(object):
         self.color_std = np.array(color_std, dtype=np.float32)
 
     def __call__(self, coord, feat, label):
-        if np.max(feat[:, :3]) > 1.0001:
+        if np.mean(feat[:, :3]) > 1.0001:
             feat[:, :3] *= 1.0 / 255
         feat[:, :3] = (feat[:, :3] - self.color_mean) / self.color_std
         return coord, feat, label

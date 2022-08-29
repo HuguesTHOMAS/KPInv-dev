@@ -54,9 +54,9 @@ def keops_knn(q_points: Tensor, s_points: Tensor, k: int) -> Tuple[Tensor, Tenso
     
     xi = pykeops.torch.LazyTensor(q_points.unsqueeze(-2))  # (*, N, 1, C)
     xj = pykeops.torch.LazyTensor(s_points.unsqueeze(-3))  # (*, 1, M, C)
-    dij = (xi - xj).norm2()  # (*, N, M)
-    knn_distances, knn_indices = dij.Kmin_argKmin(k, dim=q_points.dim() - 1)  # (*, N, K)
-    return knn_distances, knn_indices
+    dij = (xi - xj).sqnorm2()  # (*, N, M)
+    knn_d2, knn_indices = dij.Kmin_argKmin(k, dim=q_points.dim() - 1)  # (*, N, K)
+    return knn_d2, knn_indices
 
 @torch.no_grad()
 def knn(q_points: Tensor,
@@ -127,7 +127,7 @@ def knn(q_points: Tensor,
     return knn_indices
 
 @torch.no_grad()
-def radius_search_pack_mode(q_points, s_points, q_lengths, s_lengths, radius, neighbor_limit, shadow=False, inf=1e8):
+def radius_search_pack_mode(q_points, s_points, q_lengths, s_lengths, radius, neighbor_limit, shadow=False, inf=1e8, return_dist=False):
     """Radius search in pack mode (fast version).
     Args:
         q_points (Tensor): query points (M, 3).
@@ -155,7 +155,7 @@ def radius_search_pack_mode(q_points, s_points, q_lengths, s_lengths, radius, ne
     # Limit for shadow neighbors
     if shadow:
         # shadow everything outside radius
-        shadow_limit = radius
+        shadow_limit = radius ** 2
     else:
         # keep knns, only shadow invalid indices like when s_pts.shape < K
         shadow_limit = inf / 10
@@ -166,6 +166,10 @@ def radius_search_pack_mode(q_points, s_points, q_lengths, s_lengths, radius, ne
 
     # batch to pack
     knn_indices, _ = batch_to_pack(batch_knn_indices, batch_q_masks)  # (M, K)
+    if return_dist:
+        knn_distances, _ = batch_to_pack(batch_knn_distances, batch_q_masks)  # (M, K)
+        return knn_indices, torch.sqrt(knn_distances)
+    
     return knn_indices
 
 @torch.no_grad()
@@ -204,7 +208,7 @@ def radius_search_list_mode(q_points, s_points, q_lengths, s_lengths, radius, ne
     if shadow:
         knn_dists_list = [b_knn_dists for b_knn_dists, _ in knn_dists_inds]
         knn_dists, _ = list_to_pack(knn_dists_list)
-        knn_masks = torch.gt(knn_dists, radius)
+        knn_masks = torch.gt(knn_dists, radius**2)
         knn_indices.masked_fill_(knn_masks, s_points.shape[0])
 
     return knn_indices

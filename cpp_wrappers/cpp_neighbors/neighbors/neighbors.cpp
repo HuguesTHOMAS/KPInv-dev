@@ -337,6 +337,7 @@ void batch_nanoflann_knns(vector<PointXYZ>& queries,
                                 vector<int>& q_batches,
                                 vector<int>& s_batches,
                                 vector<int>& neighbors_indices,
+                                vector<float>& neighbors_sqdist,
                                 size_t n_neighbors)
 {
 
@@ -348,6 +349,7 @@ void batch_nanoflann_knns(vector<PointXYZ>& queries,
 
 	// We already know the memory needed
 	neighbors_indices.resize(queries.size() * n_neighbors);
+	neighbors_sqdist.resize(queries.size() * n_neighbors);
 	
 	// batch index
 	int b = 0;
@@ -409,11 +411,17 @@ void batch_nanoflann_knns(vector<PointXYZ>& queries,
 
 		// Directly fill the final neighbor matrix
 		for (int j = 0; j < nMatches; j++)
+		{
 			neighbors_indices[i0 * n_neighbors + j] = (int)ret_index[j] + sum_sb;
+			neighbors_sqdist[i0 * n_neighbors + j] = out_dist_sqr[j];
+		}
 
 		// Also fill the shadow matrix
 		for (int j = nMatches; j < n_neighbors; j++)
+		{
 			neighbors_indices[i0 * n_neighbors + j] = (int)supports.size();
+			neighbors_sqdist[i0 * n_neighbors + j] = 1e10;
+		}
 
         // Increment query idx
 		i0++;

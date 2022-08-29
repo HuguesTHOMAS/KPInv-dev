@@ -74,7 +74,9 @@ def my_config():
     # cfg.model.layer_blocks = (2,  3,  4,  6,  3)    # Same as point transformers
     # cfg.model.layer_blocks = (3,  4,  6,  8,  4)
     # cfg.model.layer_blocks = (4,  6,  8,  8,  6)
-    cfg.model.layer_blocks = (4,  6,  8, 12,  6)  # Strong architecture
+    # cfg.model.layer_blocks = (4,  6,  8, 12,  6)  # Strong architecture
+
+    cfg.model.layer_blocks = (3,  5,  7,  9,  9,  6)  # For large block inputs
 
     cfg.model.kp_mode = 'kpconv'       # Choose ['kpconv', 'kpdef', 'kpinv']. And ['kpconv-mod', 'kpdef-mod', 'kpconv-geom'] for modulations
                                             # Choose ['inv_v1', 'inv_v2', 'inv_v3', 'inv_v4', 'transformer']
@@ -87,6 +89,8 @@ def my_config():
     cfg.data.sub_size = 0.02          # -1.0 so that dataset point clouds are not initially subsampled
     cfg.model.init_sub_size = 0.04    # Adapt this with train.in_radius. Try to keep a ratio of ~50
     cfg.model.sub_mode = 'grid'
+
+    cfg.model.upsample_n = 3          # Number of neighbors used for nearest neighbor linear interpolation
 
     cfg.model.input_channels = 5    # This value has to be compatible with one of the dataset input features definition
 
@@ -117,7 +121,7 @@ def my_config():
     # Batch related_parames
     cfg.train.batch_size = 4            # Target batch size. If you don't want calibration, you can directly set train.batch_limit
     cfg.train.accum_batch = 5           # Accumulate batches for an effective batch size of batch_size * accum_batch.
-    cfg.train.steps_per_epoch = 25
+    cfg.train.steps_per_epoch = 250
     
     # Training length
     cfg.train.max_epoch = 180
@@ -138,7 +142,7 @@ def my_config():
     cfg.train.cyc_lr1 = 5e-3                # Float, Maximum learning rate of 1cycle decay
     cfg.train.cyc_raise_n = 1               #   Int, Raise rate for first part of 1cycle = number of epoch to multiply lr by 10
     cfg.train.cyc_decrease10 = 80           #   Int, Decrease rate for second part of 1cycle = number of epoch to divide lr by 10
-    cfg.train.cyc_plateau = 5               #   Int, Number of epoch for plateau at maximum lr
+    cfg.train.cyc_plateau = 1               #   Int, Number of epoch for plateau at maximum lr
 
     # import matplotlib.pyplot as plt
     # fig = plt.figure('lr')
@@ -157,7 +161,7 @@ def my_config():
     # a = 1/0
 
     # Train Augmentations
-    cfg.augment_train.anisotropic = True
+    cfg.augment_train.anisotropic = False
     cfg.augment_train.scale = [0.9, 1.1]
     cfg.augment_train.flips = [0.5, 0, 0]
     cfg.augment_train.rotations = 'vertical'
@@ -215,7 +219,7 @@ def adjust_config(cfg):
         cfg.train.lr_decays[str(i)] = decrease_rate
 
     # Test
-    cfg.test.in_radius = cfg.train.in_radius * 3
+    cfg.test.in_radius = cfg.train.in_radius * 2
     cfg.augment_test.chromatic_norm = cfg.augment_train.chromatic_norm
     cfg.augment_test.height_norm = cfg.augment_train.height_norm
     cfg.test.num_workers = cfg.train.num_workers

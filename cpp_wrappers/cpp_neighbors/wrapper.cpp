@@ -382,10 +382,11 @@ static PyObject* batch_knn_neighbors(PyObject* self, PyObject* args, PyObject* k
 
 	// Create result containers
 	vector<int> neighbors_indices;
+	vector<float> neighbors_sqdist;
 
 	// Compute results
 	//batch_ordered_neighbors(queries, supports, q_batches, s_batches, neighbors_indices, radius);
-	batch_nanoflann_knns(queries, supports, q_batches, s_batches, neighbors_indices, (size_t)n_neighbors);
+	batch_nanoflann_knns(queries, supports, q_batches, s_batches, neighbors_indices, neighbors_sqdist, (size_t)n_neighbors);
 
 	// Check result
 	if (neighbors_indices.size() < 1)
@@ -403,15 +404,18 @@ static PyObject* batch_knn_neighbors(PyObject* self, PyObject* args, PyObject* k
 	neighbors_dims[1] = n_neighbors;
 
 	// Create output array
-	PyObject* res_obj = PyArray_SimpleNew(2, neighbors_dims, NPY_INT);
+	PyObject* res_obj_n = PyArray_SimpleNew(2, neighbors_dims, NPY_INT);
+	PyObject* res_obj_d2 = PyArray_SimpleNew(2, neighbors_dims, NPY_FLOAT);
 	PyObject* ret = NULL;
 
 	// Fill output array with values
 	size_t size_in_bytes = Nq * n_neighbors * sizeof(int);
-	memcpy(PyArray_DATA(res_obj), neighbors_indices.data(), size_in_bytes);
+	memcpy(PyArray_DATA(res_obj_n), neighbors_indices.data(), size_in_bytes);
+	size_t size_in_bytes2 = Nq * n_neighbors * sizeof(float);
+	memcpy(PyArray_DATA(res_obj_d2), neighbors_sqdist.data(), size_in_bytes2);
 
 	// Merge results
-	ret = Py_BuildValue("N", res_obj);
+	ret = Py_BuildValue("NN", res_obj_n, res_obj_d2);
 
 	// Clean up
 	// ********

@@ -380,6 +380,36 @@ class GlobalAverageBlock(nn.Module):
         return global_avgpool(x, lengths)
 
 
+class LinearUpsampleBlock(nn.Module):
+
+    def __init__(self, upsample_n):
+        """
+        Initialize a nearest neighbor linear interpolation upsampling block with its ReLU and BatchNorm.
+        """
+        super(LinearUpsampleBlock, self).__init__()
+        self.upsample_n = upsample_n
+        return
+
+    def forward(self, x, upsample_inds, upsample_dists):
+        """
+                     x: (N, C) input features
+         upsample_inds: (M, H) indices of the nearest neighbors
+        upsample_dists: (M, H) distances to the nearest neighbors
+        """
+
+        # Add a last row with minimum features for shadow pools
+        x = torch.cat((x, torch.zeros_like(x[:1, :])), dim=0)
+
+        # Get features nearest neighbor features for each pooling location # (N+1, C) -> (M, H, C)
+        neighbor_x = index_select(x, upsample_inds[:, :self.upsample_n], dim=0)
+
+        # Get linear weights from distances 
+        dist_recip = 1.0 / (upsample_dists + 1e-8)  # (M, H)
+        norm = torch.sum(dist_recip, dim=1, keepdim=True)  # (M, 1)
+        neighbor_w = dist_recip / norm  # (M, H)
+
+        return torch.sum(neighbor_x * neighbor_w.unsqueeze(2), dim=1)  # (M, C)
+
 class NearestUpsampleBlock(nn.Module):
 
     def __init__(self):

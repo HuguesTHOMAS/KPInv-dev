@@ -36,6 +36,7 @@ def build_base_pyramid(points: Tensor,
     pyramid.neighbors = []
     pyramid.pools = []
     pyramid.upsamples = []
+    pyramid.up_distances = []
 
     pyramid.points.append(points)
     pyramid.lengths.append(lengths)
@@ -48,6 +49,7 @@ def fill_pyramid(pyramid: EasyDict,
                  sub_size: float,
                  search_radius: float,
                  neighbor_limits: List[int],
+                 upsample_n: int = 1,
                  sub_mode: str = 'grid'):
     """
     Fill the graph pyramid, with:
@@ -110,8 +112,10 @@ def fill_pyramid(pyramid: EasyDict,
             subsampling_inds = neighb_func(sub_points, cur_points, sub_lengths, cur_lengths, search_radius, neighbor_limits[i])
             pyramid.pools.append(subsampling_inds)
 
-            upsampling_inds = neighb_func(cur_points, sub_points, cur_lengths, sub_lengths, search_radius * 2, 1)
+            upsampling_inds, up_dists = neighb_func(cur_points, sub_points, cur_lengths, sub_lengths, search_radius * 2, upsample_n, return_dist=True)
             pyramid.upsamples.append(upsampling_inds)
+            pyramid.up_distances.append(up_dists)
+
 
         # Increase radius for next layer
         search_radius *= 2
@@ -132,6 +136,7 @@ def build_full_pyramid(points: Tensor,
                         sub_size: float,
                         search_radius: float,
                         neighbor_limits: List[int],
+                        upsample_n: int = 1,
                         sub_mode: str = 'grid'):
     """
     Build the graph pyramid, consisting of:
@@ -149,6 +154,7 @@ def build_full_pyramid(points: Tensor,
                  sub_size,
                  search_radius,
                  neighbor_limits,
+                 upsample_n,
                  sub_mode)
 
     return pyramid
@@ -178,7 +184,6 @@ def pyramid_neighbor_stats(points: Tensor,
         if i > 0:
             points, lengths = subsample_pack_batch(points, lengths, sub_size, method=sub_mode)
         counts = keops_radius_count(points, points, search_radius)
-        # neighbors = radius_search_pack_mode(points, points, lengths, lengths, search_radius, neighbor_limits[i])
         counts_list.append(counts)
         sub_size *= 2
         search_radius *= 2

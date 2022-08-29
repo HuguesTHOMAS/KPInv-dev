@@ -94,7 +94,9 @@ def init_cfg():
     cfg.model.kp_repulse_dist = 1.0     # Float, distance of repulsion for deformed kernel points
     
     cfg.model.init_sub_size = 0.04      # Float, initial subampling size, (voxel size, lattice size of fps minimum distance)
-    cfg.model.sub_mode = 'ph'           #   Str, subsampling mode ('grid', 'ph', 'fps')
+    cfg.model.sub_mode = 'grid'         #   Str, subsampling mode ('grid', 'ph', 'fps')
+    
+    cfg.model.upsample_n = 1            #   Int, Number of neighbors used for nearest neighbor linear interpolation
 
     cfg.model.input_channels = 1        #   Int, dimension of input feaures
     cfg.model.init_channels = 64        #   Int, dimension of first network features

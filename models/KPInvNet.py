@@ -204,6 +204,7 @@ class KPFCNN(nn.Module):
         self.first_sigma = self.subsample_size * self.kp_sigma
         self.layer_blocks = cfg.model.layer_blocks
         self.num_layers = len(self.layer_blocks)
+        self.upsample_n = cfg.model.upsample_n
         
         # List of valid labels (those not ignored in loss)
         self.valid_labels = np.sort([c for c in cfg.data.label_values if c not in cfg.data.ignored_labels])
@@ -370,6 +371,7 @@ class KPFCNN(nn.Module):
                          self.subsample_size,
                          self.first_radius,
                          self.neighbor_limits,
+                         self.upsample_n,
                          sub_mode=self.sub_mode)
 
         if verbose: 

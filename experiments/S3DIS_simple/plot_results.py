@@ -586,7 +586,7 @@ if __name__ == '__main__':
     ######################################################
 
     # My logs: choose the logs to show
-    logs, logs_names = exp_kpconv_geom()
+    logs, logs_names = exp_transformer()
 
     frame_lines_1(["Plot S3DIS experiments"])
 

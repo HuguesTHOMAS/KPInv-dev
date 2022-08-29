@@ -431,10 +431,12 @@ def test_neighbors():
     torch.cuda.synchronize()
     t1 = time.time()
     all_neighborscpp2 = []
+    all_d_cpp = []
     for i, cpu_batch in enumerate(all_cpu_batches):
         pack_tensor, lengths = list_to_pack(cpu_batch)
-        conv_i = batch_knn_neighbors(pack_tensor, pack_tensor, lengths, lengths, conv_r, neighbor_limit)
+        conv_i, dists = batch_knn_neighbors(pack_tensor, pack_tensor, lengths, lengths, conv_r, neighbor_limit, return_dist=True)
         all_neighborscpp2.append(conv_i)
+        all_d_cpp.append(dists)
     torch.cuda.synchronize()
     t2 = time.time()
     print('Done in {:.3f}s'.format(t2 - t1))
@@ -458,10 +460,12 @@ def test_neighbors():
     torch.cuda.synchronize()
     t1 = time.time()
     all_neighbors2 = []
+    all_d_gpu = []
     for i, gpu_batch in enumerate(all_gpu_batches):
         pack_tensor, lengths = list_to_pack(gpu_batch)
-        conv_i = radius_search_pack_mode(pack_tensor, pack_tensor, lengths, lengths, conv_r, neighbor_limit, shadow=False)
+        conv_i, dists = radius_search_pack_mode(pack_tensor, pack_tensor, lengths, lengths, conv_r, neighbor_limit, shadow=False, return_dist=True)
         all_neighbors2.append(conv_i)
+        all_d_gpu.append(dists)
     torch.cuda.synchronize()
     t2 = time.time()
     print('Done in {:.3f}s'.format(t2 - t1))
@@ -474,10 +478,35 @@ def test_neighbors():
 
     print('Verify that the two torch neighbors implem returns the same result')
 
-    all_good = []
+    all_max = []
+    all_median = []
+    for d_cpp, d_gpu in zip(all_d_cpp, all_d_gpu):
+        all_max.append(torch.max(torch.abs(d_cpp - d_gpu.cpu())).item())
+        all_median.append(torch.median(torch.abs(d_cpp - d_gpu.cpu())).item())
+
+    print(np.max(all_max))
+    print(np.max(all_median))
+
+
+    print()
+    print()
+
+    for i in range(10):
+        print('{:6.6f} {:6.6f} {:6.6f}     {:6.6f} {:6.6f} {:6.6f}'.format(d_cpp[i, 0].item(),
+                                                                           d_cpp[i, 1].item(),
+                                                                           d_cpp[i, 2].item(),
+                                                                           d_gpu[i, 0].item(),
+                                                                           d_gpu[i, 1].item(),
+                                                                           d_gpu[i, 2].item()))
+
+    print()
+    print()
+
+    print('Verify distances')
+
     for i, neighb2 in enumerate(all_neighbors2):
-        all_good.append(torch.all(all_neighbors1[i] == neighb2).item())
-    print(np.all(all_good))
+        all_good.append(torch.all(all_neighbors1[i] - neighb2).item())
+
 
     print()
     print()

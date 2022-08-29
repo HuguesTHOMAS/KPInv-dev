@@ -50,7 +50,7 @@ from utils.printing import frame_lines_1
 from utils.ply import read_ply, write_ply
 from utils.gpu_init import init_gpu
 from utils.gpu_subsampling import subsample_numpy, subsample_pack_batch, subsample_cloud
-from utils.gpu_neigbors import keops_knn, tiled_knn
+from utils.gpu_neigbors import tiled_knn
 from utils.torch_pyramid import build_full_pyramid, pyramid_neighbor_stats, build_base_pyramid
 
 from utils.transform import ComposeAugment, RandomRotate, RandomScaleFlip, RandomJitter, FloorCentering, \
@@ -151,14 +151,12 @@ class SceneSegDataset(Dataset):
             augment_list += [ChromaticTranslation(),
                              ChromaticJitter(),
                              HueSaturationTranslation()]
+        augment_list.append(RandomDropColor(p=a_cfg.color_drop))
         if a_cfg.chromatic_norm:
             augment_list += [ChromaticNormalize()]
             
         if 'height_norm' in a_cfg and a_cfg.height_norm:
             augment_list += [HeightNormalize()]
-
-                             
-        augment_list.append(RandomDropColor(p=a_cfg.color_drop))
 
         # TRAIN AUGMENT
         # Transformer: no drop color and chromatic contrast/transl/jitter/HSV
@@ -601,13 +599,13 @@ class SceneSegDataset(Dataset):
             in_features = np.hstack((in_features, in_points[:, 2:] + c_point[:, 2:])).astype(np.float32)
 
             # Data augmentation
-            in_points, in_features, in_labels = self.augmentation_transform(in_points, in_features, in_labels)
+            in_points2, in_features, in_labels = self.augmentation_transform(in_points, in_features, in_labels)
 
             # Select features for the network
             in_features = self.select_features(in_features)
 
             # View the arrays as torch tensors
-            torch_points = torch.from_numpy(in_points)
+            torch_points = torch.from_numpy(in_points2)
             torch_features = torch.from_numpy(in_features)
             torch_labels = torch.from_numpy(in_labels).type(torch.long)
 
@@ -619,6 +617,21 @@ class SceneSegDataset(Dataset):
                                                                           labels=torch_labels,
                                                                           method=self.cfg.model.sub_mode,
                                                                           return_inverse=True)
+
+            # pl = pv.Plotter(window_size=[1600, 900])
+            # pl.add_points(torch_points.cpu().numpy(),
+            #               render_points_as_spheres=False,
+            #               scalars=torch_features[:, 1:4].cpu().numpy(),
+            #               rgb=True,
+            #               point_size=6.0)
+            # pl.add_points(in_points.cpu().numpy() + np.array([[5.0, 0, 0]]),
+            #               render_points_as_spheres=False,
+            #               scalars=in_features[:, 1:4].cpu().numpy(),
+            #               rgb=True,
+            #               point_size=8.0)
+            # pl.set_background('white')
+            # pl.enable_eye_dome_lighting()
+            # pl.show()
 
             # Stack batch
             p_list += [in_points]
@@ -682,6 +695,7 @@ class SceneSegDataset(Dataset):
                                             self.cfg.model.init_sub_size,
                                             self.cfg.model.init_sub_size * self.cfg.model.kp_radius,
                                             self.cfg.model.neighbor_limits,
+                                            self.cfg.model.upsample_n,
                                             sub_mode=self.cfg.model.sub_mode)
 
         else:

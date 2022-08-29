@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 import numpy as np
 
-from models.generic_blocks import NearestUpsampleBlock, UnaryBlock, local_nearest_pool
+from models.generic_blocks import LinearUpsampleBlock, UnaryBlock, local_nearest_pool
 from models.kpconv_blocks import KPDef, KPConvBlock, KPConvResidualBlock
 
 from utils.torch_pyramid import fill_pyramid
@@ -208,6 +208,8 @@ class KPFCNN(nn.Module):
         self.num_layers = len(self.layer_blocks)
         self.deformable = deformable
         self.modulated = modulated
+        self.upsample_n = cfg.model.upsample_n
+        
         
         # List of valid labels (those not ignored in loss)
         self.valid_labels = np.sort([c for c in cfg.data.label_values if c not in cfg.data.ignored_labels])
@@ -274,7 +276,7 @@ class KPFCNN(nn.Module):
         for layer in range(self.num_layers - 1, 0, -1):
             
             decoder_i = self.get_unary_block(C * 3, C, cfg)
-            upsampling_i = NearestUpsampleBlock()
+            upsampling_i = LinearUpsampleBlock(self.upsample_n)
             
             setattr(self, 'decoder_{:d}'.format(layer), decoder_i)
             setattr(self, 'upsampling_{:d}'.format(layer), upsampling_i)
@@ -384,6 +386,7 @@ class KPFCNN(nn.Module):
                          self.subsample_size,
                          self.first_radius,
                          self.neighbor_limits,
+                         self.upsample_n,
                          sub_mode=self.sub_mode)
 
         if verbose: 
@@ -432,9 +435,10 @@ class KPFCNN(nn.Module):
             # Get layer blocks
             l = layer -1    # 3, 2, 1, 0
             unary = getattr(self, 'decoder_{:d}'.format(layer))
+            upsample = getattr(self, 'upsampling_{:d}'.format(layer))
 
             # Upsample
-            feats = local_nearest_pool(feats, batch.in_dict.upsamples[l])
+            feats = upsample(feats, batch.in_dict.upsamples[l], batch.in_dict.up_distances[l])
 
             # Concat with skip features
             feats = torch.cat([feats, skip_feats[l]], dim=1)
