@@ -79,8 +79,7 @@ def my_config():
     cfg.model.kp_mode = 'kpconv'       # Choose ['kpconv', 'kpdef', 'kpinv']. And ['kpconv-mod', 'kpdef-mod', 'kpconv-geom'] for modulations
                                             # Choose ['inv_v1', 'inv_v2', 'inv_v3', 'inv_v4', 'transformer']
     cfg.model.kernel_size = 15
-    cfg.model.kp_radius = 1.5
-    cfg.model.kp_sigma = 0.7 * cfg.model.kp_radius
+    cfg.model.kp_radius = 2.5
     cfg.model.kp_influence = 'linear'
     cfg.model.kp_aggregation = 'sum'
     cfg.model.conv_groups = 1
@@ -93,7 +92,7 @@ def my_config():
 
     cfg.model.neighbor_limits = []                      # Use empty list to let calibration get the values
     # cfg.model.neighbor_limits = [35, 40, 50, 50, 50]    # Use empty list to let calibration get the values
-    cfg.model.neighbor_limits = [16, 16, 16, 16, 16]    # List for point_transformer
+    # cfg.model.neighbor_limits = [16, 16, 16, 16, 16]    # List for point_transformer
 
 
     # Specific parameters for involution and transformers
@@ -106,28 +105,22 @@ def my_config():
     # -------------------
     
     # Are we using spheres/cubes/cylinders/cubic_cylinders as input
-    cfg.data.use_cubes = False
-    cfg.data.cylindric_input = False
+    cfg.data.use_cubes = True
+    cfg.data.cylindric_input = True
 
     # Input threads
     cfg.train.num_workers = 16
 
     # Input spheres radius. Adapt this with model.init_sub_size. Try to keep a ratio of ~50
-    cfg.train.in_radius = 1.8
-    if cfg.data.use_cubes:
-        if cfg.data.cylindric_input:
-            cfg.train.in_radius *= np.pi**(1/2) / 2  # ratio between square and circle area
-        else:
-            cfg.train.in_radius *= (4 / 3 * np.pi)**(1/3) / 2  # ratio between cube and sphere volume
+    cfg.train.in_radius = 2.0
 
     # Batch related_parames
     cfg.train.batch_size = 4            # Target batch size. If you don't want calibration, you can directly set train.batch_limit
     cfg.train.accum_batch = 5           # Accumulate batches for an effective batch size of batch_size * accum_batch.
-    cfg.train.steps_per_epoch = 250
+    cfg.train.steps_per_epoch = 25
     
     # Training length
     cfg.train.max_epoch = 180
-    cfg.train.checkpoint_gap = cfg.train.max_epoch // 5
     
     # Deformations
     cfg.train.deform_loss_factor = 0.1      # Reduce to reduce influence for deformation on overall features
@@ -146,12 +139,6 @@ def my_config():
     cfg.train.cyc_raise_n = 1               #   Int, Raise rate for first part of 1cycle = number of epoch to multiply lr by 10
     cfg.train.cyc_decrease10 = 80           #   Int, Decrease rate for second part of 1cycle = number of epoch to divide lr by 10
     cfg.train.cyc_plateau = 5               #   Int, Number of epoch for plateau at maximum lr
-    raise_rate = (cfg.train.cyc_lr1 / cfg.train.cyc_lr0)**(1/cfg.train.cyc_raise_n)
-    decrease_rate = 0.1**(1 / cfg.train.cyc_decrease10)
-    cfg.train.lr = cfg.train.cyc_lr0
-    cfg.train.lr_decays = {str(i): raise_rate for i in range(1, cfg.train.cyc_raise_n + 1)}
-    for i in range(cfg.train.cyc_raise_n + 1 + cfg.train.cyc_plateau, cfg.train.max_epoch):
-        cfg.train.lr_decays[str(i)] = decrease_rate
 
     # import matplotlib.pyplot as plt
     # fig = plt.figure('lr')
@@ -179,19 +166,19 @@ def my_config():
     cfg.augment_train.chromatic_contrast = True
     cfg.augment_train.chromatic_all = False
     cfg.augment_train.chromatic_norm = True
+    cfg.augment_train.height_norm = False
+
+    
 
     
     # Test parameters
     # ---------------
 
-    cfg.test.steps_per_epoch = 50    # Size of one validation epoch (should be small)
-    cfg.test.in_radius = cfg.train.in_radius * 3
+    cfg.test.steps_per_epoch = 20    # Size of one validation epoch (should be small)
     cfg.test.batch_limit = 1
     cfg.test.batch_size = 1
 
     cfg.test.val_momentum = 0.95
-    cfg.test.num_workers = cfg.train.num_workers
-    cfg.test.max_points = cfg.train.max_points
 
     # Test Augmentations
     cfg.augment_test.anisotropic = False
@@ -202,7 +189,38 @@ def my_config():
     cfg.augment_test.color_drop = 0.0
     cfg.augment_test.chromatic_contrast = False
     cfg.augment_test.chromatic_all = False
+
+    return cfg
+
+
+def adjust_config(cfg):
+
+    # Model
+    cfg.model.kp_sigma = 0.7 * cfg.model.kp_radius
+
+    # Train
+    if cfg.data.use_cubes:
+        if cfg.data.cylindric_input:
+            cfg.train.in_radius *= np.pi**(1/2) / 2  # ratio between square and circle area
+        else:
+            cfg.train.in_radius *= (4 / 3 * np.pi)**(1/3) / 2  # ratio between cube and sphere volume   
+    cfg.train.checkpoint_gap = cfg.train.max_epoch // 5
+
+    # Learning rate
+    raise_rate = (cfg.train.cyc_lr1 / cfg.train.cyc_lr0)**(1/cfg.train.cyc_raise_n)
+    decrease_rate = 0.1**(1 / cfg.train.cyc_decrease10)
+    cfg.train.lr = cfg.train.cyc_lr0
+    cfg.train.lr_decays = {str(i): raise_rate for i in range(1, cfg.train.cyc_raise_n + 1)}
+    for i in range(cfg.train.cyc_raise_n + 1 + cfg.train.cyc_plateau, cfg.train.max_epoch):
+        cfg.train.lr_decays[str(i)] = decrease_rate
+
+    # Test
+    cfg.test.in_radius = cfg.train.in_radius * 3
     cfg.augment_test.chromatic_norm = cfg.augment_train.chromatic_norm
+    cfg.augment_test.height_norm = cfg.augment_train.height_norm
+    cfg.test.num_workers = cfg.train.num_workers
+    cfg.test.max_points = cfg.train.max_points
+
 
     return cfg
 
@@ -229,14 +247,17 @@ if __name__ == '__main__':
     int_args = ['model.kernel_size',
                 'model.conv_groups',
                 'model.inv_groups',
-                'model.first_inv_layer']
+                'model.first_inv_layer',
+                'train.cyc_decrease10',
+                'train.max_epoch']
 
     bool_args = ['model.use_strided_conv',
                  'data.use_cubes',
                  'data.cylindric_input',
                  'augment_train.chromatic_contrast',
                  'augment_train.chromatic_all',
-                 'augment_train.chromatic_norm']
+                 'augment_train.chromatic_norm',
+                 'augment_train.height_norm']
                  
 
     list_args = ['model.layer_blocks',
@@ -293,6 +314,9 @@ if __name__ == '__main__':
         new_arg = getattr(args, key2)
         if new_arg is not None:
             cfg[key1][key2] = bool(new_arg)
+
+    # Adjust config after parameters have been changed
+    cfg = adjust_config(cfg)
 
     
     ##############
@@ -414,6 +438,10 @@ if __name__ == '__main__':
     #                       - KPConv-group modulations
     #                       - KPConv-inv
     #                       - Add geometric encoding to KPConv and related designs
+    #                       TODO - see what Point COnv Former does? https://arxiv.org/pdf/2208.02879.pdf
+    #                       TODO - Also SPNet https://arxiv.org/pdf/2109.11610.pdf
+    #                       TODO - Also Fast Transformer and their geometric encoding (more efficient) https://arxiv.org/pdf/2112.04702.pdf
+    #                               it also use cosine similarity instead of softmax
     #
     #           > TODO: Kernel point verification by measurinf chamfer distance with neighbors given different radiuses => Get optimal radius value
     #
@@ -440,6 +468,8 @@ if __name__ == '__main__':
     #               TODO - https://www.fast.ai/2018/07/02/adam-weight-decay/
     #               TODO - https://arxiv.org/pdf/2206.04670v1.pdf
     #               TODO - https://arxiv.org/pdf/2205.05740v2.pdf
+    #               TODO - https://arxiv.org/pdf/2201.03545.pdf  MODERN RESNET
+    #               TODO - https://arxiv.org/pdf/2109.11610.pdf  SPNet shows that Poisson Disc sampling  better (so FPS also) and Trilinear interp for upsampling as well
     #
     #           > State of the art agmentation technique:
     #               https://arxiv.org/pdf/2110.02210.pdf

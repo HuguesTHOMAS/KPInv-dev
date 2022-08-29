@@ -329,7 +329,7 @@ def cloud_segmentation_test(epoch, net, test_loader, cfg, test_data, device, sav
         sub_probs = test_data.probs[c_i].cpu().numpy()
 
         # Get the predicted labels
-        sub_preds = val_loader.dataset.probs_to_preds(sub_probs)
+        sub_preds = test_loader.dataset.probs_to_preds(sub_probs)
         all_sub_preds.append(sub_preds.astype(np.int32))
         
     # Check if test labels are available
@@ -409,6 +409,8 @@ def cloud_segmentation_test(epoch, net, test_loader, cfg, test_data, device, sav
 
                 # Get subsampled points from tree structure
                 sub_points = np.array(test_loader.dataset.input_trees[c_i].data, copy=False)
+                if test_loader.dataset.cylindric_input:
+                    support_points = np.hstack((support_points, test_loader.dataset.input_z[i]))
 
                 # We first save the subsampled version for visu
                 if available_labels:

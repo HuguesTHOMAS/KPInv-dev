@@ -20,22 +20,23 @@ class RandomRotate(object):
 
     def __call__(self, coord, feat, label):
 
-        R = np.eye(coord.shape[1], dtype=np.float32)
+        R = None
         if coord.shape[1] == 3:
             if self.mode == 'vertical':
                 theta = np.random.rand() * 2 * np.pi
                 c, s = np.cos(theta), np.sin(theta)
                 R = np.array([[c, -s, 0], [s, c, 0], [0, 0, 1]], dtype=np.float32)
             elif self.mode == 'all':
-                R = get_random_rotations(shape=None).astype(np.float32)
+                R = get_random_rotations(shape=None).astype(np.float32)  
 
+        else:
+            raise ValueError('Unsupported random rotation augment for point dimension: {:d}'.format(coord.shape[1]))
+
+        if R is not None:
             if self.single_thread:
                 coord = np.sum(np.expand_dims(coord, 2) * np.transpose(R), axis=1)
             else:
                 coord = np.dot(coord, np.transpose(R))
-
-        else:
-            raise ValueError('Unsupported random rotation augment for point dimension: {:d}'.format(coord.shape[1]))
 
         return coord, feat, label
 

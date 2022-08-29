@@ -304,6 +304,8 @@ def cloud_segmentation_validation(epoch, net, val_loader, cfg, val_data, device,
 
             # Get subsampled points from tree structure
             points = np.array(val_loader.dataset.input_trees[c_i].data, copy=False)
+            if val_loader.dataset.cylindric_input:
+                points = np.hstack((points, val_loader.dataset.input_z[c_i]))
 
             # Get probs on our own ply points
             sub_probs = val_data.probs[c_i]
@@ -319,6 +321,8 @@ def cloud_segmentation_validation(epoch, net, val_loader, cfg, val_data, device,
 
             # Save file
             labels = val_loader.dataset.input_labels[c_i]
+
+            print(points.shape, sub_vote_preds.shape, sub_preds.shape, labels.shape)
             write_ply(val_name,
                       [points, sub_vote_preds, sub_preds, labels.astype(np.int32)],
                       ['x', 'y', 'z', 'vote_pre', 'last_pre', 'class'])

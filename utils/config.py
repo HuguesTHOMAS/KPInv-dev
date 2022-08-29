@@ -184,6 +184,7 @@ def init_cfg():
     cfg.augment_train.chromatic_contrast = False
     cfg.augment_train.chromatic_all = False
     cfg.augment_train.chromatic_norm = False
+    cfg.augment_train.height_norm = False
 
     # Test Augmentations
     cfg.augment_test = EasyDict()
@@ -196,6 +197,7 @@ def init_cfg():
     cfg.augment_test.chromatic_contrast = False
     cfg.augment_train.chromatic_all = False
     cfg.augment_test.chromatic_norm = False
+    cfg.augment_train.height_norm = False
 
 
     return cfg

@@ -729,6 +729,9 @@ def compare_convergences_segment(list_of_cfg, list_of_paths, list_of_names=None)
         file = join(path, 'val_IoUs.txt')
         val_IoUs = load_single_IoU(file, num_classes)
 
+        print(len(val_IoUs))
+        print(val_IoUs[0].shape)
+
         # Get mean IoU
         class_IoUs, mIoUs = IoU_class_metrics(val_IoUs, smooth_n)
 
@@ -1137,11 +1140,13 @@ def compare_on_test_set(list_of_cfg,
         # *****************
 
         # Change some parameters
-        cfg.test.in_radius = 4.0
+        # cfg.test.in_radius = 4.0
         cfg.test.batch_limit = 1
         cfg.test.steps_per_epoch = 9999999
         cfg.test.max_votes = 3
-        cfg.test.chkp_idx = -1
+        cfg.test.chkp_idx = None
+
+
 
         # Augmentations
         cfg.augment_test.anisotropic = False
@@ -1152,7 +1157,8 @@ def compare_on_test_set(list_of_cfg,
         cfg.augment_test.color_drop = 0.0
         cfg.augment_test.chromatic_contrast = False
         cfg.augment_test.chromatic_all = False
-        cfg.augment_test.chromatic_norm = cfg.augment_train.chromatic_norm
+        # cfg.augment_test.chromatic_norm = cfg.augment_test.chromatic_norm
+        # cfg.augment_test.height_norm = cfg.augment_test.height_norm
 
         
         # Read test results if available
@@ -1202,6 +1208,8 @@ def compare_on_test_set(list_of_cfg,
                 log_confs.append(np.loadtxt(conf_path, dtype=np.int32))
 
         all_confs.append(np.stack(log_confs,  axis=0))
+
+        break
 
 
 

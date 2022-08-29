@@ -152,8 +152,12 @@ class SceneSegDataset(Dataset):
                              ChromaticJitter(),
                              HueSaturationTranslation()]
         if a_cfg.chromatic_norm:
-            augment_list += [ChromaticNormalize(),
-                             HeightNormalize()]
+            augment_list += [ChromaticNormalize()]
+            
+        if 'height_norm' in a_cfg and a_cfg.height_norm:
+            augment_list += [HeightNormalize()]
+
+                             
         augment_list.append(RandomDropColor(p=a_cfg.color_drop))
 
         # TRAIN AUGMENT

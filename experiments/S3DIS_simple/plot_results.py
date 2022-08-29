@@ -496,7 +496,7 @@ def exp_involution():
     return logs, logs_names
 
 
-def exp_kpconv_geom():
+def exp_old_params():
     """
     Adding geom nearly doubles the processing time, but improves the performances. Although we do not reach the same score as before
     """
@@ -521,16 +521,48 @@ def exp_kpconv_geom():
                   'kpconv-1.5(16)-bignet-rot',
                   'kpconv-1.5(16)-bignet-chroma',
                   'kpconv-1.5(16)-bignet-cylinder',
-                  'kpconv-1.5(16)-bignet-cube',  # TODO: when testing cube vs cylinder, reduce in radius (check calib to have similar amount of points)
-                  'best with full-augment',
-                  'best with full-augment',
-                  '...',
-                  'test a last kpconv+geom with our best kpconv params',
-                  '...',
-                  'test transformer with larger radius and new augment',
+                  'kpconv-1.5(16)-bignet-cube']
+
+    # safe check log names
+    if len(logs) > len(logs_names):
+        logs = logs[:len(logs_names)]
+    logs_names = np.array(logs_names[:len(logs)])
+
+    return logs, logs_names
+
+
+def exp_kpconv_geom():
+    """
+    Adding geom nearly doubles the processing time, but improves the performances. Although we do not reach the same score as before
+    """
+
+    # Using the dates of the logs, you can easily gather consecutive ones. All logs should be of the same dataset.
+    start = 'Log_2022-08-27_07-06-54'
+    end = 'Log_2022-08-29_23-43-08'
+
+    # Name of the result path
+    res_path = 'results'
+
+    # Gather logs and sort by date
+    logs = np.sort([join(res_path, l) for l in listdir_str(res_path) if start <= l <= end])
+
+    # # Optionally add a specific log at a specific place in the log list
+    # logs = logs.astype('<U50')
+    # logs = np.insert(logs, 0, 'results/Log_2022-08-23_08-43-18')
+
+    # Give names to the logs (for plot legends)
+    logs_names = ['kpconv-1.5(16)-bignet-cube',
+                  'kpconv-1.5(16)-bignet-cubesmaller',
+                  'small-no-height_norm',
+                  'small-kpconv-geom',
+                  'small-kpconv-mod-geom',
+                  '...'
+                  'small-transformer',
+                  'small-inv_v4',
+                  'small-inv_v3',
+                  'test drop before norm'
                   '...',
                   'do_KP_inv', ]
-
 
     # safe check log names
     if len(logs) > len(logs_names):
@@ -581,6 +613,7 @@ if __name__ == '__main__':
                     hide_params=['test.batch_limit',
                                  'train.batch_limit',
                                  'test.batch_size',
+                                 'augment_test.height_norm',
                                  'augment_test.chromatic_norm',
                                  'augment_test.chromatic_all',
                                  'augment_test.chromatic_contrast',
