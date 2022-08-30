@@ -4,7 +4,7 @@ import torch
 from utils.rotation import create_3D_rotations
 
 # Subsampling extension
-import cpp_wrappers.cpp_subsampling.grid_subsampling as cpp_subsampling
+import cpp_wrappers.cpp_subsampling.cpp_subsampling as cpp_subsampling
 import cpp_wrappers.cpp_neighbors.cpp_neighbors as cpp_neighbors
 
 
@@ -13,6 +13,20 @@ import cpp_wrappers.cpp_neighbors.cpp_neighbors as cpp_neighbors
 #           Utility functions
 #       \***********************/
 #
+
+
+def furthest_point_sample_cpp(points, new_n=None, stride=4, min_d=0.):
+    """
+    CPP wrapper for a furthest point subsampling
+    """
+
+    # Create new_lengths if not provided
+    if new_n is None:
+        new_n = points.shape[0] // stride
+
+    return cpp_subsampling.furthest_point_sample(points,
+                                                 new_n=new_n,
+                                                 min_d=min_d)
 
 
 def grid_subsampling(points, features=None, labels=None, sampleDl=0.1, verbose=0):
@@ -27,21 +41,21 @@ def grid_subsampling(points, features=None, labels=None, sampleDl=0.1, verbose=0
     """
 
     if (features is None) and (labels is None):
-        return cpp_subsampling.subsample(points,
+        return cpp_subsampling.grid_subsample(points,
                                          sampleDl=sampleDl,
                                          verbose=verbose)
     elif (labels is None):
-        return cpp_subsampling.subsample(points,
+        return cpp_subsampling.grid_subsample(points,
                                          features=features,
                                          sampleDl=sampleDl,
                                          verbose=verbose)
     elif (features is None):
-        return cpp_subsampling.subsample(points,
+        return cpp_subsampling.grid_subsample(points,
                                          classes=labels,
                                          sampleDl=sampleDl,
                                          verbose=verbose)
     else:
-        return cpp_subsampling.subsample(points,
+        return cpp_subsampling.grid_subsample(points,
                                          features=features,
                                          classes=labels,
                                          sampleDl=sampleDl,
@@ -97,7 +111,7 @@ def batch_grid_subsampling(points, batches_len, features=None, labels=None,
     #######################
 
     if (features is None) and (labels is None):
-        s_points, s_len = cpp_subsampling.subsample_batch(points,
+        s_points, s_len = cpp_subsampling.grid_subsample_batch(points,
                                                           batches_len,
                                                           sampleDl=sampleDl,
                                                           max_p=max_p,
@@ -110,7 +124,7 @@ def batch_grid_subsampling(points, batches_len, features=None, labels=None,
         return s_points, s_len
 
     elif (labels is None):
-        s_points, s_len, s_features = cpp_subsampling.subsample_batch(points,
+        s_points, s_len, s_features = cpp_subsampling.grid_subsample_batch(points,
                                                                       batches_len,
                                                                       features=features,
                                                                       sampleDl=sampleDl,
@@ -125,7 +139,7 @@ def batch_grid_subsampling(points, batches_len, features=None, labels=None,
         return s_points, s_len, s_features
 
     elif (features is None):
-        s_points, s_len, s_labels = cpp_subsampling.subsample_batch(points,
+        s_points, s_len, s_labels = cpp_subsampling.grid_subsample_batch(points,
                                                                     batches_len,
                                                                     classes=labels,
                                                                     sampleDl=sampleDl,
@@ -140,7 +154,7 @@ def batch_grid_subsampling(points, batches_len, features=None, labels=None,
         return s_points, s_len, s_labels
 
     else:
-        s_points, s_len, s_features, s_labels = cpp_subsampling.subsample_batch(points,
+        s_points, s_len, s_features, s_labels = cpp_subsampling.grid_subsample_batch(points,
                                                                               batches_len,
                                                                               features=features,
                                                                               classes=labels,

@@ -9,9 +9,10 @@ import numpy.distutils.misc_util
 
 SOURCES = ["../cpp_utils/cloud/cloud.cpp",
              "grid_subsampling/grid_subsampling.cpp",
+             "fps_subsampling/fps_subsampling.cpp",
              "wrapper.cpp"]
 
-module = Extension(name="grid_subsampling",
+module = Extension(name="cpp_subsampling",
                     sources=SOURCES,
                     extra_compile_args=['-std=c++11',
                                         '-D_GLIBCXX_USE_CXX11_ABI=0'])

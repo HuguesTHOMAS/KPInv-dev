@@ -86,9 +86,10 @@ def my_config():
     cfg.model.kp_aggregation = 'sum'
     cfg.model.conv_groups = 1
 
-    cfg.data.sub_size = 0.02          # -1.0 so that dataset point clouds are not initially subsampled
-    cfg.model.init_sub_size = 0.04    # Adapt this with train.in_radius. Try to keep a ratio of ~50
-    cfg.model.sub_mode = 'grid'
+    cfg.data.init_sub_size = 0.02          # -1.0 so that dataset point clouds are not initially subsampled
+    cfg.data.init_sub_mode = 'grid'        # Mode for initial subsampling of data
+    cfg.model.in_sub_size = 0.04           # Adapt this with train.in_radius. Try to keep a ratio of ~50
+    cfg.model.in_sub_mode = 'fps'          # Mode for input subsampling
 
     cfg.model.upsample_n = 3          # Number of neighbors used for nearest neighbor linear interpolation
 
@@ -115,7 +116,7 @@ def my_config():
     # Input threads
     cfg.train.num_workers = 16
 
-    # Input spheres radius. Adapt this with model.init_sub_size. Try to keep a ratio of ~50
+    # Input spheres radius. Adapt this with model.in_sub_size. Try to keep a ratio of ~50
     cfg.train.in_radius = 2.0
 
     # Batch related_parames

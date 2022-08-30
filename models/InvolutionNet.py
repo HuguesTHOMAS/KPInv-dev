@@ -26,8 +26,8 @@ class InvolutionFCNN(nn.Module):
         ############
 
         # Parameters
-        self.subsample_size = cfg.model.init_sub_size
-        self.sub_mode = cfg.model.sub_mode
+        self.subsample_size = cfg.model.in_sub_size
+        self.in_sub_mode = cfg.model.in_sub_mode
         self.kp_radius = cfg.model.kp_radius
         self.kp_sigma = cfg.model.kp_sigma
         self.neighbor_limits = cfg.model.neighbor_limits
@@ -227,7 +227,7 @@ class InvolutionFCNN(nn.Module):
                          self.first_radius,
                          self.neighbor_limits,
                          self.upsample_n,
-                         sub_mode=self.sub_mode)
+                         sub_mode=self.in_sub_mode)
 
         if verbose: 
             torch.cuda.synchronize(batch.device())                           
@@ -404,8 +404,8 @@ class KPResNet(nn.Module):
         ############
 
         # Parameters
-        self.subsample_size = cfg.model.init_sub_size
-        self.sub_mode = cfg.model.sub_mode
+        self.subsample_size = cfg.model.in_sub_size
+        self.in_sub_mode = cfg.model.in_sub_mode
         self.kp_radius = cfg.model.kp_radius
         self.kp_sigma = cfg.model.kp_sigma
         self.neighbor_limits = cfg.model.neighbor_limits

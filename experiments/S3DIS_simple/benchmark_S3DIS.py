@@ -122,9 +122,9 @@ def my_config():
     cfg.model.kp_influence = 'linear'
     cfg.model.kp_aggregation = 'sum'
 
-    cfg.data.sub_size = 0.02          # -1.0 so that dataset point clouds are not initially subsampled
-    cfg.model.init_sub_size = 0.04    # Adapt this with train.in_radius. Try to keep a ratio of ~50
-    cfg.model.sub_mode = 'grid'
+    cfg.data.init_sub_size = 0.02          # -1.0 so that dataset point clouds are not initially subsampled
+    cfg.model.in_sub_size = 0.04    # Adapt this with train.in_radius. Try to keep a ratio of ~50
+    cfg.model.in_sub_mode = 'grid'
 
     cfg.model.input_channels = 5    # This value has to be compatible with one of the dataset input features definition
 
@@ -142,7 +142,7 @@ def my_config():
     # Input threads
     cfg.train.num_workers = 16
 
-    # Input spheres radius. Adapt this with model.init_sub_size. Try to keep a ratio of ~50
+    # Input spheres radius. Adapt this with model.in_sub_size. Try to keep a ratio of ~50
     cfg.train.in_radius = 1.8
 
     # Batch related_parames

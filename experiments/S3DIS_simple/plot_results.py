@@ -556,9 +556,8 @@ def exp_kpconv_geom():
                   'small-no-height_norm',
                   'small-kpconv-geom',
                   'small-kpconv-mod-geom',
-                  'kpconv-1.5-big-bloc',
-                  'kpconv-1.5-big-spheres',
-                  'kpconv-1.5-big-spheres',
+                  'kpconv-2.5-big-bloc',
+                  'kpconv-2.5-big-spheres',
                   '...'
                   'small-transformer',
                   'small-inv_v4',
@@ -612,7 +611,7 @@ if __name__ == '__main__':
     # Print differences in a nice table
     print_cfg_diffs(logs_names,
                     all_cfgs,
-                    # show_params=['model.init_sub_size',
+                    # show_params=['model.in_sub_size',
                     #              'train.in_radius'],
                     hide_params=['test.batch_limit',
                                  'train.batch_limit',

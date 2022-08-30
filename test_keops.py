@@ -22,7 +22,8 @@ from utils.gpu_neigbors import radius_search_pack_mode, radius_search_list_mode
 from utils.cpp_funcs import batch_radius_neighbors, batch_knn_neighbors
 from utils.printing import bcolors
 
-from utils.cuda_funcs import furthest_point_sample_1, furthest_point_sample_2
+from utils.cuda_funcs import furthest_point_sample, furthest_point_sample_3
+from utils.cpp_funcs import furthest_point_sample_cpp
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -141,7 +142,7 @@ def test_grid_subsample():
     ##############
 
     # Get data
-    points, colors, labels = load_S3DIS(crop_ratio=0.13)
+    points, colors, labels = load_S3DIS(crop_ratio=0.33)
 
     print('\nConvert points to GPU')
     t1 = time.time()
@@ -161,6 +162,9 @@ def test_grid_subsample():
     ##################
     # Test subsampling
     ##################
+
+    if points.shape[0] < 1:
+        a = 1/0
 
     # Subsample cloud
     print('\nCpp Wrapper subsampling')
@@ -190,55 +194,65 @@ def test_grid_subsample():
     print('Done in {:.3f}s'.format(t2 - t1))
     print(points.shape, '=>', sub_points3.shape)
     
-    # Save as ply
-    print('results/test1.ply')
-    write_ply('results/test1.ply',
-              (sub_points1.astype(np.float32)),
-              ['x', 'y', 'z'])
+    # # Save as ply
+    # print('results/test1.ply')
+    # write_ply('results/test1.ply',
+    #           (sub_points1.astype(np.float32)),
+    #           ['x', 'y', 'z'])
 
-    print('results/test2.ply')
-    write_ply('results/test2.ply',
-              (sub_points2.numpy().astype(np.float32)),
-              ['x', 'y', 'z'])
+    # print('results/test2.ply')
+    # write_ply('results/test2.ply',
+    #           (sub_points2.numpy().astype(np.float32)),
+    #           ['x', 'y', 'z'])
 
-    print('results/test3.ply')
-    write_ply('results/test3.ply',
-              (sub_points3.detach().cpu().numpy().astype(np.float32)),
-              ['x', 'y', 'z'])
-
-    print('\nGPU FPS 1')
-    torch.cuda.synchronize()
-    t1 = time.time()
-    sub_inds, _ = furthest_point_sample_1(point_gpu, [int(point_gpu.shape[0])], stride=4)
-    sub_points4 = point_gpu[sub_inds, :]
-    torch.cuda.synchronize()
-    t2 = time.time()
-    print('Done in {:.3f}s'.format(t2 - t1))
-    print(points.shape, '=>', sub_points4.shape)
-
-    # Save as ply
-    print('results/test4.ply')
-    write_ply('results/test4.ply',
-              (sub_points4.detach().cpu().numpy().astype(np.float32)),
-              ['x', 'y', 'z'])
-
-    print('\nGPU FPS 2')
-    torch.cuda.synchronize()
-    t1 = time.time()
-    sub_inds2 = furthest_point_sample_2(point_gpu, stride=4)
-    sub_points5 = point_gpu[sub_inds2, :]
-    torch.cuda.synchronize()
-    t2 = time.time()
-    print('Done in {:.3f}s'.format(t2 - t1))
-    print(points.shape, '=>', sub_points5.shape)
-
-    # Save as ply
-    print('results/test5.ply')
-    write_ply('results/test5.ply',
-              (sub_points5.detach().cpu().numpy().astype(np.float32)),
-              ['x', 'y', 'z'])
+    # print('results/test3.ply')
+    # write_ply('results/test3.ply',
+    #           (sub_points3.detach().cpu().numpy().astype(np.float32)),
+    #           ['x', 'y', 'z'])
               
-    a = 1/0
+    # print('\nGPU FPS')
+    # torch.cuda.synchronize()
+    # t1 = time.time()
+    # sub_inds2 = furthest_point_sample(point_gpu, stride=4)
+    # sub_points4 = point_gpu[sub_inds2, :]
+    # torch.cuda.synchronize()
+    # t2 = time.time()
+    # print('Done in {:.3f}s'.format(t2 - t1))
+    # print(points.shape, '=>', sub_points4.shape)
+
+    # # Save as ply
+    # print('results/test4.ply')
+    # write_ply('results/test4.ply',
+    #           (sub_points4.detach().cpu().numpy().astype(np.float32)),
+    #           ['x', 'y', 'z'])
+
+    # print('\nCPU FPS')
+    # torch.cuda.synchronize()
+    # t1 = time.time()
+    # sub_inds2 = furthest_point_sample_cpp(points, stride=4, min_d=0.04)
+
+    # sub_points5 = points[sub_inds2, :]
+    # torch.cuda.synchronize()
+    # t2 = time.time()
+    # print('Done in {:.3f}s'.format(t2 - t1))
+    # print(points.shape, '=>', sub_points5.shape)
+
+    # # Get distance to nearest neighbors
+    # neighbors, dists = batch_knn_neighbors(sub_points5,
+    #                                        sub_points5,
+    #                                        [sub_points5.shape[0]],
+    #                                        [sub_points5.shape[0]],
+    #                                        0,
+    #                                        5,
+    #                                        return_dist=True)
+
+    # # Save as ply
+    # print('results/test5.ply')
+    # write_ply('results/test5.ply',
+    #           (sub_points5.astype(np.float32), dists.astype(np.float32)),
+    #           ['x', 'y', 'z', 'f1', 'f2', 'f3', 'f4', 'f5'])
+
+    # a = 1/0
 
     #############################
     # Test subsampling of spheres
@@ -254,13 +268,13 @@ def test_grid_subsample():
     # Get an input sphere
     print('\nSpheres')
 
-    in_R = 5.0
+    in_R = 1.8
     newDl = 0.08
 
     t1 = time.time()
     all_inputs_points = []
     all_gpu_pts = []
-    for i in range(0, sub_points1.shape[0] - 1, 1000):
+    for i in range(0, sub_points1.shape[0] - 1, 10000):
 
         center_point = sub_points1[i:i + 1, :]
         input_inds = search_tree.query_radius(center_point, r=in_R)[0]
@@ -283,24 +297,87 @@ def test_grid_subsample():
     print('{:.3f}ms per sphere'.format(1000 * (t2 - t1) / N))
 
     print('\nCPU Pytorch subsampling')
+    torch.cuda.synchronize()
     t1 = time.time()
     for i, pts in enumerate(all_inputs_points):
         cpu_pts = torch.from_numpy(pts)
         sub_pts1 = grid_subsample(cpu_pts, newDl)
-    t2 = time.time()
-    print('Done in {:.3f}s'.format(t2 - t1))
-    print('{:.3f}s per sphere'.format(1000 * (t2 - t1) / N))
-
-    print('\nGPU Pytorch subsampling')
-    t1 = time.time()
-    for i, gpu_pts in enumerate(all_gpu_pts):
-        sub_pts1 = grid_subsample(gpu_pts, newDl)
+    torch.cuda.synchronize()
     t2 = time.time()
     print('Done in {:.3f}s'.format(t2 - t1))
     print('{:.3f}ms per sphere'.format(1000 * (t2 - t1) / N))
 
+    print('\nGPU Pytorch subsampling')
+    torch.cuda.synchronize()
+    t1 = time.time()
+    all_N = []
+    for i, gpu_pts in enumerate(all_gpu_pts):
+        sub_pts1 = grid_subsample(gpu_pts, newDl)
+        all_N.append(int(sub_pts1.shape[0]))
+    torch.cuda.synchronize()
+    t2 = time.time()
+    print('Done in {:.3f}s'.format(t2 - t1))
+    print('{:.3f}ms per sphere'.format(1000 * (t2 - t1) / N))
+
+    print('\nGPU Pytorch subsampling FPS')
+    torch.cuda.synchronize()
+    t1 = time.time()
+    all_N2 = []
+    for i, gpu_pts in enumerate(all_gpu_pts):
+        sub_inds2 = furthest_point_sample(gpu_pts, stride=4)
+        sub_points2 = gpu_pts[sub_inds2, :]
+        all_N2.append(int(sub_points2.shape[0]))
+    torch.cuda.synchronize()
+    t2 = time.time()
+    print('Done in {:.3f}s'.format(t2 - t1))
+    print('{:.3f}ms per sphere'.format(1000 * (t2 - t1) / N))
+
+    print('\nCPU wrapper subsampling FPS')
+    torch.cuda.synchronize()
+    all_N3 = []
+    t1 = time.time()
+    for i, pts in enumerate(all_inputs_points):
+        sub_inds3 = furthest_point_sample_cpp(pts, stride=1, min_d=newDl*0.67)
+        sub_points3 = pts[sub_inds3, :]
+        all_N3.append(int(sub_points3.shape[0]))
+    torch.cuda.synchronize()
+    t2 = time.time()
+    print('Done in {:.3f}s'.format(t2 - t1))
+    print('{:.3f}ms per sphere'.format(1000 * (t2 - t1) / N))
+
+    # print('\nGPU Pytorch subsampling FPS Naive')
+    # torch.cuda.synchronize()
+    # t1 = time.time()
+    # all_N2 = []
+    # for i, gpu_pts in enumerate(all_gpu_pts):
+    #     sub_inds2 = furthest_point_sample_3(gpu_pts, stride=4)
+    #     sub_points2 = gpu_pts[sub_inds2, :]
+    #     all_N2.append(int(sub_points2.shape[0]))
+    # torch.cuda.synchronize()
+    # t2 = time.time()
+    # print('Done in {:.3f}s'.format(t2 - t1))
+    # print('{:.3f}ms per sphere'.format(1000 * (t2 - t1) / N))
+    
+    # print('\nCPU Pytorch subsampling FPS Naive')
+    # torch.cuda.synchronize()
+    # t1 = time.time()
+    # for i, pts in enumerate(all_inputs_points):
+    #     cpu_pts = torch.from_numpy(pts)
+    #     sub_inds2 = furthest_point_sample_3(cpu_pts, stride=4)
+    #     sub_points2 = cpu_pts[sub_inds2, :]
+    #     all_N2.append(int(sub_points2.shape[0]))
+    # torch.cuda.synchronize()
+    # t2 = time.time()
+    # print('Done in {:.3f}s'.format(t2 - t1))
+    # print('{:.3f}ms per sphere'.format(1000 * (t2 - t1) / N))
+
+
     print(input_inds.shape)
     print('------------ OK ------------')
+    
+    print('grid: ', np.mean([int(gpu_pts.shape[0]) for gpu_pts in all_gpu_pts]), np.mean(all_N))
+    print('fps: ', np.mean([int(gpu_pts.shape[0]) for gpu_pts in all_gpu_pts]), np.mean(all_N2))
+    print('fps(min_d): ', np.mean([int(gpu_pts.shape[0]) for gpu_pts in all_gpu_pts]), np.mean(all_N3))
 
     return
 

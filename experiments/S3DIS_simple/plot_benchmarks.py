@@ -162,7 +162,7 @@ if __name__ == '__main__':
     # Print differences in a nice table
     print_cfg_diffs(logs_names,
                     all_cfgs,
-                    # show_params=['model.init_sub_size',
+                    # show_params=['model.in_sub_size',
                     #              'train.in_radius'],
                     hide_params=['test.batch_limit',
                                  'train.batch_limit',

@@ -1,6 +1,7 @@
 #include <Python.h>
 #include <numpy/arrayobject.h>
 #include "grid_subsampling/grid_subsampling.h"
+#include "fps_subsampling/fps_subsampling.h"
 #include <string>
 
 
@@ -14,12 +15,15 @@ static char subsample_docstring[] = "function subsampling a pointcloud";
 
 static char subsample_batch_docstring[] = "function subsampling a batch of stacked pointclouds";
 
+static char fps_docstring[] = "function subsampling a pointcloud with FPS";
+
 
 // Declare the functions
 // *********************
 
 static PyObject *cloud_subsampling(PyObject* self, PyObject* args, PyObject* keywds);
 static PyObject *batch_subsampling(PyObject *self, PyObject *args, PyObject *keywds);
+static PyObject *furthest_point_sampling(PyObject* self, PyObject* args, PyObject* keywds);
 
 
 // Specify the members of the module
@@ -27,8 +31,9 @@ static PyObject *batch_subsampling(PyObject *self, PyObject *args, PyObject *key
 
 static PyMethodDef module_methods[] = 
 {
-	{ "subsample", (PyCFunction)cloud_subsampling, METH_VARARGS | METH_KEYWORDS, subsample_docstring },
-	{ "subsample_batch", (PyCFunction)batch_subsampling, METH_VARARGS | METH_KEYWORDS, subsample_batch_docstring },
+	{ "grid_subsample", (PyCFunction)cloud_subsampling, METH_VARARGS | METH_KEYWORDS, subsample_docstring },
+	{ "grid_subsample_batch", (PyCFunction)batch_subsampling, METH_VARARGS | METH_KEYWORDS, subsample_batch_docstring },
+	{ "furthest_point_sample", (PyCFunction)furthest_point_sampling, METH_VARARGS | METH_KEYWORDS, fps_docstring },
 	{NULL, NULL, 0, NULL}
 };
 
@@ -39,7 +44,7 @@ static PyMethodDef module_methods[] =
 static struct PyModuleDef moduledef = 
 {
     PyModuleDef_HEAD_INIT,
-    "grid_subsampling",     // m_name
+    "cpp_subsampling",     // m_name
     module_docstring,       // m_doc
     -1,                     // m_size
     module_methods,         // m_methods
@@ -49,7 +54,7 @@ static struct PyModuleDef moduledef =
     NULL,                   // m_free
 };
 
-PyMODINIT_FUNC PyInit_grid_subsampling(void)
+PyMODINIT_FUNC PyInit_cpp_subsampling(void)
 {
     import_array();
 	return PyModule_Create(&moduledef);
@@ -345,7 +350,7 @@ static PyObject* cloud_subsampling(PyObject* self, PyObject* args, PyObject* key
 	PyObject* points_obj = NULL;
 	PyObject* features_obj = NULL;
 	PyObject* classes_obj = NULL;
-
+	
 	// Keywords containers
 	static char* kwlist[] = { "points", "features", "classes", "sampleDl", "method", "verbose", NULL };
 	float sampleDl = 0.1;
@@ -564,3 +569,104 @@ static PyObject* cloud_subsampling(PyObject* self, PyObject* args, PyObject* key
 
 	return ret;
 }
+
+
+// Definition of the FPS subsample method
+// **************************************
+
+static PyObject* furthest_point_sampling(PyObject* self, PyObject* args, PyObject* keywds)
+{
+
+	// Manage inputs
+	// *************
+
+	// Args containers
+	PyObject* points_obj = NULL;
+
+	// Keywords containers
+	static char* kwlist[] = {"points", "new_n", "min_d", "verbose", NULL };
+	float min_d = 0.0;
+	int new_n = -1;
+	int verbose = 0;
+
+	// Parse the input  
+	if (!PyArg_ParseTupleAndKeywords(args, keywds, "O|$ifi", kwlist, &points_obj, &new_n, &min_d, &verbose))
+	{
+		PyErr_SetString(PyExc_RuntimeError, "Error parsing arguments");
+		return NULL;
+	}
+
+
+	// Interpret the input objects as numpy arrays.
+	PyObject* points_array = PyArray_FROM_OTF(points_obj, NPY_FLOAT, NPY_IN_ARRAY);
+
+	// Verify data was load correctly.
+	if (points_array == NULL)
+	{
+		Py_XDECREF(points_array);
+		PyErr_SetString(PyExc_RuntimeError, "Error converting input points to numpy arrays of type float32");
+		return NULL;
+	}
+
+	// Check that the input array respect the dims
+	if ((int)PyArray_NDIM(points_array) != 2 || (int)PyArray_DIM(points_array, 1) != 3)
+	{
+		Py_XDECREF(points_array);
+		PyErr_SetString(PyExc_RuntimeError, "Wrong dimensions : points.shape is not (N, 3)");
+		return NULL;
+	}
+
+	// Number of points
+	int N = (int)PyArray_DIM(points_array, 0);
+
+
+	// Call the C++ function
+	// *********************
+
+	// Convert PyArray to Cloud C++ class
+	vector<PointXYZ> original_points;
+	original_points = vector<PointXYZ>((PointXYZ*)PyArray_DATA(points_array), (PointXYZ*)PyArray_DATA(points_array) + N);
+
+	// Subsample
+	vector<int> subsampled_inds;
+	fps_subsampling(original_points,
+					subsampled_inds,
+					new_n,
+					min_d,
+					verbose);
+
+	// Check result
+	if (subsampled_inds.size() < 1)
+	{
+		PyErr_SetString(PyExc_RuntimeError, "Error");
+		return NULL;
+	}
+
+	// Manage outputs
+	// **************
+
+	// Dimension of input containers
+	npy_intp* sub_dims = new npy_intp[1];
+	sub_dims[0] = subsampled_inds.size();
+
+	// Create output array
+	PyObject* res_points_obj = PyArray_SimpleNew(1, sub_dims, NPY_INT);
+	PyObject* ret = NULL;
+
+	// Fill output array with values
+	size_t size_in_bytes = subsampled_inds.size() * sizeof(int);
+	memcpy(PyArray_DATA(res_points_obj), subsampled_inds.data(), size_in_bytes);
+
+	// Merge results
+	ret = Py_BuildValue("N", res_points_obj);
+
+	// Clean up
+	// ********
+
+	Py_DECREF(points_array);
+
+	return ret;
+}
+
+
+

@@ -63,7 +63,8 @@ def init_cfg():
 
     cfg.data.ignored_labels = []        #  List, value of ignored label values
 
-    cfg.data.sub_size = -1.0            # Float, data subampling size, negative value means we use original data
+    cfg.data.init_sub_size = -1.0       # Float, data subampling size, negative value means we use original data
+    cfg.data.init_sub_mode = 'grid'     # Mode for initial subsampling of data
 
     cfg.data.use_cubes = False          #  Bool, do we use cube sampling instead of sphere samplings
     cfg.data.cylindric_input = False         #  Bool, do we use infinite height for cube sampling
@@ -93,8 +94,8 @@ def init_cfg():
     cfg.model.kp_deform_grad = 0.1      # Float, multiplier for deformation gradient
     cfg.model.kp_repulse_dist = 1.0     # Float, distance of repulsion for deformed kernel points
     
-    cfg.model.init_sub_size = 0.04      # Float, initial subampling size, (voxel size, lattice size of fps minimum distance)
-    cfg.model.sub_mode = 'grid'         #   Str, subsampling mode ('grid', 'ph', 'fps')
+    cfg.model.in_sub_size = 0.04        # Float, initial subampling size, (voxel size, lattice size of fps minimum distance)
+    cfg.model.in_sub_mode = 'grid'      #   Str, subsampling mode ('grid', 'ph', 'fps')
     
     cfg.model.upsample_n = 1            #   Int, Number of neighbors used for nearest neighbor linear interpolation
 

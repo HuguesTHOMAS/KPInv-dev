@@ -180,11 +180,12 @@ class SceneSegDataset(Dataset):
     def load_scenes_in_memory(self, label_property='label', f_properties=[], f_scales=[]):
 
         # Parameter
-        dl = self.cfg.data.sub_size
+        dl = self.cfg.data.init_sub_size
+        mode = self.cfg.data.init_sub_mode
 
         # Create path for files
         if dl > 0:
-            tree_path = join(self.path, 'input_{:s}_{:.3f}'.format(self.cfg.model.sub_mode, dl))
+            tree_path = join(self.path, 'input_{:s}_{:.3f}'.format(mode, dl))
         else:
             tree_path = join(self.path, 'input_no_sub')
 
@@ -252,7 +253,7 @@ class SceneSegDataset(Dataset):
                                                dl,
                                                features=features,
                                                labels=labels,
-                                               method=self.cfg.model.sub_mode)
+                                               method=mode)
                                                
                     if labels is None:
                         sub_points, sub_features = sub_data
@@ -612,10 +613,10 @@ class SceneSegDataset(Dataset):
 
             # Input subsampling (on CPU to be parrallelizable)
             in_points, in_features, in_labels, inv_inds = subsample_cloud(torch_points,
-                                                                          self.cfg.model.init_sub_size,
+                                                                          self.cfg.model.in_sub_size,
                                                                           features=torch_features,
                                                                           labels=torch_labels,
-                                                                          method=self.cfg.model.sub_mode,
+                                                                          method=self.cfg.model.in_sub_mode,
                                                                           return_inverse=True)
 
             # pl = pv.Plotter(window_size=[1600, 900])
@@ -692,11 +693,11 @@ class SceneSegDataset(Dataset):
             input_dict = build_full_pyramid(stacked_points,
                                             stack_lengths,
                                             len(self.cfg.model.layer_blocks),
-                                            self.cfg.model.init_sub_size,
-                                            self.cfg.model.init_sub_size * self.cfg.model.kp_radius,
+                                            self.cfg.model.in_sub_size,
+                                            self.cfg.model.in_sub_size * self.cfg.model.kp_radius,
                                             self.cfg.model.neighbor_limits,
                                             self.cfg.model.upsample_n,
-                                            sub_mode=self.cfg.model.sub_mode)
+                                            sub_mode=self.cfg.model.in_sub_mode)
 
         else:
 
@@ -738,8 +739,8 @@ class SceneSegDataset(Dataset):
                     gpu_points = torch.from_numpy(in_points).to(device)
                     sub_points, _ = subsample_pack_batch(gpu_points,
                                                         [gpu_points.shape[0]],
-                                                        self.cfg.model.init_sub_size,
-                                                        method=self.cfg.model.sub_mode)
+                                                        self.cfg.model.in_sub_size,
+                                                        method=self.cfg.model.in_sub_mode)
                     batch_n_pts += sub_points.shape[0]
                     batch_n += 1
 
@@ -816,8 +817,8 @@ class SceneSegDataset(Dataset):
                 gpu_points = torch.from_numpy(in_points).to(device)
                 sub_points, _ = subsample_pack_batch(gpu_points,
                                                     [gpu_points.shape[0]],
-                                                    self.cfg.model.init_sub_size,
-                                                    method=self.cfg.model.sub_mode)
+                                                    self.cfg.model.in_sub_size,
+                                                    method=self.cfg.model.in_sub_mode)
                 all_cloud_n.append(sub_points.shape[0])
                 
             pi += 1
@@ -940,13 +941,13 @@ class SceneSegDataset(Dataset):
                 gpu_points = torch.from_numpy(in_points).to(device)
                 sub_points, _ = subsample_pack_batch(gpu_points,
                                                     [gpu_points.shape[0]],
-                                                    cfg.model.init_sub_size,
-                                                    method=cfg.model.sub_mode)
+                                                    cfg.model.in_sub_size,
+                                                    method=cfg.model.in_sub_mode)
                 neighb_counts = pyramid_neighbor_stats(sub_points,
                                                     num_layers,
-                                                    cfg.model.init_sub_size,
-                                                    cfg.model.init_sub_size * cfg.model.kp_radius,
-                                                    sub_mode=cfg.model.sub_mode)
+                                                    cfg.model.in_sub_size,
+                                                    cfg.model.in_sub_size * cfg.model.kp_radius,
+                                                    sub_mode=cfg.model.in_sub_mode)
 
                 # Update number of trucated_neighbors
                 for j, neighb_c in enumerate(neighb_counts):
