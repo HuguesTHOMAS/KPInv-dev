@@ -5,6 +5,8 @@ import itertools
 
 from utils.gpu_init import init_gpu, tensor_MB
 
+from utils.cuda_funcs import furthest_point_sample
+from utils.cpp_funcs import furthest_point_sample_cpp
 
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -590,6 +592,23 @@ def subsample_cloud(points, sub_size, features=None, labels=None, method='grid',
     return sampled_points, sampled_lengths
 
 
+def fp_subsample(points, sub_size):
+
+    if 'cuda' in points.device.type:
+        subsampling_func = furthest_point_sample
+    else:
+        subsampling_func = furthest_point_sample_cpp
+
+        
+    sub_inds3 = subsampling_func(points, stride=1, min_d=sub_size)
+
+
+
+
+    return sub_points
+    
+
+
 def subsample_pack_batch(points, lengths, sub_size, method='grid'):
     """
     Subsample torch batch of point clouds with different method,
@@ -611,8 +630,11 @@ def subsample_pack_batch(points, lengths, sub_size, method='grid'):
         subsampling_func = permutohedral_subsample
     elif method == 'hex':
         subsampling_func = hexagonal_subsample
+    elif method == 'fps':
+        subsampling_func = fp_subsample
     else:
         raise ValueError('Wrong Subsampling method: {:s}'.format(method))
+
 
     # Convert length to tensor
     length_as_list = type(lengths) == list

@@ -88,7 +88,7 @@ def my_config():
 
     cfg.data.init_sub_size = 0.02          # -1.0 so that dataset point clouds are not initially subsampled
     cfg.data.init_sub_mode = 'grid'        # Mode for initial subsampling of data
-    cfg.model.in_sub_size = 0.04           # Adapt this with train.in_radius. Try to keep a ratio of ~50
+    cfg.model.in_sub_size = 0.04 * 0.67    # Adapt this with train.in_radius. Try to keep a ratio of ~50 (*0.67 if fps)
     cfg.model.in_sub_mode = 'fps'          # Mode for input subsampling
 
     cfg.model.upsample_n = 3          # Number of neighbors used for nearest neighbor linear interpolation
