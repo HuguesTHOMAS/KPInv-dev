@@ -34,7 +34,7 @@ def furthest_point_sample(points, new_n=None, stride=4, min_d=0):
 
     idx = torch.cuda.IntTensor(B, new_n)
     temp = torch.cuda.FloatTensor(B, N).fill_(1e10)
-    pointnet2_cuda.furthest_point_sampling_wrapper(B, N, new_n, points, temp, idx)
+    pointnet2_cuda.furthest_point_sampling_wrapper(B, N, new_n, min_d, points, temp, idx)
     del temp
 
     return idx.view(-1).long()

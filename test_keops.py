@@ -324,7 +324,7 @@ def test_grid_subsample():
     t1 = time.time()
     all_N2 = []
     for i, gpu_pts in enumerate(all_gpu_pts):
-        sub_inds2 = furthest_point_sample(gpu_pts, stride=4)
+        sub_inds2 = furthest_point_sample(gpu_pts, stride=2, min_d=newDl*0.67)
         sub_points2 = gpu_pts[sub_inds2, :]
         all_N2.append(int(sub_points2.shape[0]))
     torch.cuda.synchronize()

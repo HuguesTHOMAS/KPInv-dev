@@ -43,6 +43,7 @@ __global__ void furthest_point_sampling_kernel(int b, int n, int m, float min_d2
     const int stride = block_size;
 
     int old = 0;
+    int old_d = min_d2 + 1.0;
     if (threadIdx.x == 0)
         idxs[0] = old;
 
@@ -156,13 +157,15 @@ __global__ void furthest_point_sampling_kernel(int b, int n, int m, float min_d2
             __syncthreads();
         }
 
-        // // Optional break in case distance is reach
-        // if (dists[0] < min_d2)
-        //     break;
-
         old = dists_i[0];
+        old_d = dists[0];
         if (tid == 0)
+        {
+            // Optional break in case distance is reach
+            if (old_d < min_d2)
+                break;
             idxs[j] = old;
+        }
     }
 }
 

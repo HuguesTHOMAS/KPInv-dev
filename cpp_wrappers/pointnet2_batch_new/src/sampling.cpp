@@ -18,10 +18,12 @@ int furthest_point_sampling_wrapper(int b, int n, int m, float min_d,
     float *temp = temp_tensor.data<float>();
     int *idx = idx_tensor.data<int>();
 
-    // Fill idx with -1
-    for (int j = 0; j < m; j++)
-        idx[j] = -1;
+    float min_d2 = min_d * min_d;
 
-    furthest_point_sampling_kernel_launcher(b, n, m, min_d * min_d, points, temp, idx);
+    // // Fill idx with -1
+    // for (int j = 0; j < m; j++)
+    //     idx[j] = -1;
+
+    furthest_point_sampling_kernel_launcher(b, n, m, min_d2, points, temp, idx);
     return 1;
 }
