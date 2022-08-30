@@ -65,11 +65,11 @@ def furthest_point_sample_2(points, new_n=None, stride=4):
     
     # Verify contiguous
     assert points.is_contiguous()
-    # points = points.view(B, N, -1)
 
     # Get dimensions
     N = points.shape[0]
     B = 1
+    points = points.view(B, N, -1)
 
     # Create new_lengths if not provided
     if new_n is None:
@@ -86,6 +86,6 @@ def furthest_point_sample_2(points, new_n=None, stride=4):
     pointnet2_cuda.furthest_point_sampling_wrapper(B, N, new_n, points, temp, idx)
     del temp
 
-    return idx.long()
+    return idx.view(-1).long()
 
 

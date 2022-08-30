@@ -141,7 +141,7 @@ def test_grid_subsample():
     ##############
 
     # Get data
-    points, colors, labels = load_S3DIS(crop_ratio=0.33)
+    points, colors, labels = load_S3DIS(crop_ratio=0.13)
 
     print('\nConvert points to GPU')
     t1 = time.time()
@@ -237,7 +237,7 @@ def test_grid_subsample():
     write_ply('results/test5.ply',
               (sub_points5.detach().cpu().numpy().astype(np.float32)),
               ['x', 'y', 'z'])
-
+              
     a = 1/0
 
     #############################
