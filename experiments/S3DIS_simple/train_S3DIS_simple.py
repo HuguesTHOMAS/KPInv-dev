@@ -76,7 +76,7 @@ def my_config():
     # cfg.model.layer_blocks = (4,  6,  8,  8,  6)
     # cfg.model.layer_blocks = (4,  6,  8, 12,  6)  # Strong architecture
 
-    cfg.model.layer_blocks = (3,  5,  7,  9,  9,  6)  # For large block inputs
+    cfg.model.layer_blocks = (3,  5,  7,  9,  9,  3)  # For large block inputs
 
     cfg.model.kp_mode = 'kpconv'       # Choose ['kpconv', 'kpdef', 'kpinv']. And ['kpconv-mod', 'kpdef-mod', 'kpconv-geom'] for modulations
                                             # Choose ['inv_v1', 'inv_v2', 'inv_v3', 'inv_v4', 'transformer']
@@ -109,8 +109,8 @@ def my_config():
     # -------------------
     
     # Are we using spheres/cubes/cylinders/cubic_cylinders as input
-    cfg.data.use_cubes = True
-    cfg.data.cylindric_input = True
+    cfg.data.use_cubes = False
+    cfg.data.cylindric_input = False
 
     # Input threads
     cfg.train.num_workers = 16
@@ -178,7 +178,7 @@ def my_config():
     # Test parameters
     # ---------------
 
-    cfg.test.steps_per_epoch = 20    # Size of one validation epoch (should be small)
+    cfg.test.max_steps_per_epoch = 50    # Size of one validation epoch (should be small)
     cfg.test.batch_limit = 1
     cfg.test.batch_size = 1
 

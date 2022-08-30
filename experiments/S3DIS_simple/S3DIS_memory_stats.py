@@ -111,7 +111,7 @@ def my_config():
     # ---------------
 
     cfg.test.max_votes = 10
-    cfg.test.steps_per_epoch = 50    # Size of one validation epoch (should be small)
+    cfg.test.max_steps_per_epoch = 50    # Size of one validation epoch (should be small)
 
     cfg.test.in_radius = cfg.train.in_radius
     cfg.test.num_workers = cfg.train.num_workers

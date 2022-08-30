@@ -1032,7 +1032,13 @@ class SceneSegSampler(Sampler):
         if dataset.set == 'training':
             self.N = dataset.cfg.train.steps_per_epoch * dataset.cfg.train.accum_batch
         else:
-            self.N = dataset.cfg.test.steps_per_epoch
+            self.N = dataset.cfg.test.max_steps_per_epoch
+
+        # Only perform validation for a portion of the validation test at each epoch
+        if dataset.set =='validation' and dataset.regular_sampling:
+            reg_sampling_N = int(dataset.reg_sample_pts.shape[0])
+            self.N = min(self.N, int(np.ceil(reg_sampling_N * 0.6)))
+
         return
 
     def __iter__(self):

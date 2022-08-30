@@ -187,7 +187,7 @@ if __name__ == '__main__':
     # Change some parameters
     new_cfg.test.in_radius = 4.0
     new_cfg.test.batch_limit = 1
-    new_cfg.test.steps_per_epoch = 9999999
+    new_cfg.test.max_steps_per_epoch = 9999999
     new_cfg.test.max_votes = 15
     new_cfg.test.chkp_idx = -1
 

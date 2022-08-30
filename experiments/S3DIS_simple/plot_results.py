@@ -538,7 +538,7 @@ def exp_kpconv_geom():
 
     # Using the dates of the logs, you can easily gather consecutive ones. All logs should be of the same dataset.
     start = 'Log_2022-08-27_07-06-54'
-    end = 'Log_2022-08-29_23-43-08'
+    end = 'Log_2022-09-29_23-43-08'
 
     # Name of the result path
     res_path = 'results'
@@ -551,11 +551,14 @@ def exp_kpconv_geom():
     # logs = np.insert(logs, 0, 'results/Log_2022-08-23_08-43-18')
 
     # Give names to the logs (for plot legends)
-    logs_names = ['kpconv-1.5(16)-bignet-cube',
-                  'kpconv-1.5(16)-bignet-cubesmaller',
+    logs_names = ['kpconv-1.5(16)-bignet-bloc',
+                  'kpconv-1.5(16)-bignet-blocsmaller',
                   'small-no-height_norm',
                   'small-kpconv-geom',
                   'small-kpconv-mod-geom',
+                  'kpconv-1.5-big-bloc',
+                  'kpconv-1.5-big-spheres',
+                  'kpconv-1.5-big-spheres',
                   '...'
                   'small-transformer',
                   'small-inv_v4',
@@ -563,6 +566,7 @@ def exp_kpconv_geom():
                   'test drop before norm'
                   '...',
                   'do_KP_inv', ]
+
 
     # safe check log names
     if len(logs) > len(logs_names):
@@ -586,7 +590,7 @@ if __name__ == '__main__':
     ######################################################
 
     # My logs: choose the logs to show
-    logs, logs_names = exp_transformer()
+    logs, logs_names = exp_kpconv_geom()
 
     frame_lines_1(["Plot S3DIS experiments"])
 

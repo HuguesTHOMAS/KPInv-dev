@@ -208,7 +208,7 @@ def my_config():
 
     cfg.test.val_momentum = 0.5  # momentum for averaging predictions during validation. 0 for no averaging at all
 
-    cfg.test.steps_per_epoch = 50    # Size of one validation epoch (should be small)
+    cfg.test.max_steps_per_epoch = 50    # Size of one validation epoch (should be small)
     
     cfg.test.max_votes = 10
 

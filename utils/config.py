@@ -160,7 +160,7 @@ def init_cfg():
     cfg.test.num_workers = 16           #   Int, number of parallel workers for input dataset.
 
     cfg.test.max_votes = 10             #   Int, number of training epochs
-    cfg.test.steps_per_epoch = 100      #   Int, number of steps per epoch
+    cfg.test.max_steps_per_epoch = 50   #   Int, number of steps per epoch
 
     cfg.test.in_radius = 1.0            # Float, radius of the input sphere
     cfg.test.batch_size = 8             #   Int, number of input point cloud per batch
