@@ -115,7 +115,7 @@ def my_config():
     cfg.data.cylindric_input = False
 
     # Input threads
-    cfg.train.num_workers = 0
+    cfg.train.num_workers = 16
 
     # Input spheres radius. Adapt this with model.in_sub_size. Try to keep a ratio of ~50
     cfg.train.in_radius = 1.8

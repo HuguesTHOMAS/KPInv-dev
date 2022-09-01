@@ -724,13 +724,6 @@ class SceneSegDataset(Dataset):
             input_dict = build_base_pyramid(stacked_points,
                                             stack_lengths)
 
-
-        s = '-------------------------\n'
-        for pts in input_dict.points:
-            s += ' ' * 70 + str(pts.shape) + '\n'
-        s += '-*-'
-        print(s)
-
         # Add other input to the pyramid dictionary
         input_dict.features = stacked_features
         input_dict.labels = stacked_labels

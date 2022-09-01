@@ -94,11 +94,11 @@ def fill_pyramid(pyramid: EasyDict,
             sub_points, sub_lengths = subsample_pack_batch(points0, lengths0, sub_size, method=sub_mode)
             pyramid.points.append(sub_points)
             pyramid.lengths.append(sub_lengths)
+            if sub_mode == 'fps':
+                points0 = sub_points
+                lengths0 = sub_lengths
         if sub_size > 0:
             sub_size *= 2.0
-        if sub_mode == 'fps':
-            points0 = sub_points
-            lengths0 = sub_lengths
 
 
     # Find all neighbors

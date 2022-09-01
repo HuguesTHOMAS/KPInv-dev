@@ -530,8 +530,6 @@ def fp_subsample(points, sub_size,
     # Get subsample indices
     sub_inds = subsampling_func(points, stride=stride, min_d=min_d)
 
-    print(points.shape[0], sub_inds.shape[0])
-
     # Get subsampled data
     sub_points = points[sub_inds, :]
     if features is not None:
