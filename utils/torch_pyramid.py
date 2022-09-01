@@ -87,13 +87,19 @@ def fill_pyramid(pyramid: EasyDict,
         neighb_func = batch_knn_neighbors
 
     # Subsample all point clouds on GPU
+    points0 = pyramid.points[0]
+    lengths0 = pyramid.lengths[0]
     for i in range(num_layers):
         if i > 0:
-            sub_points, sub_lengths = subsample_pack_batch(pyramid.points[0], pyramid.lengths[0], sub_size, method=sub_mode)
+            sub_points, sub_lengths = subsample_pack_batch(points0, lengths0, sub_size, method=sub_mode)
             pyramid.points.append(sub_points)
             pyramid.lengths.append(sub_lengths)
         if sub_size > 0:
             sub_size *= 2.0
+        if sub_mode == 'fps':
+            points0 = sub_points
+            lengths0 = sub_lengths
+
 
     # Find all neighbors
     for i in range(num_layers):
