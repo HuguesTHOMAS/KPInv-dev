@@ -92,7 +92,8 @@ def fill_pyramid(pyramid: EasyDict,
             sub_points, sub_lengths = subsample_pack_batch(pyramid.points[0], pyramid.lengths[0], sub_size, method=sub_mode)
             pyramid.points.append(sub_points)
             pyramid.lengths.append(sub_lengths)
-        sub_size *= 2.0
+        if sub_size > 0:
+            sub_size *= 2.0
 
     # Find all neighbors
     for i in range(num_layers):
@@ -187,6 +188,7 @@ def pyramid_neighbor_stats(points: Tensor,
             points, lengths = subsample_pack_batch(points, lengths, sub_size, method=sub_mode)
         counts = keops_radius_count(points, points, search_radius)
         counts_list.append(counts)
-        sub_size *= 2
+        if sub_size > 0:
+            sub_size *= 2
         search_radius *= 2
     return counts_list

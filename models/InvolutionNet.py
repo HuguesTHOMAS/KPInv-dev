@@ -27,12 +27,18 @@ class InvolutionFCNN(nn.Module):
 
         # Parameters
         self.subsample_size = cfg.model.in_sub_size
+        if self.subsample_size < 0:
+            self.subsample_size = cfg.data.init_sub_size
         self.in_sub_mode = cfg.model.in_sub_mode
         self.kp_radius = cfg.model.kp_radius
         self.kp_sigma = cfg.model.kp_sigma
         self.neighbor_limits = cfg.model.neighbor_limits
-        self.first_radius = self.subsample_size * self.kp_radius
-        self.first_sigma = self.subsample_size * self.kp_sigma
+        if cfg.model.in_sub_size > cfg.data.init_sub_size * 1.01:
+            radius0 = cfg.model.in_sub_size * cfg.model.kp_radius
+        else:
+            radius0 = cfg.data.init_sub_size * cfg.model.kp_radius
+        self.first_radius = radius0 * self.kp_radius
+        self.first_sigma = radius0 * self.kp_sigma
         self.layer_blocks = cfg.model.layer_blocks
         self.num_layers = len(self.layer_blocks)
         self.upsample_n = cfg.model.upsample_n
@@ -397,22 +403,12 @@ class KPResNet(nn.Module):
         Args:
             cfg (EasyDict): configuration dictionary
         """
-        super(KPFCNN, self).__init__()
+        super(KPResNet, self).__init__()
 
         ############
         # Parameters
         ############
 
-        # Parameters
-        self.subsample_size = cfg.model.in_sub_size
-        self.in_sub_mode = cfg.model.in_sub_mode
-        self.kp_radius = cfg.model.kp_radius
-        self.kp_sigma = cfg.model.kp_sigma
-        self.neighbor_limits = cfg.model.neighbor_limits
-        self.first_radius = self.subsample_size * self.kp_radius
-        self.first_sigma = self.subsample_size * self.kp_sigma
-        self.layer_blocks = cfg.model.layer_blocks
-        self.num_layers = len(self.layer_blocks)
 
         return
 

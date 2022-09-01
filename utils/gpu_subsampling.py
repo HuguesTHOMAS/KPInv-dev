@@ -513,20 +513,31 @@ def fp_subsample(points, sub_size,
                  labels=None,
                  return_inverse=False):
 
+    # Choose which function we use
     if 'cuda' in points.device.type:
         subsampling_func = furthest_point_sample
     else:
         subsampling_func = furthest_point_sample_cpp
 
-    sub_inds = subsampling_func(points, stride=1, min_d=sub_size)
+    # Choose if we use min distance or stride for fps
+    if sub_size < 0:
+        stride = -sub_size
+        min_d = 0
+    else:
+        stride = 1
+        min_d = sub_size
+
+    # Get subsample indices
+    sub_inds = subsampling_func(points, stride=stride, min_d=min_d)
+
+    # Get subsampled data
     sub_points = points[sub_inds, :]
-
-
     if features is not None:
         sub_features = features[sub_inds, :]
     if labels is not None:
         sub_labels = labels[sub_inds]
 
+    # FPS does not provide inverse indices
     inv_indices0 = None
 
     return_list = [sub_points]
@@ -603,6 +614,9 @@ def subsample_pack_batch(points, lengths, sub_size, method='grid'):
         subsampling_func = fp_subsample
     else:
         raise ValueError('Wrong Subsampling method: {:s}'.format(method))
+    
+    if method != 'fps' and sub_size < 0:
+        raise ValueError('Negative subsampling size (stride) is only supported with fps subsampling.')
 
     # Convert length to tensor
     length_as_list = type(lengths) == list

@@ -87,10 +87,10 @@ def my_config():
     cfg.model.kp_aggregation = 'sum'
     cfg.model.conv_groups = 1
 
-    cfg.data.init_sub_size = 0.02          # -1.0 so that dataset point clouds are not initially subsampled
+    cfg.data.init_sub_size = 0.04          # -1.0 so that dataset point clouds are not initially subsampled
     cfg.data.init_sub_mode = 'grid'        # Mode for initial subsampling of data
-    cfg.model.in_sub_size = 0.04           # Adapt this with train.in_radius. Try to keep a ratio of ~50 (*0.67 if fps)
-    cfg.model.in_sub_mode = 'grid'         # Mode for input subsampling
+    cfg.model.in_sub_size = -4             # Adapt this with train.in_radius. Try to keep a ratio of ~50 (*0.67 if fps). If negative, and fps, it is stride
+    cfg.model.in_sub_mode = 'fps'          # Mode for input subsampling
 
     cfg.model.upsample_n = 3          # Number of neighbors used for nearest neighbor linear interpolation
 
@@ -112,13 +112,13 @@ def my_config():
     
     # Are we using spheres/cubes/cylinders/cubic_cylinders as input
     cfg.data.use_cubes = False
-    cfg.data.cylindric_input = True
+    cfg.data.cylindric_input = False
 
     # Input threads
     cfg.train.num_workers = 16
 
     # Input spheres radius. Adapt this with model.in_sub_size. Try to keep a ratio of ~50
-    cfg.train.in_radius = 1.5
+    cfg.train.in_radius = 1.8
 
     # Batch related_parames
     cfg.train.batch_size = 2                # Target batch size. If you don't want calibration, you can directly set train.batch_limit
@@ -166,15 +166,13 @@ def my_config():
     cfg.augment_train.anisotropic = False
     cfg.augment_train.scale = [0.9, 1.1]
     cfg.augment_train.flips = [0.5, 0, 0]
-    cfg.augment_train.rotations = 'vertical'
+    cfg.augment_train.rotations = 'all'
     cfg.augment_train.jitter = 0.005
     cfg.augment_train.color_drop = 0.3
     cfg.augment_train.chromatic_contrast = True
     cfg.augment_train.chromatic_all = False
     cfg.augment_train.chromatic_norm = True
     cfg.augment_train.height_norm = False
-
-    
 
     
     # Test parameters

@@ -5,6 +5,7 @@ import cpp_wrappers.pointnet2_batch.pointnet2_batch_cuda as pointnet2_cuda
 
 import os
 import torch
+import numpy as np
 
 
 @torch.no_grad()
@@ -29,7 +30,7 @@ def furthest_point_sample(points, new_n=None, stride=4, min_d=0):
 
     # Create new_lengths if not provided
     if new_n is None:
-        new_n = N // stride
+        new_n = int(np.floor(N / stride))
 
     idx = torch.cuda.IntTensor(B, new_n, device=points.device).fill_(-1)
     temp = torch.cuda.FloatTensor(B, N, device=points.device).fill_(1e10)

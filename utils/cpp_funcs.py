@@ -22,7 +22,7 @@ def furthest_point_sample_cpp(points, new_n=None, stride=4, min_d=0.):
 
     # Create new_lengths if not provided
     if new_n is None:
-        new_n = points.shape[0] // stride
+        new_n = int(np.floor(points.shape[0] / stride))
 
     return cpp_subsampling.furthest_point_sample(points,
                                                  new_n=new_n,

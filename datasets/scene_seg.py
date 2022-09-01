@@ -613,22 +613,30 @@ class SceneSegDataset(Dataset):
             torch_labels = torch.from_numpy(in_labels).type(torch.long)
 
 
-            # Input subsampling (on CPU to be parrallelizable)
-            in_points, in_features, in_labels, inv_inds = subsample_cloud(torch_points,
-                                                                          self.cfg.model.in_sub_size,
-                                                                          features=torch_features,
-                                                                          labels=torch_labels,
-                                                                          method=self.cfg.model.in_sub_mode,
-                                                                          return_inverse=True)
+            # Input subsampling only if in_sub_size > init_sub_size
+            if self.cfg.model.in_sub_size > self.cfg.data.init_sub_size * 1.01:
+                in_points, in_features, in_labels, inv_inds = subsample_cloud(torch_points,
+                                                                            self.cfg.model.in_sub_size,
+                                                                            features=torch_features,
+                                                                            labels=torch_labels,
+                                                                            method=self.cfg.model.in_sub_mode,
+                                                                            return_inverse=True)
 
-            # Compute inverse reprojection indices if not provided by the method
-            if inv_inds is None:
-                inv_inds = batch_knn_neighbors(torch_points,
-                                               in_points,
-                                               [int(torch_points.shape[0])],
-                                               [int(in_points.shape[0])],
-                                               radius=1,
-                                               neighbor_limit=1)
+                # Compute inverse reprojection indices if not provided by the method
+                if inv_inds is None:
+                    inv_inds = batch_knn_neighbors(torch_points,
+                                                in_points,
+                                                [int(torch_points.shape[0])],
+                                                [int(in_points.shape[0])],
+                                                radius=1,
+                                                neighbor_limit=1)
+
+            else:
+                in_points = torch_points
+                in_features = torch_features
+                in_labels = torch_labels
+                inv_inds = torch.arange(torch_points.shape[0], dtype=torch.long)
+
 
             # pl = pv.Plotter(window_size=[1600, 900])
             # pl.add_points(torch_points.cpu().numpy(),
@@ -700,12 +708,14 @@ class SceneSegDataset(Dataset):
 
         # Get the whole input list
         if self.precompute_pyramid:
-
+            radius0 = self.cfg.model.in_sub_size * self.cfg.model.kp_radius
+            if radius0 < 0:
+                radius0 = self.cfg.data.init_sub_size * self.cfg.model.kp_radius
             input_dict = build_full_pyramid(stacked_points,
                                             stack_lengths,
                                             len(self.cfg.model.layer_blocks),
                                             self.cfg.model.in_sub_size,
-                                            self.cfg.model.in_sub_size * self.cfg.model.kp_radius,
+                                            radius0,
                                             self.cfg.model.neighbor_limits,
                                             self.cfg.model.upsample_n,
                                             sub_mode=self.cfg.model.in_sub_mode)
@@ -747,17 +757,21 @@ class SceneSegDataset(Dataset):
                 _, in_points, _, _ = self.get_input_area(cloud_ind, center_p)
                 in_points, _, _ = calib_augment(in_points, None, None)
                 if in_points.shape[0] > 0:
-                    gpu_points = torch.from_numpy(in_points).to(device)
-                    sub_points, _ = subsample_pack_batch(gpu_points,
-                                                        [gpu_points.shape[0]],
-                                                        self.cfg.model.in_sub_size,
-                                                        method=self.cfg.model.in_sub_mode)
-                    batch_n_pts += sub_points.shape[0]
+                    if self.cfg.model.in_sub_size > self.cfg.data.init_sub_size * 1.01:
+                        gpu_points = torch.from_numpy(in_points).to(device)
+                        sub_points, _ = subsample_pack_batch(gpu_points,
+                                                            [gpu_points.shape[0]],
+                                                            self.cfg.model.in_sub_size,
+                                                            method=self.cfg.model.in_sub_mode)
+                        batch_n_pts += sub_points.shape[0]
+                    else:
+                        batch_n_pts += in_points.shape[0]
                     batch_n += 1
 
                     # In case batch is full, stop
                     if batch_n_pts > self.b_lim:
                         break
+
             all_batch_n.append(batch_n)
             all_batch_n_pts.append(batch_n_pts)
         t1 = time.time()
@@ -825,12 +839,15 @@ class SceneSegDataset(Dataset):
                 # pl.set_background('white')
                 # pl.enable_eye_dome_lighting()
                 # pl.show()
-                gpu_points = torch.from_numpy(in_points).to(device)
-                sub_points, _ = subsample_pack_batch(gpu_points,
-                                                    [gpu_points.shape[0]],
-                                                    self.cfg.model.in_sub_size,
-                                                    method=self.cfg.model.in_sub_mode)
-                all_cloud_n.append(sub_points.shape[0])
+                if self.cfg.model.in_sub_size > self.cfg.data.init_sub_size * 1.01:
+                    gpu_points = torch.from_numpy(in_points).to(device)
+                    sub_points, _ = subsample_pack_batch(gpu_points,
+                                                        [gpu_points.shape[0]],
+                                                        self.cfg.model.in_sub_size,
+                                                        method=self.cfg.model.in_sub_mode)
+                    all_cloud_n.append(sub_points.shape[0])
+                else:
+                    all_cloud_n.append(in_points.shape[0])
                 
             pi += 1
             print('', end='\r')
@@ -950,14 +967,20 @@ class SceneSegDataset(Dataset):
             if in_points.shape[0] > 0:
                 in_points, _, _ = calib_augment(in_points, None, None)
                 gpu_points = torch.from_numpy(in_points).to(device)
-                sub_points, _ = subsample_pack_batch(gpu_points,
-                                                    [gpu_points.shape[0]],
-                                                    cfg.model.in_sub_size,
-                                                    method=cfg.model.in_sub_mode)
+                if self.cfg.model.in_sub_size > self.cfg.data.init_sub_size * 1.01:
+                    radius0 = self.cfg.model.in_sub_size * self.cfg.model.kp_radius
+                    sub_points, _ = subsample_pack_batch(gpu_points,
+                                                        [gpu_points.shape[0]],
+                                                        cfg.model.in_sub_size,
+                                                        method=cfg.model.in_sub_mode)
+                else:
+                    sub_points = gpu_points
+                    radius0 = self.cfg.data.init_sub_size * self.cfg.model.kp_radius
+
                 neighb_counts = pyramid_neighbor_stats(sub_points,
                                                     num_layers,
                                                     cfg.model.in_sub_size,
-                                                    cfg.model.in_sub_size * cfg.model.kp_radius,
+                                                    radius0,
                                                     sub_mode=cfg.model.in_sub_mode)
 
                 # Update number of trucated_neighbors
