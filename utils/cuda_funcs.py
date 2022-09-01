@@ -3,9 +3,8 @@
 # Cuda extensions
 import cpp_wrappers.pointnet2_batch.pointnet2_batch_cuda as pointnet2_cuda
 
+import os
 import torch
-
-
 
 
 @torch.no_grad()
@@ -32,12 +31,14 @@ def furthest_point_sample(points, new_n=None, stride=4, min_d=0):
     if new_n is None:
         new_n = N // stride
 
-    idx = torch.cuda.IntTensor(B, new_n)
-    temp = torch.cuda.FloatTensor(B, N).fill_(1e10)
+    idx = torch.cuda.IntTensor(B, new_n, device=points.device).fill_(-1)
+    temp = torch.cuda.FloatTensor(B, N, device=points.device).fill_(1e10)
     pointnet2_cuda.furthest_point_sampling_wrapper(B, N, new_n, min_d, points, temp, idx)
     del temp
+    idx = idx.view(-1).long()
 
-    return idx.view(-1).long()
+    # Remove -1 indices as they are just ignored values
+    return idx[idx > -1]
 
 
 @torch.no_grad()

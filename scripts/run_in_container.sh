@@ -11,14 +11,16 @@ echo ""
 detach=false
 devdoc=false
 command=""
+chosen_gpu=""
 
-while getopts dvc: option
+while getopts dvc:g: option
 do
 case "${option}"
 in
 d) detach=true;; 
 v) devdoc=true;; 
 c) command=${OPTARG};;
+g) chosen_gpu=${OPTARG};;
 esac
 done
 
@@ -62,6 +64,10 @@ other_args="-v $XSOCK:$XSOCK \
 	-e XAUTHORITY=${XAUTH} \
     -e DISPLAY=$DISPLAY \
     -w /home/$USER/KPInv-dev"
+
+if [ "$chosen_gpu" ] ; then
+    docker_args="${docker_args} -e CUDA_VISIBLE_DEVICES=$chosen_gpu"
+fi
 
 if [ "$devdoc" = true ] ; then
 

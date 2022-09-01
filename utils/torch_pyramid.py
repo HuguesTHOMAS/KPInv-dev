@@ -8,7 +8,9 @@ from utils.batch_conversion import batch_to_pack, pack_to_batch, pack_to_list, l
 from utils.gpu_subsampling import subsample_pack_batch
 
 from utils.gpu_neigbors import radius_search_pack_mode, keops_radius_count
-from utils.cpp_funcs import batch_radius_neighbors, batch_knn_neighbors
+from utils.cpp_funcs import furthest_point_sample_cpp, batch_knn_neighbors
+
+from utils.cuda_funcs import furthest_point_sample
 
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -84,19 +86,10 @@ def fill_pyramid(pyramid: EasyDict,
         # neighb_func = batch_radius_neighbors
         neighb_func = batch_knn_neighbors
 
-    # Choose subsampling function depending on device
-    sub_func = subsample_pack_batch
-    if sub_mode == 'fps':
-        if 'cuda' in pyramid.points[0].device.type:
-            sub_func = furthest_point_sample
-        else:
-            sub_func = furthest_point_sample_cpp
-
-
     # Subsample all point clouds on GPU
     for i in range(num_layers):
         if i > 0:
-            sub_points, sub_lengths = sub_func(pyramid.points[0], pyramid.lengths[0], sub_size, method=sub_mode)
+            sub_points, sub_lengths = subsample_pack_batch(pyramid.points[0], pyramid.lengths[0], sub_size, method=sub_mode)
             pyramid.points.append(sub_points)
             pyramid.lengths.append(sub_lengths)
         sub_size *= 2.0
@@ -186,20 +179,12 @@ def pyramid_neighbor_stats(points: Tensor,
     Returns:
         counts_list (List[Tensor]): All neigbors counts at each layers
     """
-    
-    # Choose subsampling function depending on device
-    sub_func = subsample_pack_batch
-    if sub_mode == 'fps':
-        if 'cuda' in points.device.type:
-            sub_func = furthest_point_sample
-        else:
-            sub_func = furthest_point_sample_cpp
 
     counts_list = []
     lengths = [points.shape[0]]
     for i in range(num_layers):
         if i > 0:
-            points, lengths = sub_func(points, lengths, sub_size, method=sub_mode)
+            points, lengths = subsample_pack_batch(points, lengths, sub_size, method=sub_mode)
         counts = keops_radius_count(points, points, search_radius)
         counts_list.append(counts)
         sub_size *= 2

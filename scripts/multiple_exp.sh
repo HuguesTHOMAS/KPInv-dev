@@ -19,13 +19,8 @@ training_script="experiments/S3DIS_simple/train_S3DIS_simple.py"
 # Declare an array variable
 # *************************
 
-declare -a arg_arr=("--use_cubes 1 --cylindric_input 1"
-                    "--use_cubes 1 --cylindric_input 1 --height_norm 0"
-                    "--use_cubes 1 --cylindric_input 1 --kp_mode kpconv-geom"
-                    "--use_cubes 1 --cylindric_input 1 --kp_mode kpconv-mod-geom"
-                    "--use_cubes 1 --cylindric_input 1 --kp_mode transformer"
-                    "--use_cubes 1 --cylindric_input 1 --kp_mode inv_v4"
-                    "--use_cubes 1 --cylindric_input 1 --kp_mode inv_v3")
+declare -a arg_arr=("--kp_mode kpconv --neighbor_limits 10 10"
+                    "--use_cubes 1 --cylindric_input 1 --kp_mode kpconv --neighbor_limits 10 10")
 
 
 echo ""

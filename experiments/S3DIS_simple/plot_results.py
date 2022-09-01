@@ -558,11 +558,44 @@ def exp_kpconv_geom():
                   'small-kpconv-mod-geom',
                   'kpconv-2.5-big-bloc',
                   'kpconv-2.5-big-spheres',
-                  '...'
-                  'small-transformer',
-                  'small-inv_v4',
-                  'small-inv_v3',
-                  'test drop before norm'
+                  'transformer-med-spheres',
+                  'kpconv-2.5-med-spheres',
+                  'kpconv-2.5-med-blocs']
+
+
+    # safe check log names
+    if len(logs) > len(logs_names):
+        logs = logs[:len(logs_names)]
+    logs_names = np.array(logs_names[:len(logs)])
+
+    return logs, logs_names
+
+
+def exp_drop_before_norm():
+    """
+    Adding geom nearly doubles the processing time, but improves the performances. Although we do not reach the same score as before
+    """
+
+    # Using the dates of the logs, you can easily gather consecutive ones. All logs should be of the same dataset.
+    start = 'Log_2022-08-31_07-06-54'
+    end = 'Log_2022-09-29_23-43-08'
+
+    # Name of the result path
+    res_path = 'results'
+
+    # Gather logs and sort by date
+    logs = np.sort([join(res_path, l) for l in listdir_str(res_path) if start <= l <= end])
+
+    # Optionally add a specific log at a specific place in the log list
+    logs = logs.astype('<U50')
+    logs = np.insert(logs, 0, 'results/Log_2022-08-30_18-57-14')
+
+    # Give names to the logs (for plot legends)
+    logs_names = ['transformer-med-spheres',
+                  'transformer-cyl-norm-drop',
+                  'transformer-cyl-drop-norm',
+                  '...',
+                  'do poisson disk sampling',
                   '...',
                   'do_KP_inv', ]
 
@@ -589,7 +622,7 @@ if __name__ == '__main__':
     ######################################################
 
     # My logs: choose the logs to show
-    logs, logs_names = exp_kpconv_geom()
+    logs, logs_names = exp_drop_before_norm()
 
     frame_lines_1(["Plot S3DIS experiments"])
 

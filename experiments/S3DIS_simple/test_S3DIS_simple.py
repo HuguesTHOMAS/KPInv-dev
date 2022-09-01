@@ -161,7 +161,7 @@ if __name__ == '__main__':
     #       > 'last_XXX': Automatically retrieve the last trained model on dataset XXX
     #       > '(old_)results/Log_YYYY-MM-DD_HH-MM-SS': Directly provide the path of a trained model
 
-    chosen_log = 'results/Log_2022-08-23_18-48-07'
+    chosen_log = 'results/Log_2022-08-30_18-57-14'
 
     # Add argument here to handle it
     parser = argparse.ArgumentParser()
@@ -183,24 +183,27 @@ if __name__ == '__main__':
     ###################
     # Define parameters
     ###################
+    
+    # Checkpoint index for testing
+    new_cfg.test.chkp_idx = -2
 
     # Change some parameters
-    new_cfg.test.in_radius = 4.0
+    new_cfg.test.in_radius = new_cfg.train.in_radius * 4
     new_cfg.test.batch_limit = 1
     new_cfg.test.max_steps_per_epoch = 9999999
     new_cfg.test.max_votes = 15
-    new_cfg.test.chkp_idx = -1
 
     # Augmentations
-    new_cfg.augment_train.anisotropic = True
-    new_cfg.augment_train.scale = [0.99, 1.01]
-    new_cfg.augment_train.flips = [0.5, 0, 0]
-    new_cfg.augment_train.rotations = 'vertical'
-    new_cfg.augment_train.jitter = 0
-    new_cfg.augment_train.color_drop = 0.0
-    new_cfg.augment_train.chromatic_contrast = False
-    new_cfg.augment_train.chromatic_all = False
+    new_cfg.augment_test.anisotropic = False
+    new_cfg.augment_test.scale = [0.99, 1.01]
+    new_cfg.augment_test.flips = [0.5, 0, 0]
+    new_cfg.augment_test.rotations = 'vertical'
+    new_cfg.augment_test.jitter = 0
+    new_cfg.augment_test.color_drop = 0.0
+    new_cfg.augment_test.chromatic_contrast = False
+    new_cfg.augment_test.chromatic_all = False
     new_cfg.augment_test.chromatic_norm = new_cfg.augment_train.chromatic_norm
+    new_cfg.augment_test.height_norm = new_cfg.augment_train.height_norm
 
 
     test_log(chosen_log, new_cfg)

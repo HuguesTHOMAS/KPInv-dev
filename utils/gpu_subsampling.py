@@ -508,6 +508,40 @@ def subsample_numpy(points, sub_size, features=None, labels=None, method='grid',
     return return_list
 
 
+def fp_subsample(points, sub_size,
+                 features=None,
+                 labels=None,
+                 return_inverse=False):
+
+    if 'cuda' in points.device.type:
+        subsampling_func = furthest_point_sample
+    else:
+        subsampling_func = furthest_point_sample_cpp
+
+    sub_inds = subsampling_func(points, stride=1, min_d=sub_size)
+    sub_points = points[sub_inds, :]
+
+
+    if features is not None:
+        sub_features = features[sub_inds, :]
+    if labels is not None:
+        sub_labels = labels[sub_inds]
+
+    inv_indices0 = None
+
+    return_list = [sub_points]
+    if (features is not None):
+        return_list.append(sub_features)
+    if (labels is not None):
+        return_list.append(sub_labels)
+    if return_inverse:
+        return_list.append(inv_indices0)
+    if len(return_list) > 1:
+        return return_list
+    else:
+        return return_list[0]
+
+
 def subsample_cloud(points, sub_size, features=None, labels=None, method='grid', return_inverse=False):
     """
     Subsample torch point clouds with different method, handling features and labels as well.
@@ -529,6 +563,8 @@ def subsample_cloud(points, sub_size, features=None, labels=None, method='grid',
         subsampling_func = permutohedral_subsample
     elif method == 'hex':
         subsampling_func = hexagonal_subsample
+    elif method == 'fps':
+        subsampling_func = fp_subsample
     else:
         raise ValueError('Wrong Subsampling method: {:s}'.format(method))
 
@@ -541,74 +577,7 @@ def subsample_cloud(points, sub_size, features=None, labels=None, method='grid',
 
     return return_list
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-    # Convert length to tensor
-    length_as_list = type(lengths) == list
-    if length_as_list:
-        lengths = torch.LongTensor(lengths).to(points.device)
-
-    # Parameters
-    batch_size = lengths.shape[0]
-    start_index = 0
-    sampled_points_list = []
-
-    # Looping on each batch point cloud
-    for i in range(batch_size):
-        length = lengths[i].item()
-        end_index = start_index + length
-        points0 = points[start_index:end_index]
-        sampled_points_list.append(subsampling_func(points0, sub_size))
-        start_index = end_index
-
-    # Packing the list of points
-    sampled_points = torch.cat(sampled_points_list, dim=0)
-    sampled_lengths = [x.shape[0] for x in sampled_points_list]
-    if not length_as_list:
-        sampled_lengths = torch.LongTensor(sampled_lengths).to(points.device)
-
-    return sampled_points, sampled_lengths
-
-
-def fp_subsample(points, sub_size):
-
-    if 'cuda' in points.device.type:
-        subsampling_func = furthest_point_sample
-    else:
-        subsampling_func = furthest_point_sample_cpp
-
-        
-    sub_inds3 = subsampling_func(points, stride=1, min_d=sub_size)
-
-
-
-
-    return sub_points
     
-
-
 def subsample_pack_batch(points, lengths, sub_size, method='grid'):
     """
     Subsample torch batch of point clouds with different method,
@@ -634,7 +603,6 @@ def subsample_pack_batch(points, lengths, sub_size, method='grid'):
         subsampling_func = fp_subsample
     else:
         raise ValueError('Wrong Subsampling method: {:s}'.format(method))
-
 
     # Convert length to tensor
     length_as_list = type(lengths) == list

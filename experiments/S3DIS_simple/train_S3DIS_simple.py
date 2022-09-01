@@ -76,9 +76,10 @@ def my_config():
     # cfg.model.layer_blocks = (4,  6,  8,  8,  6)
     # cfg.model.layer_blocks = (4,  6,  8, 12,  6)  # Strong architecture
 
-    cfg.model.layer_blocks = (3,  5,  7,  9,  9,  3)  # For large block inputs
+    # cfg.model.layer_blocks = (3,  5,  7,  9,  9,  3)  # For large block inputs
+    cfg.model.layer_blocks = (3,  5,  7,  9,  7)  # For large block inputs
 
-    cfg.model.kp_mode = 'kpconv'       # Choose ['kpconv', 'kpdef', 'kpinv']. And ['kpconv-mod', 'kpdef-mod', 'kpconv-geom'] for modulations
+    cfg.model.kp_mode = 'transformer'       # Choose ['kpconv', 'kpdef', 'kpinv']. And ['kpconv-mod', 'kpdef-mod', 'kpconv-geom'] for modulations
                                             # Choose ['inv_v1', 'inv_v2', 'inv_v3', 'inv_v4', 'transformer']
     cfg.model.kernel_size = 15
     cfg.model.kp_radius = 2.5
@@ -88,16 +89,16 @@ def my_config():
 
     cfg.data.init_sub_size = 0.02          # -1.0 so that dataset point clouds are not initially subsampled
     cfg.data.init_sub_mode = 'grid'        # Mode for initial subsampling of data
-    cfg.model.in_sub_size = 0.04 * 0.67    # Adapt this with train.in_radius. Try to keep a ratio of ~50 (*0.67 if fps)
-    cfg.model.in_sub_mode = 'fps'          # Mode for input subsampling
+    cfg.model.in_sub_size = 0.04           # Adapt this with train.in_radius. Try to keep a ratio of ~50 (*0.67 if fps)
+    cfg.model.in_sub_mode = 'grid'         # Mode for input subsampling
 
     cfg.model.upsample_n = 3          # Number of neighbors used for nearest neighbor linear interpolation
 
     cfg.model.input_channels = 5    # This value has to be compatible with one of the dataset input features definition
 
-    cfg.model.neighbor_limits = []                      # Use empty list to let calibration get the values
+    # cfg.model.neighbor_limits = []                      # Use empty list to let calibration get the values
     # cfg.model.neighbor_limits = [35, 40, 50, 50, 50]    # Use empty list to let calibration get the values
-    # cfg.model.neighbor_limits = [16, 16, 16, 16, 16]    # List for point_transformer
+    cfg.model.neighbor_limits = [16, 16, 16, 16, 16]    # List for point_transformer
 
 
     # Specific parameters for involution and transformers
@@ -111,17 +112,17 @@ def my_config():
     
     # Are we using spheres/cubes/cylinders/cubic_cylinders as input
     cfg.data.use_cubes = False
-    cfg.data.cylindric_input = False
+    cfg.data.cylindric_input = True
 
     # Input threads
     cfg.train.num_workers = 16
 
     # Input spheres radius. Adapt this with model.in_sub_size. Try to keep a ratio of ~50
-    cfg.train.in_radius = 2.0
+    cfg.train.in_radius = 1.5
 
     # Batch related_parames
-    cfg.train.batch_size = 4            # Target batch size. If you don't want calibration, you can directly set train.batch_limit
-    cfg.train.accum_batch = 5           # Accumulate batches for an effective batch size of batch_size * accum_batch.
+    cfg.train.batch_size = 2                # Target batch size. If you don't want calibration, you can directly set train.batch_limit
+    cfg.train.accum_batch = 8               # Accumulate batches for an effective batch size of batch_size * accum_batch.
     cfg.train.steps_per_epoch = 250
     
     # Training length
@@ -167,7 +168,7 @@ def my_config():
     cfg.augment_train.flips = [0.5, 0, 0]
     cfg.augment_train.rotations = 'vertical'
     cfg.augment_train.jitter = 0.005
-    cfg.augment_train.color_drop = 0.2
+    cfg.augment_train.color_drop = 0.3
     cfg.augment_train.chromatic_contrast = True
     cfg.augment_train.chromatic_all = False
     cfg.augment_train.chromatic_norm = True

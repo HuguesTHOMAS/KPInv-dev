@@ -52,10 +52,11 @@ from utils.gpu_init import init_gpu
 from utils.gpu_subsampling import subsample_numpy, subsample_pack_batch, subsample_cloud
 from utils.gpu_neigbors import tiled_knn
 from utils.torch_pyramid import build_full_pyramid, pyramid_neighbor_stats, build_base_pyramid
+from utils.cpp_funcs import batch_knn_neighbors
 
 from utils.transform import ComposeAugment, RandomRotate, RandomScaleFlip, RandomJitter, FloorCentering, \
     ChromaticAutoContrast, ChromaticTranslation, ChromaticJitter, HueSaturationTranslation, RandomDropColor, \
-    ChromaticNormalize, HeightNormalize
+    ChromaticNormalize, HeightNormalize, RandomFullColor
 
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -151,9 +152,10 @@ class SceneSegDataset(Dataset):
             augment_list += [ChromaticTranslation(),
                              ChromaticJitter(),
                              HueSaturationTranslation()]
-        augment_list.append(RandomDropColor(p=a_cfg.color_drop))
+        # augment_list.append(RandomDropColor(p=a_cfg.color_drop))
         if a_cfg.chromatic_norm:
             augment_list += [ChromaticNormalize()]
+        augment_list.append(RandomFullColor(p=a_cfg.color_drop))
             
         if 'height_norm' in a_cfg and a_cfg.height_norm:
             augment_list += [HeightNormalize()]
@@ -618,6 +620,15 @@ class SceneSegDataset(Dataset):
                                                                           labels=torch_labels,
                                                                           method=self.cfg.model.in_sub_mode,
                                                                           return_inverse=True)
+
+            # Compute inverse reprojection indices if not provided by the method
+            if inv_inds is None:
+                inv_inds = batch_knn_neighbors(torch_points,
+                                               in_points,
+                                               [int(torch_points.shape[0])],
+                                               [int(in_points.shape[0])],
+                                               radius=1,
+                                               neighbor_limit=1)
 
             # pl = pv.Plotter(window_size=[1600, 900])
             # pl.add_points(torch_points.cpu().numpy(),

@@ -63,7 +63,7 @@ def init_cfg():
 
     cfg.data.ignored_labels = []        #  List, value of ignored label values
 
-    cfg.data.init_sub_size = -1.0       # Float, data subampling size, negative value means we use original data
+    cfg.data.init_sub_size = 0.02       # Float, data subampling size, negative value means we use original data
     cfg.data.init_sub_mode = 'grid'     # Mode for initial subsampling of data
 
     cfg.data.use_cubes = False          #  Bool, do we use cube sampling instead of sphere samplings
@@ -183,7 +183,7 @@ def init_cfg():
     cfg.augment_train.flips = [0.5, 0, 0]
     cfg.augment_train.rotations = 'vertical'
     cfg.augment_train.jitter = 0.005
-    cfg.augment_train.color_drop = 0.2
+    cfg.augment_train.color_drop = 0.3
     cfg.augment_train.chromatic_contrast = False
     cfg.augment_train.chromatic_all = False
     cfg.augment_train.chromatic_norm = False
@@ -198,9 +198,9 @@ def init_cfg():
     cfg.augment_test.jitter = 0
     cfg.augment_test.color_drop = 0
     cfg.augment_test.chromatic_contrast = False
-    cfg.augment_train.chromatic_all = False
+    cfg.augment_test.chromatic_all = False
     cfg.augment_test.chromatic_norm = False
-    cfg.augment_train.height_norm = False
+    cfg.augment_test.height_norm = False
 
 
     return cfg

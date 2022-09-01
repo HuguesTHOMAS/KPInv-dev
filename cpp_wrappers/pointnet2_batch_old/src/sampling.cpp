@@ -11,19 +11,13 @@ All Rights Reserved 2018.
 #include "sampling_gpu.h"
 
 
-int furthest_point_sampling_wrapper(int b, int n, int m, float min_d,
+int furthest_point_sampling_wrapper(int b, int n, int m, 
     at::Tensor points_tensor, at::Tensor temp_tensor, at::Tensor idx_tensor) {
 
     const float *points = points_tensor.data<float>();
     float *temp = temp_tensor.data<float>();
     int *idx = idx_tensor.data<int>();
 
-    float min_d2 = min_d * min_d;
-
-    // // Fill idx with -1
-    // for (int j = 0; j < m; j++)
-    //     idx[j] = -1;
-
-    furthest_point_sampling_kernel_launcher(b, n, m, min_d2, points, temp, idx);
+    furthest_point_sampling_kernel_launcher(b, n, m, points, temp, idx);
     return 1;
 }

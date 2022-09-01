@@ -210,6 +210,7 @@ class HueSaturationTranslation(object):
 
 
 class RandomDropColor(object):
+
     def __init__(self, p=0.2):
         self.p = p
 
@@ -219,6 +220,22 @@ class RandomDropColor(object):
         return coord, feat, label
 
 
+class RandomFullColor(object):
+
+    def __init__(self, p=0.3):
+        self.p = p
+
+    def __call__(self, coord, feat, label):
+        r = np.random.rand()
+        if r < self.p / 3:
+            feat[:, :3] = -1.0
+        elif r < self.p * 2 / 3:
+            feat[:, :3] = 0.0
+        elif r < self.p:
+            feat[:, :3] = 1.0
+        return coord, feat, label
+
+    
 class ChromaticNormalize(object):
     def __init__(self,
                  color_mean=[0.5136457, 0.49523646, 0.44921124],

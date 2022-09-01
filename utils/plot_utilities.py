@@ -729,9 +729,6 @@ def compare_convergences_segment(list_of_cfg, list_of_paths, list_of_names=None)
         file = join(path, 'val_IoUs.txt')
         val_IoUs = load_single_IoU(file, num_classes)
 
-        print(len(val_IoUs))
-        print(val_IoUs[0].shape)
-
         # Get mean IoU
         class_IoUs, mIoUs = IoU_class_metrics(val_IoUs, smooth_n)
 

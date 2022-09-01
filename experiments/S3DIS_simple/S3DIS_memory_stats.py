@@ -104,7 +104,7 @@ def my_config():
     cfg.augment_train.flips = [0.5, 0, 0]
     cfg.augment_train.rotations = 'vertical'
     cfg.augment_train.jitter = 0.005
-    cfg.augment_train.color_drop = 0.2
+    cfg.augment_train.color_drop = 0.3
 
 
     # Test parameters
