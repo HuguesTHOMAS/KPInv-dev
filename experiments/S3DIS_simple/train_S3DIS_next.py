@@ -79,19 +79,19 @@ def my_config():
 
     # cfg.model.layer_blocks = (3,  5,  7,  9,  9,  3)  # For large block inputs
 
-    cfg.model.layer_blocks = (3,  4,  5,  12,  4)
-    cfg.model.norm = 'batch' # batch, layer
-    cfg.model.init_channels = 96  # 48, 64, 80, 96
+    cfg.model.layer_blocks = (3,  4,  5,  9,  4)
+    cfg.model.norm = 'batch'
+    cfg.model.init_channels = 96
 
-    cfg.model.kp_mode = 'kpconv'            # Choose ['kpconv', 'kpdef', 'kpinv']. 
+    cfg.model.kp_mode = 'kpnext'            # Choose ['kpconv', 'kpdef', 'kpinv']. 
                                             # Choose ['inv_v1', 'inv_v2', 'inv_v3', 'inv_v4', 'transformer']
                                             # Choose ['kpconv-mod', 'kpdef-mod', 'kpconv-geom'] for modulations
                                             # Choose ['kpconv-depth'] for depthwise conv (groups = input channels = output chanels)
                                             # Choose ['kpnext'] for better kpconv
-    cfg.model.shell_sizes = [1, 15, 46]
+    cfg.model.shell_sizes = [1, 15]
     cfg.model.kp_radius = 2.5
     cfg.model.kp_influence = 'linear'
-    cfg.model.kp_aggregation = 'sum'  # 'sum', 'nearest'
+    cfg.model.kp_aggregation = 'sum'
     cfg.model.conv_groups = 1
 
     cfg.data.init_sub_size = 0.02          # -1.0 so that dataset point clouds are not initially subsampled
@@ -132,7 +132,7 @@ def my_config():
 
     # Batch related_parames
     cfg.train.batch_size = 2                # Target batch size. If you don't want calibration, you can directly set train.batch_limit
-    cfg.train.accum_batch = 10              # Accumulate batches for an effective batch size of batch_size * accum_batch.
+    cfg.train.accum_batch = 8               # Accumulate batches for an effective batch size of batch_size * accum_batch.
     cfg.train.steps_per_epoch = 250
     
     # Training length
@@ -214,10 +214,7 @@ def my_config():
 def adjust_config(cfg):
 
     # Model
-    if len(cfg.model.shell_sizes) < 3:
-        cfg.model.kp_sigma = 0.7 * cfg.model.kp_radius
-    else:
-        cfg.model.kp_sigma = 0.4 * cfg.model.kp_radius
+    cfg.model.kp_sigma = 0.7 * cfg.model.kp_radius
 
     # Train
     if cfg.data.use_cubes:
@@ -258,8 +255,7 @@ if __name__ == '__main__':
     ###################
 
     # Add argument here to handle it
-    str_args = ['model.kp_mode',
-                'train.data_sampler']
+    str_args = ['model.kp_mode']
 
     float_args = ['train.weight_decay',
                   'model.kp_radius',

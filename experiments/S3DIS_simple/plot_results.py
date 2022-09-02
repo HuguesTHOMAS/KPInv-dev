@@ -604,7 +604,8 @@ def exp_drop_before_norm():
 
     # TODO: Handle kpnextarchitecture like ConvNext, operate DropPath
     # TODO: random / regular/ c-random
-    # TODO: random / regular/ c-random
+    # TODO: Find why augmenting k in depthwise conv augments the FLOPS
+    # TODO: Share kernel influences with consecutives KPConv
     # TODO: KPInv and more ConvNext optims
 
 

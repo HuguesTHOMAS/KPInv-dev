@@ -551,6 +551,7 @@ def load_kernels(radius, shell_sizes, dimension, fixed, lloyd=False):
     # If we only give one number (total K), use Lloyd optimization
     lloyd = len(shell_sizes) < 2
 
+
     # Get number of kernel points
     num_kpoints = np.sum(shell_sizes)
 
@@ -587,8 +588,8 @@ def load_kernels(radius, shell_sizes, dimension, fixed, lloyd=False):
             best_k = np.argmin(grad_norms[-1, :])
 
             # Save points
-            kernel_points0 = kernel_points[best_k, :, :]
-            volumes = np.zeros(kernel_points0.shape[0])
+            kernel_points = kernel_points[best_k, :, :]
+            volumes = np.zeros(kernel_points.shape[0])
 
             # plt.figure()
             # plt.plot(torch.arange(grad_norms.shape[0]), grad_norms, '--')
