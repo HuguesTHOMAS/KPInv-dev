@@ -101,7 +101,7 @@ def init_cfg():
 
     cfg.model.input_channels = 1        #   Int, dimension of input feaures
     cfg.model.init_channels = 64        #   Int, dimension of first network features
-    cfg.model.norm = 'batch'            #   Str, type of normalization in the network ('group', 'batch', 'none')
+    cfg.model.norm = 'batch'            #   Str, type of normalization in the network ('group', 'batch', 'layer' 'none')
     cfg.model.bn_momentum = 0.98        # Float, Momentum for batch normalization.
 
     cfg.model.layer_blocks = (2, 1, 1)  # Tuple, number of blocks in each layers (in addition to the strided ones in between).
@@ -126,7 +126,9 @@ def init_cfg():
     cfg.train.batch_size = 16           #   Int, number of input point cloud per batch
     cfg.train.accum_batch = 1           #   Int, number of batches accumulated before performing an optimizer step batch size.
     cfg.train.batch_limit = -1          #   Int, maximum number of points in total in a batch
-    cfg.train.max_points = -1           #   Int, maximum number of points per element (randomly drop the excedent)
+
+    cfg.train.data_sampler = 'c-random' #   Str, Data sampling mode to choose input spheres ('regular', 'random', 'c-random')
+    cfg.train.max_points = -1           #   Int, maximum number of points per element
     
     cfg.train.optimizer = 'SGD'         #   Str, optimizer ('SGD', 'Adam' or 'AdamW')
     cfg.train.lr = 1e-2                 # Float, initial learning rate
@@ -166,7 +168,9 @@ def init_cfg():
     cfg.test.in_radius = 1.0            # Float, radius of the input sphere
     cfg.test.batch_size = 8             #   Int, number of input point cloud per batch
     cfg.test.batch_limit = -1           #   Int, maximum number of points in total in a batch
-    cfg.test.max_points = -1            #   Int, maximum number of points per element (randomly drop the excedent)
+
+    cfg.test.data_sampler = 'regular'   #   Str, Data sampling mode to choose input spheres ('regular', 'random', 'c-random')
+    cfg.test.max_points = -1            #   Int, maximum number of points per element
 
     cfg.test.val_momentum = 0.95        # Float, momentum for averaging predictions during validation.
     cfg.test.test_momentum = 0.95       # Float, momentum for averaging predictions during test.
@@ -183,7 +187,7 @@ def init_cfg():
     cfg.augment_train.flips = [0.5, 0, 0]
     cfg.augment_train.rotations = 'vertical'
     cfg.augment_train.jitter = 0.005
-    cfg.augment_train.color_drop = 0.3
+    cfg.augment_train.color_drop = 0.2
     cfg.augment_train.chromatic_contrast = False
     cfg.augment_train.chromatic_all = False
     cfg.augment_train.chromatic_norm = False

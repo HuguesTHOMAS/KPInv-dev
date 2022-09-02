@@ -36,6 +36,7 @@ sys.path.append(parent)
 from utils.config import init_cfg, save_cfg, get_directories
 from utils.printing import frame_lines_1, underline
 
+from models.KPConvNet import KPNeXt
 from models.KPConvNet import KPFCNN as KPConvFCNN
 from models.KPInvNet import KPFCNN as KPInvFCNN
 from models.InvolutionNet import InvolutionFCNN
@@ -76,29 +77,33 @@ def my_config():
     # cfg.model.layer_blocks = (4,  6,  8,  8,  6)
     # cfg.model.layer_blocks = (4,  6,  8, 12,  6)  # Strong architecture
 
-    # cfg.model.layer_blocks = (3,  5,  7,  9,  9,  3)  # For large block inputs
-    cfg.model.layer_blocks = (3,  5,  7,  9,  7)  # For large block inputs
+    cfg.model.layer_blocks = (3,  5,  7,  9,  9,  3)  # For large block inputs
+    cfg.model.norm = 'batch'
+    cfg.model.init_channels = 128
 
-    cfg.model.kp_mode = 'transformer'       # Choose ['kpconv', 'kpdef', 'kpinv']. And ['kpconv-mod', 'kpdef-mod', 'kpconv-geom'] for modulations
+    cfg.model.kp_mode = 'kpnext'            # Choose ['kpconv', 'kpdef', 'kpinv']. 
                                             # Choose ['inv_v1', 'inv_v2', 'inv_v3', 'inv_v4', 'transformer']
+                                            # Choose ['kpconv-mod', 'kpdef-mod', 'kpconv-geom'] for modulations
+                                            # Choose ['kpconv-depth'] for depthwise conv (groups = input channels = output chanels)
+                                            # Choose ['kpnext'] for better kpconv
     cfg.model.kernel_size = 15
     cfg.model.kp_radius = 2.5
     cfg.model.kp_influence = 'linear'
     cfg.model.kp_aggregation = 'sum'
     cfg.model.conv_groups = 1
 
-    cfg.data.init_sub_size = 0.04          # -1.0 so that dataset point clouds are not initially subsampled
+    cfg.data.init_sub_size = 0.02          # -1.0 so that dataset point clouds are not initially subsampled
     cfg.data.init_sub_mode = 'grid'        # Mode for initial subsampling of data
-    cfg.model.in_sub_size = -4             # Adapt this with train.in_radius. Try to keep a ratio of ~50 (*0.67 if fps). If negative, and fps, it is stride
-    cfg.model.in_sub_mode = 'fps'          # Mode for input subsampling
+    cfg.model.in_sub_size = 0.04           # Adapt this with train.in_radius. Try to keep a ratio of ~50 (*0.67 if fps). If negative, and fps, it is stride
+    cfg.model.in_sub_mode = 'grid'         # Mode for input subsampling
 
     cfg.model.upsample_n = 3          # Number of neighbors used for nearest neighbor linear interpolation
 
     cfg.model.input_channels = 5    # This value has to be compatible with one of the dataset input features definition
 
-    # cfg.model.neighbor_limits = []                      # Use empty list to let calibration get the values
+    cfg.model.neighbor_limits = []                      # Use empty list to let calibration get the values
     # cfg.model.neighbor_limits = [35, 40, 50, 50, 50]    # Use empty list to let calibration get the values
-    cfg.model.neighbor_limits = [16, 16, 16, 16, 16]    # List for point_transformer
+    # cfg.model.neighbor_limits = [16, 16, 16, 16, 16]    # List for point_transformer
 
 
     # Specific parameters for involution and transformers
@@ -106,19 +111,22 @@ def my_config():
     cfg.model.first_inv_layer = 1               # Use involution layers only from this layer index
     cfg.model.inv_groups = 1
 
-
     # Training parameters
     # -------------------
-    
-    # Are we using spheres/cubes/cylinders/cubic_cylinders as input
-    cfg.data.use_cubes = False
-    cfg.data.cylindric_input = False
 
     # Input threads
     cfg.train.num_workers = 16
+    
+    # Are we using spheres/cubes/cylinders/cubic_cylinders as input
+    cfg.data.use_cubes = False
+    cfg.data.cylindric_input = True
+
+    # How do we sample the input elements (spheres or cubes)
+    cfg.train.data_sampler = 'c-random' # 'c-random' for class balanced random sampling
+    cfg.train.max_points = -1           # positive value will reduce the input size to have exactly the asked number of points
 
     # Input spheres radius. Adapt this with model.in_sub_size. Try to keep a ratio of ~50
-    cfg.train.in_radius = 1.8
+    cfg.train.in_radius = 1.5
 
     # Batch related_parames
     cfg.train.batch_size = 2                # Target batch size. If you don't want calibration, you can directly set train.batch_limit
@@ -166,9 +174,9 @@ def my_config():
     cfg.augment_train.anisotropic = False
     cfg.augment_train.scale = [0.9, 1.1]
     cfg.augment_train.flips = [0.5, 0, 0]
-    cfg.augment_train.rotations = 'all'
+    cfg.augment_train.rotations = 'vertical'
     cfg.augment_train.jitter = 0.005
-    cfg.augment_train.color_drop = 0.3
+    cfg.augment_train.color_drop = 0.2
     cfg.augment_train.chromatic_contrast = True
     cfg.augment_train.chromatic_all = False
     cfg.augment_train.chromatic_norm = True
@@ -178,7 +186,11 @@ def my_config():
     # Test parameters
     # ---------------
 
-    cfg.test.max_steps_per_epoch = 50    # Size of one validation epoch (should be small)
+    # How do we sample the input elements (spheres or cubes)
+    cfg.test.data_sampler = 'regular'       # 'regular' to pick spheres regularly accross the data.
+    cfg.test.max_points = -1                # positive value will reduce the input size to have exactly the asked number of points
+
+    cfg.test.max_steps_per_epoch = 50       # Size of one validation epoch (should be small)
     cfg.test.batch_limit = 1
     cfg.test.batch_size = 1
 
@@ -223,7 +235,6 @@ def adjust_config(cfg):
     cfg.augment_test.chromatic_norm = cfg.augment_train.chromatic_norm
     cfg.augment_test.height_norm = cfg.augment_train.height_norm
     cfg.test.num_workers = cfg.train.num_workers
-    cfg.test.max_points = cfg.train.max_points
 
 
     return cfg
@@ -338,7 +349,6 @@ if __name__ == '__main__':
     underline('Loading validation dataset')
     test_dataset = S3DISDataset(cfg,
                                 chosen_set='validation',
-                                regular_sampling=True,
                                 precompute_pyramid=True)
     
     # Calib from training data
@@ -394,6 +404,8 @@ if __name__ == '__main__':
         net = KPInvFCNN(cfg)
     elif cfg.model.kp_mode.startswith('transformer') or cfg.model.kp_mode.startswith('inv_'):
         net = InvolutionFCNN(cfg)
+    elif cfg.model.kp_mode.startswith('kpnext'):
+        net = KPNeXt(cfg, modulated=modulated, deformable=False)
 
     print()
     print(net)

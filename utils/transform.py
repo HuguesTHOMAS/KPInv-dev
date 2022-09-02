@@ -221,18 +221,18 @@ class RandomDropColor(object):
 
 
 class RandomFullColor(object):
+    """
+    As in PointNext they do the random drop before Color normalize, it means the features 
+    values after drop are not zeros but -2.XXXX. So here we use this function after normalize 
+    and allow the colors to be randomly -2, 0 or 2 for each channel.
+    """
 
     def __init__(self, p=0.3):
         self.p = p
 
     def __call__(self, coord, feat, label):
-        r = np.random.rand()
-        if r < self.p / 3:
-            feat[:, :3] = -1.0
-        elif r < self.p * 2 / 3:
-            feat[:, :3] = 0.0
-        elif r < self.p:
-            feat[:, :3] = 1.0
+        if np.random.rand() < self.p:
+            feat[:, :3] = 2 * np.random.randint(-1, 2, size=3)
         return coord, feat, label
 
     

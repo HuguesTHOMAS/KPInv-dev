@@ -82,7 +82,7 @@ def S3DIS_cfg(cfg):
 
 class S3DISDataset(SceneSegDataset):
 
-    def __init__(self, cfg, chosen_set='training', regular_sampling=False, precompute_pyramid=False, load_data=True):
+    def __init__(self, cfg, chosen_set='training', precompute_pyramid=False, load_data=True):
         """
         Class to handle S3DIS dataset.
         Simple implementation.
@@ -93,7 +93,6 @@ class S3DISDataset(SceneSegDataset):
         SceneSegDataset.__init__(self,
                                  cfg,
                                  chosen_set=chosen_set,
-                                 regular_sampling=regular_sampling,
                                  precompute_pyramid=precompute_pyramid)
 
         ############
@@ -116,7 +115,7 @@ class S3DISDataset(SceneSegDataset):
         # Sampling data preparation
         ###########################
 
-        if self.regular_sampling:
+        if self.data_sampler == 'regular':
             # In case regular sampling, generate the first sampling points
             self.new_reg_sampling_pts()
 

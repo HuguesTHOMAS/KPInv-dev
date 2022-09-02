@@ -67,7 +67,7 @@ from utils.transform import ComposeAugment, RandomRotate, RandomScaleFlip, Rando
 
 class SceneSegDataset(Dataset):
 
-    def __init__(self, cfg, chosen_set='training', regular_sampling=False, precompute_pyramid=False):
+    def __init__(self, cfg, chosen_set='training', precompute_pyramid=False):
         """
         Initialize parameters of the dataset here.
         """
@@ -80,7 +80,6 @@ class SceneSegDataset(Dataset):
 
         # Training or test set
         self.set = chosen_set
-        self.regular_sampling = regular_sampling
         self.precompute_pyramid = precompute_pyramid
 
         # Parameters depending on training or test
@@ -92,6 +91,7 @@ class SceneSegDataset(Dataset):
         self.b_n = b_cfg.batch_size
         self.b_lim = b_cfg.batch_limit
         self.max_p = b_cfg.max_points
+        self.data_sampler = b_cfg.data_sampler
 
         # Cube sampling or sphere sampling
         self.use_cubes = cfg.data.use_cubes
@@ -367,11 +367,19 @@ class SceneSegDataset(Dataset):
 
     def prepare_label_inds(self):
 
+        # Get all indices
+        all_inds = []
+        for cloud_ind, cloud_labels in enumerate(self.input_labels):
+            all_inds.append(np.vstack((np.full(cloud_labels.shape, cloud_ind, dtype=np.int64),
+                                       np.arange(cloud_labels.shape[0], dtype=np.int64))))
+        self.all_inds = np.hstack(all_inds)
+
         # Choose random points of each class for each cloud
         for label in self.label_values:
 
             # Gather indices of the points with this label in all the input clouds [2, N1], [2, N2], ...]
             l_inds = []
+            all_inds = []
             for cloud_ind, cloud_labels in enumerate(self.input_labels):
                 label_indices = np.where(np.equal(cloud_labels, label))[0]
                 l_inds.append(np.vstack((np.full(label_indices.shape, cloud_ind, dtype=np.int64), label_indices)))
@@ -445,16 +453,16 @@ class SceneSegDataset(Dataset):
 
     def get_votes(self):
         v = 0
-        if self.regular_sampling:
+        if self.data_sampler == 'regular':
             with self.worker_lock:
                 reg_sampling_N = float(self.reg_sample_pts.shape[0])
                 v = float(self.reg_votes.item())
                 v += float(self.reg_sampling_i.item()) / reg_sampling_N
         return v
     
-    def sample_random_sphere(self, center_noise=0.1):
+    def sample_input_center(self, center_noise=0.1):
 
-        if self.regular_sampling:
+        if self.data_sampler == 'regular':
             
             with self.worker_lock:
                     
@@ -477,17 +485,20 @@ class SceneSegDataset(Dataset):
                 # Update sampling index
                 self.reg_sampling_i += 1
 
-        else:
+        elif 'random' in self.data_sampler:
 
-            # Choose a random label
-            rand_l = np.random.choice(self.num_classes)
-            while rand_l in self.ignored_labels:
+            if self.data_sampler == 'c-random':
+                # Choose a random label and then a random point with this label
                 rand_l = np.random.choice(self.num_classes)
+                while rand_l in self.ignored_labels:
+                    rand_l = np.random.choice(self.num_classes)
+                rand_ind = np.random.choice(self.label_indices[rand_l].shape[1])
+                cloud_ind, point_ind = self.label_indices[rand_l][:, rand_ind]
+            else:
+                # Directly choose a random point regardless of labels
+                rand_ind = np.random.choice(self.all_inds.shape[1])
+                cloud_ind, point_ind = self.all_inds[:, rand_ind]
 
-            # Choose a random point from this class
-            rand_ind = np.random.choice(self.label_indices[rand_l].shape[1])
-            cloud_ind, point_ind = self.label_indices[rand_l][:, rand_ind]
-            
             # Get points from tree structure
             points = np.array(self.input_trees[cloud_ind].data, copy=False)
 
@@ -498,6 +509,9 @@ class SceneSegDataset(Dataset):
 
             # Add a small noise to center point
             center_point += np.random.normal(scale=center_noise * self.in_radius, size=center_point.shape)
+
+        else:
+            raise ValueError('Unknown data_sampler type: {:s}. Must be in ("regular", "random", "c-random")'.format(self.data_sampler))
 
         return cloud_ind, center_point
 
@@ -515,28 +529,56 @@ class SceneSegDataset(Dataset):
         if self.cylindric_input:
             q_point = q_point[:, :2]
 
-        # Radius of query (larger in case we want a cube)
-        r = self.in_radius
-        if self.use_cubes:
-            if self.cylindric_input:
-                r *= np.sqrt(self.dim - 1)
-            else:
-                r *= np.sqrt(self.dim)
+        # In case we have a maxpoint, we query the right number of points directly (except for cubes)
+        if self.max_p > 0:
+            
+            # Use a larger number of points for a cube
+            k = self.max_p
+            if self.use_cubes:
+                k*=2
 
-        # Query points
-        input_inds = self.input_trees[cloud_ind].query_radius(q_point, r=r)[0]
+            # Query points
+            input_inds = self.input_trees[cloud_ind].query(X, k, return_distance=False)
+            print(input_inds.shape)
+            input_inds = np.squeeze(input_inds)
 
-        # Get points from tree structure
-        points = np.array(self.input_trees[cloud_ind].data, copy=False)
-        input_points = points[input_inds].astype(np.float32)
-        
-        # Crop the cube if wanted
-        if self.use_cubes:
-            cube_mask = np.logical_and(np.all(input_points > q_point - self.in_radius, axis=-1),
-                                       np.all(input_points < q_point + self.in_radius, axis=-1))
-            input_points = input_points[cube_mask]
-            input_inds = input_inds[cube_mask]
+            # Get points from tree structure
+            points = np.array(self.input_trees[cloud_ind].data, copy=False)
+            input_points = points[input_inds].astype(np.float32)
 
+            # Crop the cube if wanted
+            if self.use_cubes:
+                cube_dists = np.max(np.abs(input_points - center_point.astype(np.float32)), axis=1)
+                # pick_indices = np.argsort(cube_dists)[:self.max_p]
+                pick_indices = np.argpartition(cube_dists, self.max_p)[:self.max_p]
+                input_points = input_points[pick_indices, :]
+                input_inds = input_inds[pick_indices]
+
+        else:
+
+            # Radius of query (larger in case we want a cube)
+            r = self.in_radius
+            if self.use_cubes:
+                if self.cylindric_input:
+                    r *= np.sqrt(self.dim - 1)
+                else:
+                    r *= np.sqrt(self.dim)
+
+            # Query points
+            input_inds = self.input_trees[cloud_ind].query_radius(q_point, r=r)[0]
+
+            # Get points from tree structure
+            points = np.array(self.input_trees[cloud_ind].data, copy=False)
+            input_points = points[input_inds].astype(np.float32)
+            
+            # Crop the cube if wanted
+            if self.use_cubes:
+                cube_mask = np.logical_and(np.all(input_points > q_point - self.in_radius, axis=-1),
+                                        np.all(input_points < q_point + self.in_radius, axis=-1))
+                input_points = input_points[cube_mask]
+                input_inds = input_inds[cube_mask]
+
+        # Stop here if we do not need more
         if only_inds:
             return input_inds
 
@@ -585,14 +627,14 @@ class SceneSegDataset(Dataset):
 
         while True:
 
-            # Pick a sphere center randomly
-            cloud_ind, c_point = self.sample_random_sphere()
+            # Pick an input area center randomly
+            cloud_ind, c_point = self.sample_input_center()
 
             # In case we reach the end of the test epoch
             if cloud_ind is None:
                 break
 
-            # Get the input sphere
+            # Get the input area
             in_inds, in_points, in_features, in_labels = self.get_input_area(cloud_ind, c_point)
             
             if in_points.shape[0] < 1:
@@ -752,7 +794,7 @@ class SceneSegDataset(Dataset):
             batch_n = 0
             batch_n_pts = 0
             while True:
-                cloud_ind, center_p = self.sample_random_sphere()
+                cloud_ind, center_p = self.sample_input_center()
                 _, in_points, _, _ = self.get_input_area(cloud_ind, center_p)
                 in_points, _, _ = calib_augment(in_points, None, None)
                 if in_points.shape[0] > 0:
@@ -822,7 +864,7 @@ class SceneSegDataset(Dataset):
         # First get a avg of the pts per point cloud
         all_cloud_n = []
         while len(all_cloud_n) < samples:
-            cloud_ind, center_p = self.sample_random_sphere()
+            cloud_ind, center_p = self.sample_input_center()
             if cloud_ind is None:
                 break
             _, in_points, feat, label = self.get_input_area(cloud_ind, center_p)
@@ -960,7 +1002,7 @@ class SceneSegDataset(Dataset):
         truncated_n = [0 for _ in range(num_layers)]
         all_n = [0 for _ in range(num_layers)]
         while len(all_neighbor_counts[0]) < samples:
-            cloud_ind, center_p = self.sample_random_sphere()
+            cloud_ind, center_p = self.sample_input_center()
             _, in_points, _, _ = self.get_input_area(cloud_ind, center_p)
             
             if in_points.shape[0] > 0:
@@ -1069,7 +1111,7 @@ class SceneSegSampler(Sampler):
             self.N = dataset.cfg.test.max_steps_per_epoch
 
         # Only perform validation for a portion of the validation test at each epoch
-        if dataset.set =='validation' and dataset.regular_sampling:
+        if dataset.set =='validation' and dataset.data_sampler == 'regular':
             reg_sampling_N = int(dataset.reg_sample_pts.shape[0])
             self.N = min(self.N, int(np.ceil(reg_sampling_N * 0.6)))
 

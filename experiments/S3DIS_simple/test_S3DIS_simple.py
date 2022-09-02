@@ -67,7 +67,6 @@ def test_log(chosen_log, new_cfg, save_visu=False):
     underline('Loading validation dataset')
     test_dataset = S3DISDataset(new_cfg,
                                 chosen_set='test',
-                                regular_sampling=True,
                                 precompute_pyramid=True)
     
     # Calib from training data

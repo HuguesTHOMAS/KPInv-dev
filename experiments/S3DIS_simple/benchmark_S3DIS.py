@@ -200,7 +200,7 @@ def my_config():
     cfg.augment_train.flips = [0.5, 0, 0]
     cfg.augment_train.rotations = 'vertical'
     cfg.augment_train.jitter = 0.005
-    cfg.augment_train.color_drop = 0.3
+    cfg.augment_train.color_drop = 0.2
 
     
     # Test parameters
@@ -216,7 +216,6 @@ def my_config():
     cfg.test.num_workers = cfg.train.num_workers
     cfg.test.batch_size = cfg.train.batch_size
     cfg.test.batch_limit = cfg.train.batch_limit
-    cfg.test.max_points = cfg.train.max_points
 
     return cfg
 
@@ -301,7 +300,6 @@ if __name__ == '__main__':
     underline('Loading validation dataset')
     test_dataset = S3DISDataset(cfg,
                                 chosen_set='validation',
-                                regular_sampling=True,
                                 precompute_pyramid=True)
     
     # Calib from training data

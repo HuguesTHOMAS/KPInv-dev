@@ -22,7 +22,8 @@ from torch.nn.init import kaiming_uniform_
 
 
 from kernels.kernel_points import load_kernels
-from models.generic_blocks import index_select, radius_gaussian, local_maxpool, UnaryBlock, BatchNormBlock, GroupNormBlock, NormBlock
+from models.generic_blocks import index_select, radius_gaussian, local_maxpool, UnaryBlock, BatchNormBlock, \
+    GroupNormBlock, NormBlock, DropPathPack
 
 # ----------------------------------------------------------------------------------------------------------------------
 #
@@ -305,6 +306,12 @@ class KPConv(nn.Module):
 
             output_feats = torch.einsum("mkc,kcd->md", weighted_feats, self.weights)  # (M, K, C) x (K, C, O) -> (M, O)
 
+        elif self.groups == self.in_channels and self.out_channels == self.in_channels:
+
+            # Depthwise conv
+            weights = self.weights.view(1, self.kernel_size, self.groups) # (K, C, 1, 1) -> (1, K, C)
+            output_feats = torch.sum(weighted_feats * weights, dim=1)  # (M, K, C) -> (M, C)
+
         else:
             # group conv
             weighted_feats = weighted_feats.view(-1, self.kernel_size, self.groups, self.in_channels_per_group)  # (M, K, C) -> (M, K, G, C//G)
@@ -333,7 +340,7 @@ class KPConv(nn.Module):
         repr_str += ', in_C: {:d}'.format(self.in_channels)
         repr_str += ', out_C: {:d}'.format(self.out_channels)
         repr_str += ', r: {:.2f}'.format(self.radius)
-        repr_str += ', sigma: {:d})'.format(self.sigma)
+        repr_str += ', sigma: {:.2f})'.format(self.sigma)
 
         return repr_str
 
@@ -639,7 +646,7 @@ class KPDef(nn.Module):
         repr_str += ', in_C: {:d}'.format(self.in_channels)
         repr_str += ', out_C: {:d}'.format(self.out_channels)
         repr_str += ', r: {:.2f}'.format(self.radius)
-        repr_str += ', sigma: {:d})'.format(self.sigma)
+        repr_str += ', sigma: {:.2f})'.format(self.sigma)
 
         return repr_str
 
@@ -706,15 +713,7 @@ class KPConvBlock(nn.Module):
 
         # Define modules
         self.activation = activation
-
-        if norm_type == 'none':
-            self.norm = BatchNormBlock(out_channels, -1)
-        elif norm_type == 'batch':
-            self.norm = BatchNormBlock(out_channels, bn_momentum)
-        elif norm_type == 'group':
-            self.norm = GroupNormBlock(out_channels)
-        else:
-            raise ValueError('Unknown normalization type: {:s}. Must be in (\'group\', \'batch\', \'none\')'.format(norm_type))
+        self.norm = NormBlock(out_channels, norm_type, bn_momentum)
 
         if deformable:
             self.conv = KPDef(in_channels,
@@ -864,6 +863,125 @@ class KPConvResidualBlock(nn.Module):
         # Final activation
         q_feats = x + shortcut
         q_feats = self.activation(q_feats)
+
+        return q_feats
+
+
+class KPConvInvertedBlock(nn.Module):
+
+    def __init__(self,
+                 in_channels: int,
+                 out_channels: int,
+                 kernel_size: int,
+                 radius: float,
+                 sigma: float,
+                 drop_path: float = 0., 
+                 layer_scale_init_value: float = 1e-6,
+                 modulated: bool = False,
+                 deformable: bool = False,
+                 use_geom: bool = False,
+                 influence_mode: str = 'linear',
+                 aggregation_mode: str = 'sum',
+                 dimension: int = 3,
+                 strided: bool = False,
+                 norm_type: str = 'layer',
+                 bn_momentum: float = 0.98,
+                 activation: nn.Module = nn.GELU()):
+        """
+        KPConv inverted block as in ConvNext (and PointNext).
+        Args:
+            in_channels             (int): dimension input features
+            out_channels            (int): dimension input features
+            kernel_size             (int): number of kernel points
+            radius                (float): convolution radius
+            sigma                 (float): influence radius of each kernel point
+            modulated        (bool=False): Use modulations (self-attention)
+            deformable       (bool=False): Use deformable KPConv
+            use_geom         (bool=False): Use geometric encodings
+            influence_mode (str='linear'): Influence function ('constant', 'linear', 'gaussian')
+            aggregation_mode  (str='sum'): Aggregation mode ('nearest', 'sum')
+            dimension             (int=3): dimension of input
+            groups                (int=1): Number of groups in KPConv
+            strided          (bool=False): strided or not
+            norm_type       (str='batch'): type of normalization used in layer ('group', 'batch', 'none')
+            bn_momentum      (float=0.98): Momentum for batch normalization
+            activation (nn.Module|None=nn.LeakyReLU(0.1)): Activation function. Use None for no activation.
+        """
+        super(KPConvInvertedBlock, self).__init__()
+
+        # Define parameters
+        self.in_channels = in_channels
+        self.out_channels = out_channels
+        self.strided = strided
+        self.bn_momentum = bn_momentum
+        self.norm_type = norm_type
+        mid_channels = out_channels * 4
+
+        # learnable parameters
+        self.linear1 = nn.Linear(in_channels, mid_channels)
+        self.linear2 = nn.Linear(mid_channels, out_channels)
+
+        self.conv = KPConv(in_channels,
+                           in_channels,
+                           kernel_size,
+                           radius,
+                           sigma,
+                           modulated=modulated,
+                           use_geom=use_geom,
+                           groups=in_channels,
+                           dimension=dimension,
+                           influence_mode=influence_mode,
+                           aggregation_mode=aggregation_mode)
+        if in_channels != out_channels:
+            self.linear_shortcut =nn.Linear(in_channels, out_channels)
+        else:
+            self.linear_shortcut = nn.Identity()
+                               
+        # Other parameters
+        self.norm = NormBlock(in_channels, norm_type, bn_momentum)
+        self.activation = activation
+
+        # Optimizations
+        if layer_scale_init_value > 0:
+            self.gamma = nn.Parameter(layer_scale_init_value * torch.ones((out_channels)), requires_grad=True)  
+        else: 
+            self.gamma = None
+        self.drop_path = DropPathPack(drop_path) if drop_path > 0. else nn.Identity()
+        
+        return
+
+    def forward(self, q_pts, s_pts, s_feats, neighbor_indices):
+
+        # First depthwise convolution
+        x = self.conv(q_pts, s_pts, s_feats, neighbor_indices)
+
+        # Normalization
+        x = self.norm(x)
+
+        # Upscale features
+        x = self.linear1(x)
+
+        # Activation
+        x = self.activation(x)
+
+        # Downscale features
+        x = self.linear2(x)
+        
+        # LayerScale
+        if self.gamma is not None:
+            x = self.gamma * x
+
+        # Adapt shortcut in case block is strided
+        if self.strided:
+            shortcut = local_maxpool(s_feats, neighbor_indices)
+        else:
+            shortcut = s_feats
+
+        # Adapt shortcut in case this is a upscaling layer (only happens when strided)
+        shortcut = self.linear_shortcut(shortcut)
+
+        # Apply shortcut with stochastic depth
+        q_feats = shortcut + self.drop_path(x)
 
         return q_feats
 

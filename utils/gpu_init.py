@@ -13,7 +13,7 @@ USED_GPU = ''
 #
 
 
-def init_gpu(gpu_id='auto'):
+def init_gpu(gpu_id='0'):
     """
     Initialize the USED_GPU global variable to a free GPU, or retrieve its actual value.
     Args:

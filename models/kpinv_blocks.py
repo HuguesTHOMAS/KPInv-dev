@@ -244,7 +244,7 @@ class KPInv(nn.Module):
         repr_str += '(K: {:d}'.format(self.kernel_size)
         repr_str += ', C: {:d}'.format(self.channels)
         repr_str += ', r: {:.2f}'.format(self.radius)
-        repr_str += ', sigma: {:d})'.format(self.sigma)
+        repr_str += ', sigma: {:.2f})'.format(self.sigma)
 
         return repr_str
 
@@ -304,15 +304,8 @@ class KPInvBlock(nn.Module):
 
         # Define modules
         self.activation = activation
+        self.norm = NormBlock(out_channels, norm_type, bn_momentum)
 
-        if norm_type == 'none':
-            self.norm = BatchNormBlock(channels, -1)
-        elif norm_type == 'batch':
-            self.norm = BatchNormBlock(channels, bn_momentum)
-        elif norm_type == 'group':
-            self.norm = GroupNormBlock(channels)
-        else:
-            raise ValueError('Unknown normalization type: {:s}. Must be in (\'group\', \'batch\', \'none\')'.format(norm_type))
 
         self.conv = KPInv(channels,
                           kernel_size,

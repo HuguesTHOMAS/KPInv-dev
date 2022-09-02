@@ -594,10 +594,18 @@ def exp_drop_before_norm():
     logs_names = ['transformer-med-spheres',
                   'transformer-cyl-norm-drop',
                   'transformer-cyl-drop-norm',
-                  '...',
-                  'do poisson disk sampling',
+                  'trans-cyl-fps_0.04',
+                  'trans-cyl-fps_-4',
+                  'kpnext-L_2.5-cyl',
+                  'kpnext-L_3.5-cyl',
                   '...',
                   'do_KP_inv', ]
+                  
+
+    # TODO: Handle kpnextarchitecture like ConvNext, operate DropPath
+    # TODO: random / regular/ c-random
+    # TODO: random / regular/ c-random
+    # TODO: KPInv and more ConvNext optims
 
 
     # safe check log names

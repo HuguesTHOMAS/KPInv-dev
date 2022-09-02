@@ -278,6 +278,22 @@ class GroupNormBlock(nn.Module):
                                                                   self.num_groups)
 
 
+class LayerNormBlock(nn.Module):
+    """ 
+    LayerNorm on the feature channels. Expects input in the shape (*, N, C)
+    Will perform layer norm on the last dimension C
+    """
+    def __init__(self, normalized_shape, eps=1e-6):
+        super().__init__()
+
+        self.eps = eps
+        self.normalized_shape = (normalized_shape, )
+
+        self.layer_norm = nn.LayerNorm(self.normalized_shape, eps)
+    
+    def forward(self, x):
+        return self.layer_norm(x)
+
 
 class NormBlock(nn.Module):
 
@@ -306,6 +322,8 @@ class NormBlock(nn.Module):
             self.norm = BatchNormBlock(num_channels, bn_momentum)
         elif norm_type == 'group':
             self.norm = GroupNormBlock(num_channels)
+        elif norm_type == 'layer':
+            self.norm = LayerNormBlock(num_channels)
         else:
             raise ValueError('Unknown normalization type: {:s}. Must be in (\'group\', \'batch\', \'none\')'.format(norm_type))
 
@@ -410,6 +428,7 @@ class LinearUpsampleBlock(nn.Module):
 
         return torch.sum(neighbor_x * neighbor_w.unsqueeze(2), dim=1)  # (M, C)
 
+
 class NearestUpsampleBlock(nn.Module):
 
     def __init__(self):
@@ -434,4 +453,43 @@ class MaxPoolBlock(nn.Module):
 
     def forward(self, x, neighb_inds):
         return local_maxpool(x, neighb_inds)
+
+
+class DropPathPack(nn.Module):
+    """
+    Drop paths (Stochastic Depth) per sample  (when applied in main path of residual blocks).
+    Adapted for pack batch input (N1+...+Nx, C)
+    """
+
+    def __init__(self,
+                 drop_prob: float = 0.,
+                 scale_by_keep: bool = True):
+        super(DropPath, self).__init__()
+        self.drop_prob = drop_prob
+        self.scale_by_keep = scale_by_keep
+
+    def forward(self, x, lenghts):
+
+        # Get keep prob
+        if self.drop_prob == 0. or not self.training:
+            return x
+        keep_prob = 1 - self.drop_prob
+
+        # Get random 0 or 1 for each batch (B,)
+        bernouilli = x.new_empty((len(lenghts),)).bernoulli_(keep_prob)
+
+        # Normalize
+        if keep_prob > 0.0 and self.scale_by_keep:
+            bernouilli.div_(keep_prob)
+
+        # Convert to pack shape -> (N,)
+        bernouilli_full = torch.cat([x.new_full((l,), b) for l, b in zip(lenghts, bernouilli)], 0)
+
+        shape = (x.shape[0],) + (1,) * (x.ndim - 1)
+        return x * bernouilli_full.view(shape)
+
+    def extra_repr(self):
+        return f'drop_prob={round(self.drop_prob,3):0.3f}'
+
+
 
