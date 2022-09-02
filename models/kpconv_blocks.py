@@ -17,6 +17,7 @@
 import math
 import torch
 import torch.nn as nn
+import numpy as np
 from torch import Tensor
 from torch.nn.init import kaiming_uniform_
 
@@ -93,7 +94,7 @@ class KPConv(nn.Module):
         self.in_channels = in_channels
         self.out_channels = out_channels
         self.shell_sizes = shell_sizes
-        self.K = torch.sum(shell_sizes).item()
+        self.K = np.sum(shell_sizes).item()
         self.radius = radius
         self.sigma = sigma
         self.groups = groups
@@ -390,7 +391,7 @@ class KPDef(nn.Module):
         self.in_channels = in_channels
         self.out_channels = out_channels
         self.shell_sizes = shell_sizes
-        self.K = torch.sum(shell_sizes).item()
+        self.K = np.sum(shell_sizes).item()
         self.radius = radius
         self.sigma = sigma
         self.groups = groups

@@ -78,6 +78,8 @@ def my_config():
     # cfg.model.layer_blocks = (4,  6,  8, 12,  6)  # Strong architecture
 
     cfg.model.layer_blocks = (3,  5,  7,  9,  9,  3)  # For large block inputs
+
+    cfg.model.layer_blocks = (3,  4,  5,  9,  4)
     cfg.model.norm = 'batch'
     cfg.model.init_channels = 96
 

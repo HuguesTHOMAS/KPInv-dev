@@ -541,18 +541,18 @@ def shell_kernel_generator(radius, shell_n_pts, num_kernels=1, dimension=3, verb
     return kernel_points, saved_gradient_norms
 
 
-def load_kernels(radius, num_kpoints, dimension, fixed, lloyd=False):
+def load_kernels(radius, shell_sizes, dimension, fixed, lloyd=False):
 
     # Kernel directory
     kernel_dir = 'kernels/dispositions'
     if not exists(kernel_dir):
         makedirs(kernel_dir)
 
-    # To many points switch to Lloyds
-    lloyd = False
+    # If we only give one number (total K), use Lloyd optimization
+    lloyd = len(shell_sizes) < 2
 
-    all_disp = []
-    all_volumes = []
+    # Get number of kernel points
+    num_kpoints = np.sum(shell_sizes)
 
     # Kernel_file
     kernel_file = join(kernel_dir, 'k_{:03d}_{:s}_{:d}D_{:d}.ply'.format(num_kpoints, fixed, dimension, int(lloyd)))
@@ -578,7 +578,7 @@ def load_kernels(radius, num_kpoints, dimension, fixed, lloyd=False):
         else:
             # Create kernels
             kernel_points, grad_norms = shell_kernel_generator(1.0,
-                                                                num_kpoints,
+                                                                shell_sizes,
                                                                 num_kernels=100,
                                                                 dimension=dimension,
                                                                 verbose=0)
