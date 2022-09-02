@@ -42,7 +42,7 @@ class KPInv(nn.Module):
 
     def __init__(self,
                  channels: int,
-                 kernel_size: int,
+                 shell_sizes: int,
                  radius: float,
                  sigma: float,
                  channels_per_group: int = 16,
@@ -58,7 +58,7 @@ class KPInv(nn.Module):
         Rigid KPInv.
         Args:
             channels (int): The number of the input=output channels.
-            kernel_size (int): The number of kernel points.
+            shell_sizes (int): The number of kernel points.
             radius (float): The radius used for kernel point init.
             sigma (float): The influence radius of each kernel point.
             channels_per_group (int=16): number of channels per group in convolution.
@@ -80,7 +80,7 @@ class KPInv(nn.Module):
 
         # Save parameters
         self.channels = channels
-        self.kernel_size = kernel_size
+        self.shell_sizes = shell_sizes
         self.radius = radius
         self.sigma = sigma
         self.groups = groups
@@ -96,7 +96,7 @@ class KPInv(nn.Module):
         self.reduce_mlp = UnaryBlock(channels, channels // reduction_ratio, norm_type, bn_momentum)
 
         # MLP for kernel weights generation (second one doe not have activation as it need to predict any value)
-        self.gen_mlp = nn.Linear(channels // reduction_ratio, self.kernel_size * self.groups, bias=True)
+        self.gen_mlp = nn.Linear(channels // reduction_ratio, self.shell_sizes * self.groups, bias=True)
 
         # Initialize kernel points
         kernel_points = self.initialize_kernel_points()
@@ -109,7 +109,7 @@ class KPInv(nn.Module):
         Initialize the kernel point positions in a sphere
         :return: the tensor of kernel points
         """
-        kernel_points = load_kernels(self.radius, self.kernel_size, dimension=self.dimension, fixed=self.fixed_kernel_points)
+        kernel_points = load_kernels(self.radius, self.shell_sizes, dimension=self.dimension, fixed=self.fixed_kernel_points)
         return torch.from_numpy(kernel_points).float()
 
     def get_neighbors_influences(self, q_pts: Tensor,
@@ -162,7 +162,7 @@ class KPInv(nn.Module):
             # In case of nearest mode, only the nearest KP can influence each point
             if self.aggregation_mode == 'nearest':
                 neighbors_1nn = torch.argmin(sq_distances, dim=2)
-                neighbor_weights *= torch.transpose(nn.functional.one_hot(neighbors_1nn, self.kernel_size), 1, 2)
+                neighbor_weights *= torch.transpose(nn.functional.one_hot(neighbors_1nn, self.shell_sizes), 1, 2)
 
             elif self.aggregation_mode != 'sum':
                 raise ValueError("Unknown aggregation mode: '{:s}'. Should be 'nearest' or 'sum'".format(self.aggregation_mode))
@@ -222,8 +222,8 @@ class KPInv(nn.Module):
         # ***************************
         
         # Separate features in groups
-        weighted_feats2 = weighted_feats.view(-1, self.kernel_size, self.groups, self.channels_per_group)  # (M, K, C) -> (M, K, G, C//G)
-        conv_weights2 = conv_weights.view(-1, self.kernel_size, self.groups)  # (M, K*G) -> (M, K, G)
+        weighted_feats2 = weighted_feats.view(-1, self.shell_sizes, self.groups, self.channels_per_group)  # (M, K, C) -> (M, K, G, C//G)
+        conv_weights2 = conv_weights.view(-1, self.shell_sizes, self.groups)  # (M, K*G) -> (M, K, G)
 
         # (M, K, G, C//G) x (M, K, G) -> (M, G, C//G)
         output_feats = torch.sum(weighted_feats2 * conv_weights2.unsqueeze(-1), dim=1)
@@ -241,7 +241,7 @@ class KPInv(nn.Module):
     def __repr__(self):
 
         repr_str = 'KPInv'
-        repr_str += '(K: {:d}'.format(self.kernel_size)
+        repr_str += '(K: {:d}'.format(self.shell_sizes)
         repr_str += ', C: {:d}'.format(self.channels)
         repr_str += ', r: {:.2f}'.format(self.radius)
         repr_str += ', sigma: {:.2f})'.format(self.sigma)
@@ -261,7 +261,7 @@ class KPInvBlock(nn.Module):
 
     def __init__(self,
                  channels: int,
-                 kernel_size: int,
+                 shell_sizes: int,
                  radius: float,
                  sigma: float,
                  channels_per_group: int = 16,
@@ -276,7 +276,7 @@ class KPInvBlock(nn.Module):
         KPInv block with normalization and activation.  
         Args:
             channels (int): dimension input=output features
-            kernel_size (int): number of kernel points
+            shell_sizes (int): number of kernel points
             radius (float): convolution radius
             sigma (float): influence radius of each kernel point
             channels_per_group (int=16): number of channels per group in convolution.
@@ -292,7 +292,7 @@ class KPInvBlock(nn.Module):
 
         # Define parameters
         self.channels = channels
-        self.kernel_size = kernel_size
+        self.shell_sizes = shell_sizes
         self.radius = radius
         self.sigma = sigma
         self.channels_per_group = channels_per_group
@@ -308,7 +308,7 @@ class KPInvBlock(nn.Module):
 
 
         self.conv = KPInv(channels,
-                          kernel_size,
+                          shell_sizes,
                           radius,
                           sigma,
                           channels_per_group=channels_per_group,
@@ -340,7 +340,7 @@ class KPInvResidualBlock(nn.Module):
     def __init__(self,
                  in_channels: int,
                  out_channels: int,
-                 kernel_size: int,
+                 shell_sizes: int,
                  radius: float,
                  sigma: float,
                  channels_per_group: int = 16,
@@ -357,7 +357,7 @@ class KPInvResidualBlock(nn.Module):
         Args:
             in_channels (int): dimension input features
             out_channels (int): dimension input features
-            kernel_size (int): number of kernel points
+            shell_sizes (int): number of kernel points
             radius (float): convolution radius
             sigma (float): influence radius of each kernel point
             channels_per_group (int=16): number of channels per group in convolution.
@@ -390,7 +390,7 @@ class KPInvResidualBlock(nn.Module):
 
         # KPInv block with normalization and activation
         self.conv = KPInvBlock(mid_channels,
-                               kernel_size,
+                               shell_sizes,
                                radius,
                                sigma,
                                channels_per_group=channels_per_group,

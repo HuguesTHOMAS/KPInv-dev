@@ -79,14 +79,14 @@ def my_config():
 
     cfg.model.layer_blocks = (3,  5,  7,  9,  9,  3)  # For large block inputs
     cfg.model.norm = 'batch'
-    cfg.model.init_channels = 128
+    cfg.model.init_channels = 96
 
     cfg.model.kp_mode = 'kpnext'            # Choose ['kpconv', 'kpdef', 'kpinv']. 
                                             # Choose ['inv_v1', 'inv_v2', 'inv_v3', 'inv_v4', 'transformer']
                                             # Choose ['kpconv-mod', 'kpdef-mod', 'kpconv-geom'] for modulations
                                             # Choose ['kpconv-depth'] for depthwise conv (groups = input channels = output chanels)
                                             # Choose ['kpnext'] for better kpconv
-    cfg.model.kernel_size = 15
+    cfg.model.shell_sizes = [1, 15, 46]
     cfg.model.kp_radius = 2.5
     cfg.model.kp_influence = 'linear'
     cfg.model.kp_aggregation = 'sum'
@@ -119,7 +119,7 @@ def my_config():
     
     # Are we using spheres/cubes/cylinders/cubic_cylinders as input
     cfg.data.use_cubes = False
-    cfg.data.cylindric_input = True
+    cfg.data.cylindric_input = False
 
     # How do we sample the input elements (spheres or cubes)
     cfg.train.data_sampler = 'c-random' # 'c-random' for class balanced random sampling
@@ -259,8 +259,7 @@ if __name__ == '__main__':
                   'model.kp_radius',
                   'model.kp_sigma']
 
-    int_args = ['model.kernel_size',
-                'model.conv_groups',
+    int_args = ['model.conv_groups',
                 'model.inv_groups',
                 'model.first_inv_layer',
                 'train.cyc_decrease10',
@@ -273,11 +272,11 @@ if __name__ == '__main__':
                  'augment_train.chromatic_all',
                  'augment_train.chromatic_norm',
                  'augment_train.height_norm']
-                 
 
-    list_args = ['model.layer_blocks',
+    list_args = ['model.shell_sizes',
+                 'model.layer_blocks',
                  'model.neighbor_limits']
-    
+
     parser = argparse.ArgumentParser()
     for str_arg_name in str_args:
         parser_name = '--' + str_arg_name.split('.')[-1]

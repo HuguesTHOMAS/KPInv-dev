@@ -337,7 +337,7 @@ class KPFCNN(nn.Module):
 
         return KPConvBlock(in_C,
                            out_C,
-                           cfg.model.kernel_size,
+                           cfg.model.shell_sizes,
                            radius,
                            sigma,
                            influence_mode=cfg.model.kp_influence,
@@ -350,7 +350,7 @@ class KPFCNN(nn.Module):
 
         return KPInvResidualBlock(in_C,
                                   out_C,
-                                  cfg.model.kernel_size,
+                                  cfg.model.shell_sizes,
                                   radius,
                                   sigma,
                                   channels_per_group=cfg.model.kpinv_grp_ch,

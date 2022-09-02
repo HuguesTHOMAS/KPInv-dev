@@ -40,11 +40,11 @@ def p2p_fit_rep_loss(net):
             KP_locs = m.deformed_KP / m.radius
 
             # Point should not be close to each other
-            for i in range(m.kernel_size):
+            for i in range(m.K):
                 other_KP = torch.cat([KP_locs[:, :i, :], KP_locs[:, i + 1:, :]], dim=1).detach()
                 distances = torch.sqrt(torch.sum((other_KP - KP_locs[:, i:i + 1, :]) ** 2, dim=2))
                 rep_loss = torch.sum(torch.clamp_max(distances - m.sigma, max=0.0) ** 2, dim=1)
-                repulsive_loss += net.l1(rep_loss, torch.zeros_like(rep_loss)) / m.kernel_size
+                repulsive_loss += net.l1(rep_loss, torch.zeros_like(rep_loss)) / m.K
 
     return fitting_loss, repulsive_loss
 
@@ -345,7 +345,7 @@ class KPFCNN(nn.Module):
         # First layer is the most simple convolution possible
         return KPConvBlock(in_C,
                            out_C,
-                           cfg.model.kernel_size,
+                           cfg.model.shell_sizes,
                            radius,
                            sigma,
                            modulated=False,
@@ -363,7 +363,7 @@ class KPFCNN(nn.Module):
 
         return KPConvResidualBlock(in_C,
                                out_C,
-                               cfg.model.kernel_size,
+                               cfg.model.shell_sizes,
                                radius,
                                sigma,
                                modulated=self.modulated,
@@ -692,7 +692,7 @@ class KPNeXt(nn.Module):
         # First layer is the most simple convolution possible
         return KPConvBlock(in_C,
                            out_C,
-                           cfg.model.kernel_size,
+                           cfg.model.shell_sizes,
                            radius,
                            sigma,
                            modulated=False,
@@ -710,7 +710,7 @@ class KPNeXt(nn.Module):
 
         return KPConvInvertedBlock(in_C,
                                    out_C,
-                                   cfg.model.kernel_size,
+                                   cfg.model.shell_sizes,
                                    radius,
                                    sigma,
                                    drop_path=0.,

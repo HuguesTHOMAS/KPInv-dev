@@ -63,7 +63,7 @@ def my_config():
     cfg.model.layer_blocks = (3, 4, 8, 8, 4)    
 
     cfg.model.kp_mode = 'kpconv'
-    cfg.model.kernel_size = 15
+    cfg.model.shell_sizes = [15]
     cfg.model.kp_radius = 2.5
     cfg.model.kp_sigma = 1.0
     cfg.model.kp_influence = 'linear'

@@ -174,16 +174,18 @@ def training_epoch(epoch, t0, net, optimizer, training_loader, cfg, PID_file, de
             mini_step += 1
                 
         except RuntimeError as err:
-            raise err
-            print("Caught a CUDA OOM Error:\n{0}".format(err))
-            print("Reduce batch limit by 10% and restart epoch")
-            training_loader.dataset.b_lim -= int(training_loader.dataset.b_lim * 0.1)
-            for p in net.parameters():
-                if p.grad is not None:
-                    del p.grad  # free some memory
-            torch.cuda.empty_cache()
-            finished = False
-            break
+            if 'CUDA out of memory' in str(err):
+                print("Caught a CUDA OOM Error:\n{0}".format(err))
+                print("Reduce batch limit by 10% and restart epoch")
+                training_loader.dataset.b_lim -= int(training_loader.dataset.b_lim * 0.1)
+                for p in net.parameters():
+                    if p.grad is not None:
+                        del p.grad  # free some memory
+                torch.cuda.empty_cache()
+                finished = False
+                break
+            else:
+                raise err
 
     return finished
 

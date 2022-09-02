@@ -116,7 +116,7 @@ def my_config():
 
 
     cfg.model.kp_mode = 'kpconv'        # Choose ['kpconv', 'kpdef', 'kpinv']. And ['kpconv-mod', 'kpdef-mod'] for modulations
-    cfg.model.kernel_size = 15
+    cfg.model.shell_sizes = [15]
     cfg.model.kp_radius = 2.5
     cfg.model.kp_sigma = 1.2
     cfg.model.kp_influence = 'linear'
@@ -239,9 +239,10 @@ if __name__ == '__main__':
                   'model.kp_radius',
                   'model.kp_sigma']
 
-    int_args = ['model.kernel_size']
+    int_args = []
 
-    list_args = ['model.layer_blocks']
+    list_args = ['model.layer_blocks',
+                 'model.shell_sizes']
 
     parser = argparse.ArgumentParser()
     for str_arg_name in str_args:

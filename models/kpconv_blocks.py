@@ -45,7 +45,7 @@ class KPConv(nn.Module):
     def __init__(self,
                  in_channels: int,
                  out_channels: int,
-                 kernel_size: int,
+                 shell_sizes: list,
                  radius: float,
                  sigma: float,
                  modulated: bool = False,
@@ -65,7 +65,7 @@ class KPConv(nn.Module):
         Args:
             in_channels (int): The number of the input channels.
             out_channels (int): The number of the output channels.
-            kernel_size (int): The number of kernel points.
+            shell_sizes (list): The number of kernel points per shell.
             radius (float): The radius used for kernel point init.
             sigma (float): The influence radius of each kernel point.
             modulated (bool=False): Use modulations (self-attention)
@@ -92,7 +92,8 @@ class KPConv(nn.Module):
         # Save parameters
         self.in_channels = in_channels
         self.out_channels = out_channels
-        self.kernel_size = kernel_size
+        self.shell_sizes = shell_sizes
+        self.K = torch.sum(shell_sizes).item()
         self.radius = radius
         self.sigma = sigma
         self.groups = groups
@@ -108,15 +109,15 @@ class KPConv(nn.Module):
 
         # Initialize weights
         if self.groups == 1:
-            weights = torch.zeros(size=(kernel_size, in_channels, out_channels))
+            weights = torch.zeros(size=(self.K, in_channels, out_channels))
         else:
-            weights = torch.zeros(size=(kernel_size, groups, in_channels_per_group, out_channels_per_group))
+            weights = torch.zeros(size=(self.K, groups, in_channels_per_group, out_channels_per_group))
         self.weights = nn.Parameter(weights, requires_grad=True)
         
         # modulations, MLP
         self.modulated = modulated
         if self.modulated:
-            self.gen_mlp = nn.Linear(in_channels, self.kernel_size, bias=True)
+            self.gen_mlp = nn.Linear(in_channels, self.K, bias=True)
             
         # Define MLP delta
         delta_layers = 2
@@ -159,7 +160,7 @@ class KPConv(nn.Module):
         Initialize the kernel point positions in a sphere
         :return: the tensor of kernel points
         """
-        kernel_points = load_kernels(self.radius, self.kernel_size, dimension=self.dimension, fixed=self.fixed_kernel_points)
+        kernel_points = load_kernels(self.radius, self.shell_sizes, dimension=self.dimension, fixed=self.fixed_kernel_points)
         return torch.from_numpy(kernel_points).float()
 
     def get_neighbors_influences(self, q_pts: Tensor,
@@ -213,7 +214,7 @@ class KPConv(nn.Module):
             # In case of nearest mode, only the nearest KP can influence each point
             if self.aggregation_mode == 'nearest':
                 neighbors_1nn = torch.argmin(sq_distances, dim=2)
-                neighbor_weights *= torch.transpose(nn.functional.one_hot(neighbors_1nn, self.kernel_size), 1, 2)
+                neighbor_weights *= torch.transpose(nn.functional.one_hot(neighbors_1nn, self.K), 1, 2)
 
             elif self.aggregation_mode != 'sum':
                 raise ValueError("Unknown aggregation mode: '{:s}'. Should be 'nearest' or 'sum'".format(self.aggregation_mode))
@@ -309,16 +310,16 @@ class KPConv(nn.Module):
         elif self.groups == self.in_channels and self.out_channels == self.in_channels:
 
             # Depthwise conv
-            weights = self.weights.view(1, self.kernel_size, self.groups) # (K, C, 1, 1) -> (1, K, C)
+            weights = self.weights.view(1, self.K, self.groups) # (K, C, 1, 1) -> (1, K, C)
             output_feats = torch.sum(weighted_feats * weights, dim=1)  # (M, K, C) -> (M, C)
 
         else:
             # group conv
-            weighted_feats = weighted_feats.view(-1, self.kernel_size, self.groups, self.in_channels_per_group)  # (M, K, C) -> (M, K, G, C//G)
+            weighted_feats = weighted_feats.view(-1, self.K, self.groups, self.in_channels_per_group)  # (M, K, C) -> (M, K, G, C//G)
             output_feats = torch.einsum("mkgc,kgcd->mgd", weighted_feats, self.weights)  # (M, K, G, C//G) * (K, G, C//G, O//G) -> (M, G, O//G)
             output_feats = output_feats.reshape((-1, self.out_channels))  # (M, G, O//G) -> (M, O)
 
-            # weighted_feats = weighted_feats.view(-1, self.kernel_size, self.groups, self.in_channels_per_group)  # (M, K, C) -> (M, K, G, C//G)
+            # weighted_feats = weighted_feats.view(-1, self.K, self.groups, self.in_channels_per_group)  # (M, K, C) -> (M, K, G, C//G)
             # weighted_feats = weighted_feats.permute((1, 2, 0, 3))  # (M, K, G, C//G) -> (K, G, M, C//G)
             # kernel_outputs = torch.matmul(weighted_feats, self.weights)  # (K, G, M, C//G) x (K, G, C//G, O//G) -> (K, G, M, O//G)
             # kernel_outputs = torch.sum(kernel_outputs, dim=0)  # (K, G, M, O//G) -> (G, M, O//G)
@@ -336,7 +337,7 @@ class KPConv(nn.Module):
     def __repr__(self):
 
         repr_str = 'KPConv'
-        repr_str += '(K: {:d}'.format(self.kernel_size)
+        repr_str += '(K: {:d}'.format(self.K)
         repr_str += ', in_C: {:d}'.format(self.in_channels)
         repr_str += ', out_C: {:d}'.format(self.out_channels)
         repr_str += ', r: {:.2f}'.format(self.radius)
@@ -350,7 +351,7 @@ class KPDef(nn.Module):
     def __init__(self,
                  in_channels: int,
                  out_channels: int,
-                 kernel_size: int,
+                 shell_sizes: list,
                  radius: float,
                  sigma: float,
                  modulated: bool = False,
@@ -366,7 +367,7 @@ class KPDef(nn.Module):
         Args:
             in_channels (int): The number of the input channels.
             out_channels (int): The number of the output channels.
-            kernel_size (int): The number of kernel points.
+            shell_sizes (list): The number of kernel points per shell.
             radius (float): The radius used for kernel point init.
             sigma (float): The influence radius of each kernel point.
             modulated (bool=False): Use modulations (self-attention)
@@ -388,7 +389,8 @@ class KPDef(nn.Module):
         # Save parameters
         self.in_channels = in_channels
         self.out_channels = out_channels
-        self.kernel_size = kernel_size
+        self.shell_sizes = shell_sizes
+        self.K = torch.sum(shell_sizes).item()
         self.radius = radius
         self.sigma = sigma
         self.groups = groups
@@ -407,17 +409,17 @@ class KPDef(nn.Module):
 
         # Initialize weights
         if self.groups == 1:
-            weights = torch.zeros(size=(kernel_size, in_channels, out_channels))
+            weights = torch.zeros(size=(self.K, in_channels, out_channels))
         else:
-            weights = torch.zeros(size=(kernel_size, groups, in_channels_per_group, out_channels_per_group))
+            weights = torch.zeros(size=(self.K, groups, in_channels_per_group, out_channels_per_group))
         self.weights = nn.Parameter(weights, requires_grad=True)
 
         # Deformation generation (temporary make some test then keep only the best implem)
         self.modulated = modulated
         if self.modulated:
-            self.offset_dim = (self.dimension + 1) * self.kernel_size
+            self.offset_dim = (self.dimension + 1) * self.K
         else:
-            self.offset_dim = self.dimension * self.kernel_size
+            self.offset_dim = self.dimension * self.K
 
         self.version = 'v1'
         if self.version == 'v1':
@@ -428,7 +430,7 @@ class KPDef(nn.Module):
             # KPConv
             self.offset_conv = KPConv(in_channels,
                                       self.offset_dim,
-                                      kernel_size,
+                                      shell_sizes,
                                       radius,
                                       sigma,
                                       modulated=False,
@@ -459,7 +461,7 @@ class KPDef(nn.Module):
         Initialize the kernel point positions in a sphere
         :return: the tensor of kernel points
         """
-        kernel_points = load_kernels(self.radius, self.kernel_size, dimension=self.dimension, fixed=self.fixed_kernel_points)
+        kernel_points = load_kernels(self.radius, self.shell_sizes, dimension=self.dimension, fixed=self.fixed_kernel_points)
         return torch.from_numpy(kernel_points).float()
 
     def get_neighbors_influences(self, q_pts: Tensor,
@@ -520,7 +522,7 @@ class KPDef(nn.Module):
             # In case of nearest mode, only the nearest KP can influence each point
             if self.aggregation_mode == 'nearest':
                 neighbors_1nn = torch.argmin(sq_distances.detach(), dim=2)
-                neighbor_weights *= torch.transpose(nn.functional.one_hot(neighbors_1nn, self.kernel_size), 1, 2)
+                neighbor_weights *= torch.transpose(nn.functional.one_hot(neighbors_1nn, self.K), 1, 2)
 
             elif self.aggregation_mode != 'sum':
                 raise ValueError("Unknown aggregation mode: '{:s}'. Should be 'nearest' or 'sum'".format(self.aggregation_mode))
@@ -572,14 +574,14 @@ class KPDef(nn.Module):
 
         if self.modulated:
             # Get offset (in normalized scale) from features
-            unscaled_offsets = self.offset_features[:, :self.dimension * self.kernel_size]
-            unscaled_offsets = unscaled_offsets.view(-1, self.kernel_size, self.dimension)  # (M, K, D)
+            unscaled_offsets = self.offset_features[:, :self.dimension * self.K]
+            unscaled_offsets = unscaled_offsets.view(-1, self.K, self.dimension)  # (M, K, D)
 
             # Get modulations
-            modulations = 2 * torch.sigmoid(self.offset_features[:, self.dimension * self.kernel_size:])   # (M, K)
+            modulations = 2 * torch.sigmoid(self.offset_features[:, self.dimension * self.K:])   # (M, K)
 
         else:
-            unscaled_offsets = self.offset_features.view(-1, self.kernel_size, self.dimension)  # (M, K, D)
+            unscaled_offsets = self.offset_features.view(-1, self.K, self.dimension)  # (M, K, D)
 
         # Rescale offset for this layer
         offsets = unscaled_offsets * self.radius
@@ -618,11 +620,11 @@ class KPDef(nn.Module):
 
         else:
             # group conv
-            weighted_feats = weighted_feats.view(-1, self.kernel_size, self.groups, self.in_channels_per_group)  # (M, K, C) -> (M, K, G, C//G)
+            weighted_feats = weighted_feats.view(-1, self.K, self.groups, self.in_channels_per_group)  # (M, K, C) -> (M, K, G, C//G)
             output_feats = torch.einsum("mkgc,kgcd->mgd", weighted_feats, self.weights)  # (M, K, G, C//G) * (K, G, C//G, O//G) -> (M, G, O//G)
             output_feats = output_feats.view(-1, self.out_channels)  # (M, G, O//G) -> (M, O)
 
-            # weighted_feats = weighted_feats.view(-1, self.kernel_size, self.groups, self.in_channels_per_group)  # (M, K, C) -> (M, K, G, C//G)
+            # weighted_feats = weighted_feats.view(-1, self.K, self.groups, self.in_channels_per_group)  # (M, K, C) -> (M, K, G, C//G)
             # weighted_feats = weighted_feats.permute((1, 2, 0, 3))  # (M, K, G, C//G) -> (K, G, M, C//G)
             # kernel_outputs = torch.matmul(weighted_feats, self.weights)  # (K, G, M, C//G) x (K, G, C//G, O//G) -> (K, G, M, O//G)
             # kernel_outputs = torch.sum(kernel_outputs, dim=0)  # (K, G, M, O//G) -> (G, M, O//G)
@@ -642,7 +644,7 @@ class KPDef(nn.Module):
     def __repr__(self):
 
         repr_str = 'KPConv'
-        repr_str += '(K: {:d}'.format(self.kernel_size)
+        repr_str += '(K: {:d}'.format(self.K)
         repr_str += ', in_C: {:d}'.format(self.in_channels)
         repr_str += ', out_C: {:d}'.format(self.out_channels)
         repr_str += ', r: {:.2f}'.format(self.radius)
@@ -664,7 +666,7 @@ class KPConvBlock(nn.Module):
     def __init__(self,
                  in_channels: int,
                  out_channels: int,
-                 kernel_size: int,
+                 shell_sizes: list,
                  radius: float,
                  sigma: float,
                  modulated: bool = False,
@@ -682,7 +684,7 @@ class KPConvBlock(nn.Module):
         Args:
             in_channels             (int): dimension input features
             out_channels            (int): dimension input features
-            kernel_size             (int): number of kernel points
+            shell_sizes            (list): The number of kernel points per shell.
             radius                (float): convolution radius
             sigma                 (float): influence radius of each kernel point
             modulated        (bool=False): Use modulations (self-attention)
@@ -701,7 +703,7 @@ class KPConvBlock(nn.Module):
         # Define parameters
         self.in_channels = in_channels
         self.out_channels = out_channels
-        self.kernel_size = kernel_size
+        self.shell_sizes = shell_sizes
         self.radius = radius
         self.sigma = sigma
         self.influence_mode = influence_mode
@@ -718,7 +720,7 @@ class KPConvBlock(nn.Module):
         if deformable:
             self.conv = KPDef(in_channels,
                               out_channels,
-                              kernel_size,
+                              shell_sizes,
                               radius,
                               sigma,
                               modulated=modulated,
@@ -729,7 +731,7 @@ class KPConvBlock(nn.Module):
         else:
             self.conv = KPConv(in_channels,
                                out_channels,
-                               kernel_size,
+                               shell_sizes,
                                radius,
                                sigma,
                                modulated=modulated,
@@ -761,7 +763,7 @@ class KPConvResidualBlock(nn.Module):
     def __init__(self,
                  in_channels: int,
                  out_channels: int,
-                 kernel_size: int,
+                 shell_sizes: list,
                  radius: float,
                  sigma: float,
                  modulated: bool = False,
@@ -780,7 +782,7 @@ class KPConvResidualBlock(nn.Module):
         Args:
             in_channels             (int): dimension input features
             out_channels            (int): dimension input features
-            kernel_size             (int): number of kernel points
+            shell_sizes            (list): The number of kernel points per shell.
             radius                (float): convolution radius
             sigma                 (float): influence radius of each kernel point
             modulated        (bool=False): Use modulations (self-attention)
@@ -815,7 +817,7 @@ class KPConvResidualBlock(nn.Module):
         # KPConv block with normalizatio and activation
         self.conv = KPConvBlock(mid_channels,
                                 mid_channels,
-                                kernel_size,
+                                shell_sizes,
                                 radius,
                                 sigma,
                                 modulated=modulated,
@@ -872,7 +874,7 @@ class KPConvInvertedBlock(nn.Module):
     def __init__(self,
                  in_channels: int,
                  out_channels: int,
-                 kernel_size: int,
+                 shell_sizes: list,
                  radius: float,
                  sigma: float,
                  drop_path: float = 0., 
@@ -892,7 +894,7 @@ class KPConvInvertedBlock(nn.Module):
         Args:
             in_channels             (int): dimension input features
             out_channels            (int): dimension input features
-            kernel_size             (int): number of kernel points
+            shell_sizes            (list): The number of kernel points per shell.
             radius                (float): convolution radius
             sigma                 (float): influence radius of each kernel point
             modulated        (bool=False): Use modulations (self-attention)
@@ -923,7 +925,7 @@ class KPConvInvertedBlock(nn.Module):
 
         self.conv = KPConv(in_channels,
                            in_channels,
-                           kernel_size,
+                           shell_sizes,
                            radius,
                            sigma,
                            modulated=modulated,

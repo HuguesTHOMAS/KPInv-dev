@@ -174,7 +174,7 @@ class InvolutionFCNN(nn.Module):
 
         return KPConvBlock(in_C,
                            out_C,
-                           cfg.model.kernel_size,
+                           cfg.model.shell_sizes,
                            radius,
                            sigma,
                            influence_mode=cfg.model.kp_influence,
@@ -203,7 +203,7 @@ class InvolutionFCNN(nn.Module):
 
         return KPConvResidualBlock(in_C,
                                    out_C,
-                                   cfg.model.kernel_size,
+                                   cfg.model.shell_sizes,
                                    radius,
                                    sigma,
                                    modulated=False,

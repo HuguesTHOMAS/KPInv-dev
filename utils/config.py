@@ -75,7 +75,7 @@ def init_cfg():
 
     cfg.model = EasyDict()
     cfg.model.kp_mode = 'kpconv'        #   Str, choice of basic operator ('kpconv', 'kpinv', 'kpdef')
-    cfg.model.kernel_size = 15          #   Int, number of kernel points
+    cfg.model.shell_sizes = [15]        #  List, number of kernel points
     cfg.model.kp_radius = 2.5           # Float, radius of the basic operator
     cfg.model.kp_sigma = 1.0            # Float, radius of the kernel point influence
     cfg.model.kp_influence = 'linear'   #   Str, Influence function when d < KP_extent. ('constant', 'linear', 'gaussian')
