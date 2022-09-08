@@ -19,8 +19,17 @@ training_script="experiments/S3DIS_simple/train_S3DIS_simple.py"
 # Declare an array variable
 # *************************
 
-declare -a arg_arr=("--kp_mode kpconv --neighbor_limits 10 10"
-                    "--use_cubes 1 --cylindric_input 1 --kp_mode kpconv --neighbor_limits 10 10")
+# declare -a arg_arr=("--kp_radius 2.9"
+#                     "--kp_aggregation nearest"
+#                     "--data_sampler random"
+#                     "--data_sampler regular"
+#                     "--norm layer"
+#                     "--conv_groups 8"
+#                     "--init_channels 80"
+#                     "--init_channels 64")
+declare -a arg_arr=("--kp_aggregation nearest"
+                    "--kp_aggregation nearest --shell_sizes 1 14"
+                    "--kp_aggregation nearest --shell_sizes 1 14 28")
 
 
 echo ""
@@ -60,12 +69,14 @@ do
     echo ""
     echo "Found only $n_dockers docker container running. Starting a new one"
 
+    # Wait to be sure GPU is used
+    sleep 3.0
     
     # Start 
-    ./run_in_container.sh -d -c "python3 $training_script $arg_str"
+    ./auto_gpu.sh -d -c "python3 $training_script $arg_str"
 
     # Wait to be sure GPU is used
-    sleep 5.0
+    sleep 3.0
     
     echo ""
     echo "----------------------------------------------------------------------"

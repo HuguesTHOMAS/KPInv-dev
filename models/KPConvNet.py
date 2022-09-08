@@ -215,6 +215,7 @@ class KPFCNN(nn.Module):
         self.deformable = deformable
         self.modulated = modulated
         self.upsample_n = cfg.model.upsample_n
+        self.share_kp = cfg.model.share_kp
         
         
         # List of valid labels (those not ignored in loss)
@@ -239,15 +240,19 @@ class KPFCNN(nn.Module):
         #####################
         
         # ------ Layers 1 ------
+        if cfg.model.share_kp:
+            self.shared_kp = [None for _ in range(self.num_layers)]
+        else:
+            self.shared_kp = [{} for _ in range(self.num_layers)]
 
         # Initial convolution 
         self.encoder_1 = nn.ModuleList()
-        self.encoder_1.append(self.get_conv_block(in_C, C, conv_r, conv_sig, cfg))
-        self.encoder_1.append(self.get_residual_block(C, C * 2, conv_r, conv_sig, cfg))
+        self.encoder_1.append(self.get_conv_block(in_C, C, conv_r, conv_sig, cfg, shared_kp_data=self.shared_kp[0]))
+        self.encoder_1.append(self.get_residual_block(C, C * 2, conv_r, conv_sig, cfg, shared_kp_data=self.shared_kp[0]))
 
         # Next blocks
         for _ in range(self.layer_blocks[0] - 2):
-            self.encoder_1.append(self.get_residual_block(C * 2, C * 2, conv_r, conv_sig, cfg))
+            self.encoder_1.append(self.get_residual_block(C * 2, C * 2, conv_r, conv_sig, cfg, shared_kp_data=self.shared_kp[0]))
 
         # Pooling block
         self.pooling_1 = self.get_residual_block(C * 2, C * 2, conv_r, conv_sig, cfg, strided=True)
@@ -261,23 +266,28 @@ class KPFCNN(nn.Module):
 
             # First block takes features to new dimension.
             encoder_i = nn.ModuleList()
-            encoder_i.append(self.get_residual_block(C, C * 2, conv_r, conv_sig, cfg, deformable=self.deformable))
+            encoder_i.append(self.get_residual_block(C, C * 2, conv_r, conv_sig, cfg,
+                                                     deformable=self.deformable,
+                                                     shared_kp_data=self.shared_kp[layer-1]))
 
             # Next blocks
             for _ in range(self.layer_blocks[layer - 1] - 1):
-                encoder_i.append(self.get_residual_block(C * 2, C * 2, conv_r, conv_sig, cfg, deformable=self.deformable))
+                encoder_i.append(self.get_residual_block(C * 2, C * 2, conv_r, conv_sig, cfg,
+                                                         deformable=self.deformable,
+                                                         shared_kp_data=self.shared_kp[layer-1]))
             setattr(self, 'encoder_{:d}'.format(layer), encoder_i)
 
             # Pooling block (not for the last layer)
             if layer < self.num_layers:
-                pooling_i = self.get_residual_block(C * 2, C * 2, conv_r, conv_sig, cfg, deformable=self.deformable, strided=True)
+                pooling_i = self.get_residual_block(C * 2, C * 2, conv_r, conv_sig, cfg,
+                                                    deformable=self.deformable,
+                                                    strided=True)
                 setattr(self, 'pooling_{:d}'.format(layer), pooling_i)
-
 
         #####################
         # List Decoder blocks
         #####################
-        
+
         # ------ Layers [4, 3, 2, 1] ------
         for layer in range(self.num_layers - 1, 0, -1):
             
@@ -340,7 +350,7 @@ class KPFCNN(nn.Module):
                            norm_type=norm_type,
                            bn_momentum=cfg.model.bn_momentum)
 
-    def get_conv_block(self, in_C, out_C, radius, sigma, cfg, deformable=False):
+    def get_conv_block(self, in_C, out_C, radius, sigma, cfg, deformable=False, shared_kp_data=None):
 
         # First layer is the most simple convolution possible
         return KPConvBlock(in_C,
@@ -348,6 +358,7 @@ class KPFCNN(nn.Module):
                            cfg.model.shell_sizes,
                            radius,
                            sigma,
+                           shared_kp_data=shared_kp_data,
                            modulated=False,
                            deformable=False,
                            use_geom=False,
@@ -357,7 +368,7 @@ class KPFCNN(nn.Module):
                            norm_type=cfg.model.norm,
                            bn_momentum=cfg.model.bn_momentum)
 
-    def get_residual_block(self, in_C, out_C, radius, sigma, cfg, deformable=False, strided=False):
+    def get_residual_block(self, in_C, out_C, radius, sigma, cfg, deformable=False, strided=False, shared_kp_data=None):
 
         use_geom = 'geom' in cfg.model.kp_mode
 
@@ -366,6 +377,7 @@ class KPFCNN(nn.Module):
                                cfg.model.shell_sizes,
                                radius,
                                sigma,
+                               shared_kp_data=shared_kp_data,
                                modulated=self.modulated,
                                deformable=deformable,
                                use_geom=use_geom,
@@ -428,6 +440,12 @@ class KPFCNN(nn.Module):
                 # Pooling
                 layer_pool = getattr(self, 'pooling_{:d}'.format(layer))
                 feats = layer_pool(batch.in_dict.points[l+1], batch.in_dict.points[l], feats, batch.in_dict.pools[l])
+
+        # Remove shared data
+        if self.share_kp:
+            for l in range(self.num_layers):
+                self.shared_kp[layer].pop('neighb_w')
+                self.shared_kp[layer].pop('neighb_p')
 
          
         if verbose:    

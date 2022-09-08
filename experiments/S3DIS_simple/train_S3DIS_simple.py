@@ -26,6 +26,7 @@ import time
 import signal
 import argparse
 import numpy as np
+import torch
 from torch.utils.data import DataLoader
 
 # Local libs
@@ -35,6 +36,7 @@ sys.path.append(parent)
 
 from utils.config import init_cfg, save_cfg, get_directories
 from utils.printing import frame_lines_1, underline
+from utils.gpu_init import init_gpu
 
 from models.KPConvNet import KPNeXt
 from models.KPConvNet import KPFCNN as KPConvFCNN
@@ -88,11 +90,14 @@ def my_config():
                                             # Choose ['kpconv-mod', 'kpdef-mod', 'kpconv-geom'] for modulations
                                             # Choose ['kpconv-depth'] for depthwise conv (groups = input channels = output chanels)
                                             # Choose ['kpnext'] for better kpconv
-    cfg.model.shell_sizes = [1, 15, 46]
+    cfg.model.shell_sizes = [1, 14]
     cfg.model.kp_radius = 2.5
     cfg.model.kp_influence = 'linear'
-    cfg.model.kp_aggregation = 'sum'  # 'sum', 'nearest'
+    cfg.model.kp_aggregation = 'nearest'  # 'sum', 'nearest'
     cfg.model.conv_groups = 1
+    
+    cfg.model.share_kp = True       #  share kernels within layers
+                                        
 
     cfg.data.init_sub_size = 0.02          # -1.0 so that dataset point clouds are not initially subsampled
     cfg.data.init_sub_mode = 'grid'        # Mode for initial subsampling of data
@@ -214,10 +219,10 @@ def my_config():
 def adjust_config(cfg):
 
     # Model
-    if len(cfg.model.shell_sizes) < 3:
-        cfg.model.kp_sigma = 0.7 * cfg.model.kp_radius
+    if cfg.model.kp_aggregation == 'nearest':
+        cfg.model.kp_sigma = cfg.model.kp_radius
     else:
-        cfg.model.kp_sigma = 0.4 * cfg.model.kp_radius
+        cfg.model.kp_sigma = 0.7 * cfg.model.kp_radius
 
     # Train
     if cfg.data.use_cubes:
@@ -252,6 +257,9 @@ def adjust_config(cfg):
 #
 if __name__ == '__main__':
 
+    # First create a tensor on GPU to signal that we use it
+    device = init_gpu()
+    a = torch.zeros((1,), device=device)
 
     ###################
     # Define parameters
@@ -259,7 +267,9 @@ if __name__ == '__main__':
 
     # Add argument here to handle it
     str_args = ['model.kp_mode',
-                'train.data_sampler']
+                'train.data_sampler',
+                'model.kp_aggregation',
+                'model.norm']
 
     float_args = ['train.weight_decay',
                   'model.kp_radius',
@@ -267,6 +277,7 @@ if __name__ == '__main__':
 
     int_args = ['model.conv_groups',
                 'model.inv_groups',
+                'model.init_channels',
                 'model.first_inv_layer',
                 'train.cyc_decrease10',
                 'train.max_epoch']

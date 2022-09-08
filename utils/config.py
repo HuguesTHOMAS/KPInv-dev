@@ -83,6 +83,8 @@ def init_cfg():
     cfg.model.kp_fixed = 'center'       #   Str, Fixed points in the kernel ('none', 'center', 'verticals')
     cfg.model.conv_groups = 1           #   Int, number of groups for groups in convolution
     cfg.model.inv_groups = 1            #   Int, number of groups for groups in involution
+    cfg.model.share_kp = False         #  Bool, option to share the kenrel point (and thus neighbor influences and weights) 
+                                        #        across the KPConv of the same layer
 
     cfg.model.kpinv_grp_ch = 16         #   Int, number of channels per group in involutions
     cfg.model.kpinv_reduc = 4           #   Int, reduction ration for kpinv gen mlp

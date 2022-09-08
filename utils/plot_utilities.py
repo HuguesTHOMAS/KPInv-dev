@@ -600,6 +600,7 @@ def compare_trainings(list_of_cfg, list_of_paths, list_of_labels=None):
     mean_epoch_dt = [np.mean(edt) for edt in all_epoch_dt]
     mean_val_dt = [np.mean(edt) for edt in all_val_dt]
     width = 0.4
+
     axs[1].barh(y_pos, mean_epoch_dt, width, label = 'Train')
     axs[1].barh(y_pos, mean_val_dt, width, left=mean_epoch_dt, label = 'Val')
     axs[1].invert_yaxis()  # labels read top-to-bottom

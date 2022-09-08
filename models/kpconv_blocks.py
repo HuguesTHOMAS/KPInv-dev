@@ -14,6 +14,11 @@
 #      Hugues THOMAS - 06/03/2020
 #
 
+
+
+
+
+
 import math
 import torch
 import torch.nn as nn
@@ -49,6 +54,7 @@ class KPConv(nn.Module):
                  shell_sizes: list,
                  radius: float,
                  sigma: float,
+                 shared_kp_data = None,
                  modulated: bool = False,
                  use_geom: bool = False,
                  groups: int = 1,
@@ -64,20 +70,21 @@ class KPConv(nn.Module):
         Rigid KPConv.
         Paper: https://arxiv.org/abs/1904.08889.
         Args:
-            in_channels (int): The number of the input channels.
-            out_channels (int): The number of the output channels.
-            shell_sizes (list): The number of kernel points per shell.
-            radius (float): The radius used for kernel point init.
-            sigma (float): The influence radius of each kernel point.
-            modulated (bool=False): Use modulations (self-attention)
-            use_geom (bool=False): Use geometric encodings
-            groups (int=1): Groups in convolution (=in_channels for depthwise conv).
-            dimension (int=3): The dimension of the point space.
-            influence_mode (str='linear'): Influence function ('constant', 'linear', 'gaussian').
-            aggregation_mode (str='sum'): Aggregation mode ('nearest', 'sum').
+            in_channels        (int): The number of the input channels.
+            out_channels       (int): The number of the output channels.
+            shell_sizes       (list): The number of kernel points per shell.
+            radius           (float): The radius used for kernel point init.
+            sigma            (float): The influence radius of each kernel point.
+            shared_kp_data (None): Optional data dict shared across the layer
+            modulated   (bool=False): Use modulations (self-attention)
+            use_geom    (bool=False): Use geometric encodings
+            groups           (int=1): Groups in convolution (=in_channels for depthwise conv).
+            dimension        (int=3): The dimension of the point space.
+            influence_mode      (str='linear'): Influence function ('constant', 'linear', 'gaussian').
+            aggregation_mode       (str='sum'): Aggregation mode ('nearest', 'sum').
             fixed_kernel_points (str='center'): kernel points whose position is fixed ('none', 'center' or 'verticals').
-            norm_type     (str='batch'): type of normalization used in layer ('group', 'batch', 'none')
-            bn_momentum    (float=0.98): Momentum for batch normalization
+            norm_type            (str='batch'): type of normalization used in layer ('group', 'batch', 'none')
+            bn_momentum           (float=0.98): Momentum for batch normalization
             activation (nn.Module|None=nn.LeakyReLU(0.1)): Activation function. Use None for no activation.
             inf (float=1e6): The value of infinity to generate the padding point.
         """
@@ -107,6 +114,7 @@ class KPConv(nn.Module):
         self.out_channels_per_group = out_channels_per_group
         self.use_geom = use_geom
         self.normalize_p = True
+
 
         # Initialize weights
         if self.groups == 1:
@@ -147,8 +155,22 @@ class KPConv(nn.Module):
         self.reset_parameters()
 
         # Initialize kernel points
-        kernel_points = self.initialize_kernel_points()
-        self.register_buffer("kernel_points", kernel_points)
+        self.share_kp = shared_kp_data is not None
+        self.first_kp = False
+
+        if self.share_kp:
+            self.first_kp = 'k_pts' not in shared_kp_data
+            self.shared_kp_data = shared_kp_data
+            if self.first_kp:
+                self.shared_kp_data['k_pts'] = self.initialize_kernel_points()
+            self.register_buffer("kernel_points", self.shared_kp_data['k_pts'])
+        else:
+            self.shared_kp_data = {}
+            kernel_points = self.initialize_kernel_points()
+            self.register_buffer("kernel_points", kernel_points)
+            self.shared_kp_data['k_pts'] = kernel_points
+
+
 
         return
 
@@ -164,6 +186,7 @@ class KPConv(nn.Module):
         kernel_points = load_kernels(self.radius, self.shell_sizes, dimension=self.dimension, fixed=self.fixed_kernel_points)
         return torch.from_numpy(kernel_points).float()
 
+    @torch.no_grad()
     def get_neighbors_influences(self, q_pts: Tensor,
                                  s_pts: Tensor,
                                  neighb_inds: Tensor) -> Tensor: 
@@ -173,13 +196,15 @@ class KPConv(nn.Module):
             q_points (Tensor): query points (M, 3).
             s_points (Tensor): support points carrying input features (N, 3).
             neighb_inds (LongTensor): neighbor indices of query points among support points (M, H).
-        Returns:
-            neighbor_weights (Tensor): the influence weight of each kernel point on each neighbors point (M, K, H).
         """
+                
+        if self.share_kp and not self.first_kp:
 
-        # TODO share neighbor_weights between convolutions at same layer (need to share kernel point location as well)
+            # We use data already computed from the first KPConv of the layer
+            neighbor_weights = self.shared_kp_data['neighb_w']
+            neighbors = self.shared_kp_data['neighb_p']
 
-        with torch.no_grad():
+        else:
 
             # Add a fake point in the last row for shadow neighbors
             s_pts = torch.cat((s_pts, torch.zeros_like(s_pts[:1, :]) + self.inf), 0)   # (N, 3) -> (N+1, 3)
@@ -220,6 +245,11 @@ class KPConv(nn.Module):
             elif self.aggregation_mode != 'sum':
                 raise ValueError("Unknown aggregation mode: '{:s}'. Should be 'nearest' or 'sum'".format(self.aggregation_mode))
 
+            # Share with next kernels if necessary
+            if self.share_kp:
+                self.shared_kp_data['neighb_w'] = neighbor_weights
+                self.shared_kp_data['neighb_p'] = neighbors
+
         return neighbor_weights, neighbors
 
     def forward(self, q_pts: Tensor,
@@ -251,7 +281,7 @@ class KPConv(nn.Module):
         # neighbor_feats = gather(padded_s_feats, neighb_inds)  # (N+1, C) -> (M, H, C)
         neighbor_feats = index_select(padded_s_feats, neighb_inds, dim=0)
 
-        
+
         # Get geometric encoding features
         # *******************************
         
@@ -670,6 +700,7 @@ class KPConvBlock(nn.Module):
                  shell_sizes: list,
                  radius: float,
                  sigma: float,
+                 shared_kp_data = None,
                  modulated: bool = False,
                  deformable: bool = False,
                  use_geom: bool = False,
@@ -688,6 +719,7 @@ class KPConvBlock(nn.Module):
             shell_sizes            (list): The number of kernel points per shell.
             radius                (float): convolution radius
             sigma                 (float): influence radius of each kernel point
+            shared_kp_data      (None): Optional data dict shared across the layer
             modulated        (bool=False): Use modulations (self-attention)
             use_geom         (bool=False): Use geometric encodings
             deformable       (bool=False): Use deformable KPConv
@@ -735,6 +767,7 @@ class KPConvBlock(nn.Module):
                                shell_sizes,
                                radius,
                                sigma,
+                               shared_kp_data=shared_kp_data,
                                modulated=modulated,
                                use_geom=use_geom,
                                groups=groups,
@@ -767,6 +800,7 @@ class KPConvResidualBlock(nn.Module):
                  shell_sizes: list,
                  radius: float,
                  sigma: float,
+                 shared_kp_data = None,
                  modulated: bool = False,
                  deformable: bool = False,
                  use_geom: bool = False,
@@ -786,6 +820,7 @@ class KPConvResidualBlock(nn.Module):
             shell_sizes            (list): The number of kernel points per shell.
             radius                (float): convolution radius
             sigma                 (float): influence radius of each kernel point
+            shared_kp_data      (None): Optional data dict shared across the layer
             modulated        (bool=False): Use modulations (self-attention)
             deformable       (bool=False): Use deformable KPConv
             use_geom         (bool=False): Use geometric encodings
@@ -816,20 +851,22 @@ class KPConvResidualBlock(nn.Module):
             self.unary1 = nn.Identity()
 
         # KPConv block with normalizatio and activation
-        self.conv = KPConvBlock(mid_channels,
-                                mid_channels,
-                                shell_sizes,
-                                radius,
-                                sigma,
-                                modulated=modulated,
-                                deformable=deformable,
-                                use_geom=use_geom,
-                                influence_mode=influence_mode,
-                                aggregation_mode=aggregation_mode,
-                                dimension=dimension,
-                                groups=groups,
-                                norm_type=norm_type,
-                                bn_momentum=bn_momentum)
+        self.conv = KPConv(mid_channels,
+                            mid_channels,
+                            shell_sizes,
+                            radius,
+                            sigma,
+                            shared_kp_data=shared_kp_data,
+                            modulated=modulated,
+                            use_geom=use_geom,
+                            groups=groups,
+                            dimension=dimension,
+                            influence_mode=influence_mode,
+                            aggregation_mode=aggregation_mode)
+
+        # Define modules
+        self.activation = activation
+        self.norm = NormBlock(mid_channels, norm_type, bn_momentum)
 
         # Second upscaling mlp
         self.unary2 = UnaryBlock(mid_channels, out_channels, norm_type, bn_momentum, activation=None)
@@ -840,9 +877,6 @@ class KPConvResidualBlock(nn.Module):
         else:
             self.unary_shortcut = nn.Identity()
 
-        # Final activation function
-        self.activation = activation
-
         return
 
     def forward(self, q_pts, s_pts, s_feats, neighbor_indices):
@@ -852,6 +886,7 @@ class KPConvResidualBlock(nn.Module):
 
         # Convolution
         x = self.conv(q_pts, s_pts, x, neighbor_indices)
+        x = self.activation(self.norm(x))
 
         # Second upscaling mlp
         x = self.unary2(x)
@@ -878,6 +913,7 @@ class KPConvInvertedBlock(nn.Module):
                  shell_sizes: list,
                  radius: float,
                  sigma: float,
+                 shared_kp_data = None,
                  drop_path: float = 0., 
                  layer_scale_init_value: float = 1e-6,
                  modulated: bool = False,
@@ -898,6 +934,7 @@ class KPConvInvertedBlock(nn.Module):
             shell_sizes            (list): The number of kernel points per shell.
             radius                (float): convolution radius
             sigma                 (float): influence radius of each kernel point
+            shared_kp_data      (None): Optional data dict shared across the layer
             modulated        (bool=False): Use modulations (self-attention)
             deformable       (bool=False): Use deformable KPConv
             use_geom         (bool=False): Use geometric encodings
@@ -929,6 +966,7 @@ class KPConvInvertedBlock(nn.Module):
                            shell_sizes,
                            radius,
                            sigma,
+                           shared_kp_data=shared_kp_data,
                            modulated=modulated,
                            use_geom=use_geom,
                            groups=in_channels,

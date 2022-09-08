@@ -598,12 +598,52 @@ def exp_drop_before_norm():
                   'trans-cyl-fps_-4',
                   'kpnext-L_2.5-cyl',
                   'kpnext-L_3.5-cyl',
-                  '...',
-                  'do_KP_inv', ]
-                  
+                  '...',]
+
+    # safe check log names
+    if len(logs) > len(logs_names):
+        logs = logs[:len(logs_names)]
+    logs_names = np.array(logs_names[:len(logs)])
+
+    return logs, logs_names
+
+
+def exp_shell_optim():
+    """
+    Test shell conv
+    """
+
+    # Using the dates of the logs, you can easily gather consecutive ones. All logs should be of the same dataset.
+    start = 'Log_2022-09-02_17-49-22'
+    end = 'Log_2022-09-29_23-43-08'
+
+    # Name of the result path
+    res_path = 'results'
+
+    # Gather logs and sort by date
+    logs = np.sort([join(res_path, l) for l in listdir_str(res_path) if start <= l <= end])
+
+    # # Optionally add a specific log at a specific place in the log list
+    # logs = logs.astype('<U50')
+    # logs = np.insert(logs, 0, 'results/Log_2022-08-30_18-57-14')
+
+    # Give names to the logs (for plot legends)
+    logs_names = ['r=2.5 [1 14]',
+                  'r=2.5 [1 14 43]',
+                  'r=2.9 [1 14 43]',
+                  'abl: kp=nearest',
+                  'abl: data=random',
+                  'abl: b=layer',
+                  'r=2.9 [1 14 43] sig=0.7',
+                  'abl: C0=80',
+                  'abl: kp=nearest',
+                  'abl: kp=nearest 1 14',
+                  'abl: kp=nearest 1 14 28',
+                  '...',]
+
+    # TODO: train regular is buggy
 
     # TODO: Handle kpnextarchitecture like ConvNext, operate DropPath
-    # TODO: random / regular/ c-random
     # TODO: Find why augmenting k in depthwise conv augments the FLOPS
     # TODO: Share kernel influences with consecutives KPConv
     # TODO: KPInv and more ConvNext optims
@@ -615,7 +655,6 @@ def exp_drop_before_norm():
     logs_names = np.array(logs_names[:len(logs)])
 
     return logs, logs_names
-
 
 # ----------------------------------------------------------------------------------------------------------------------
 #
@@ -631,7 +670,7 @@ if __name__ == '__main__':
     ######################################################
 
     # My logs: choose the logs to show
-    logs, logs_names = exp_drop_before_norm()
+    logs, logs_names = exp_shell_optim()
 
     frame_lines_1(["Plot S3DIS experiments"])
 
