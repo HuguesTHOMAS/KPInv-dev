@@ -444,8 +444,8 @@ class KPFCNN(nn.Module):
         # Remove shared data
         if self.share_kp:
             for l in range(self.num_layers):
-                self.shared_kp[layer].pop('neighb_w')
-                self.shared_kp[layer].pop('neighb_p')
+                self.shared_kp[l].pop('neighb_w')
+                self.shared_kp[l].pop('neighb_p')
 
          
         if verbose:    
