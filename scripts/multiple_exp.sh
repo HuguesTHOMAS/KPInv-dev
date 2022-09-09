@@ -27,9 +27,9 @@ training_script="experiments/S3DIS_simple/train_S3DIS_simple.py"
 #                     "--conv_groups 8"
 #                     "--init_channels 80"
 #                     "--init_channels 64")
-declare -a arg_arr=("--kp_aggregation nearest"
-                    "--kp_aggregation nearest --shell_sizes 1 14"
-                    "--kp_aggregation nearest --shell_sizes 1 14 28")
+declare -a arg_arr=("--conv_groups 1"
+                    "--data_sampler random"
+                    "--conv_groups 8")
 
 
 echo ""

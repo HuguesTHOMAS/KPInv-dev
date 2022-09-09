@@ -143,7 +143,7 @@ def training_epoch(epoch, t0, net, optimizer, training_loader, cfg, PID_file, de
                     mean_dt = 0.8 * mean_dt + 0.2 * accum_dt
 
                 # Console display (only one per second)
-                if (t[-1] - last_display) > 1.0:
+                if (t[-1] - last_display) > -1.0:
                     last_display = t[-1]
 
                     message = '{:5d} {:4d} | {:8.3f} | {:7.1f} % | {:7.1f} ins/sec | {:6.1f} {:5.1f} {:5.1f} {:5.1f} {:5.1f}'

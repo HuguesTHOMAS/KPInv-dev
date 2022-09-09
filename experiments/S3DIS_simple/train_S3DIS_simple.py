@@ -85,16 +85,17 @@ def my_config():
     cfg.model.norm = 'batch' # batch, layer
     cfg.model.init_channels = 96  # 48, 64, 80, 96
 
-    cfg.model.kp_mode = 'kpconv'            # Choose ['kpconv', 'kpdef', 'kpinv']. 
+    cfg.model.kp_mode = 'kpmini'            # Choose ['kpconv', 'kpdef', 'kpinv']. 
                                             # Choose ['inv_v1', 'inv_v2', 'inv_v3', 'inv_v4', 'transformer']
                                             # Choose ['kpconv-mod', 'kpdef-mod', 'kpconv-geom'] for modulations
                                             # Choose ['kpconv-depth'] for depthwise conv (groups = input channels = output chanels)
                                             # Choose ['kpnext'] for better kpconv
-    cfg.model.shell_sizes = [1, 14]
-    cfg.model.kp_radius = 2.5
+                                            # Choose ['kpmini'] for depthwise kpconv
+    cfg.model.shell_sizes = [1, 14, 30, 60]
+    cfg.model.kp_radius = 3.5
     cfg.model.kp_influence = 'linear'
     cfg.model.kp_aggregation = 'nearest'  # 'sum', 'nearest'
-    cfg.model.conv_groups = 1
+    cfg.model.conv_groups = -1   # -1 for depthwise convolution       
     
     cfg.model.share_kp = True       #  share kernels within layers
                                         
@@ -129,15 +130,15 @@ def my_config():
     cfg.data.cylindric_input = False
 
     # How do we sample the input elements (spheres or cubes)
-    cfg.train.data_sampler = 'c-random' # 'c-random' for class balanced random sampling
+    cfg.train.data_sampler = 'random'   # 'c-random' for class balanced random sampling
     cfg.train.max_points = -1           # positive value will reduce the input size to have exactly the asked number of points
 
     # Input spheres radius. Adapt this with model.in_sub_size. Try to keep a ratio of ~50
     cfg.train.in_radius = 1.5
 
     # Batch related_parames
-    cfg.train.batch_size = 2                # Target batch size. If you don't want calibration, you can directly set train.batch_limit
-    cfg.train.accum_batch = 10              # Accumulate batches for an effective batch size of batch_size * accum_batch.
+    cfg.train.batch_size = 2                 # Target batch size. If you don't want calibration, you can directly set train.batch_limit
+    cfg.train.accum_batch = 10               # Accumulate batches for an effective batch size of batch_size * accum_batch.
     cfg.train.steps_per_epoch = 250
     
     # Training length
@@ -412,7 +413,7 @@ if __name__ == '__main__':
     if 'mod' in cfg.model.kp_mode:
         modulated = True
 
-    if cfg.model.kp_mode.startswith('kpconv'):
+    if cfg.model.kp_mode.startswith('kpconv') or cfg.model.kp_mode.startswith('kpmini'):
         net = KPConvFCNN(cfg, modulated=modulated, deformable=False)
     elif cfg.model.kp_mode.startswith('kpdef'):
         net = KPConvFCNN(cfg, modulated=modulated, deformable=True)

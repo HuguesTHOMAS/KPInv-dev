@@ -81,7 +81,7 @@ def init_cfg():
     cfg.model.kp_influence = 'linear'   #   Str, Influence function when d < KP_extent. ('constant', 'linear', 'gaussian')
     cfg.model.kp_aggregation = 'sum'    #   Str, Aggregation mode ('nearest', 'sum')
     cfg.model.kp_fixed = 'center'       #   Str, Fixed points in the kernel ('none', 'center', 'verticals')
-    cfg.model.conv_groups = 1           #   Int, number of groups for groups in convolution
+    cfg.model.conv_groups = 1           #   Int, number of groups for groups in convolution (-1 for depthwise)
     cfg.model.inv_groups = 1            #   Int, number of groups for groups in involution
     cfg.model.share_kp = False         #  Bool, option to share the kenrel point (and thus neighbor influences and weights) 
                                         #        across the KPConv of the same layer

@@ -241,13 +241,13 @@ class KPFCNN(nn.Module):
         
         # ------ Layers 1 ------
         if cfg.model.share_kp:
-            self.shared_kp = [None for _ in range(self.num_layers)]
-        else:
             self.shared_kp = [{} for _ in range(self.num_layers)]
+        else:
+            self.shared_kp = [None for _ in range(self.num_layers)]
 
         # Initial convolution 
         self.encoder_1 = nn.ModuleList()
-        self.encoder_1.append(self.get_conv_block(in_C, C, conv_r, conv_sig, cfg, shared_kp_data=self.shared_kp[0]))
+        self.encoder_1.append(self.get_conv_block(in_C, C, conv_r, conv_sig, cfg))
         self.encoder_1.append(self.get_residual_block(C, C * 2, conv_r, conv_sig, cfg, shared_kp_data=self.shared_kp[0]))
 
         # Next blocks
@@ -371,23 +371,24 @@ class KPFCNN(nn.Module):
     def get_residual_block(self, in_C, out_C, radius, sigma, cfg, deformable=False, strided=False, shared_kp_data=None):
 
         use_geom = 'geom' in cfg.model.kp_mode
+        mini = 'kpmini' in cfg.model.kp_mode
 
         return KPConvResidualBlock(in_C,
-                               out_C,
-                               cfg.model.shell_sizes,
-                               radius,
-                               sigma,
-                               shared_kp_data=shared_kp_data,
-                               modulated=self.modulated,
-                               deformable=deformable,
-                               use_geom=use_geom,
-                               influence_mode=cfg.model.kp_influence,
-                               aggregation_mode=cfg.model.kp_aggregation,
-                               dimension=cfg.data.dim,
-                               groups=cfg.model.conv_groups,
-                               strided=strided,
-                               norm_type=cfg.model.norm,
-                               bn_momentum=cfg.model.bn_momentum)
+                                   out_C,
+                                   cfg.model.shell_sizes,
+                                   radius,
+                                   sigma,
+                                   shared_kp_data=shared_kp_data,
+                                   modulated=self.modulated,
+                                   mini=mini,
+                                   use_geom=use_geom,
+                                   influence_mode=cfg.model.kp_influence,
+                                   aggregation_mode=cfg.model.kp_aggregation,
+                                   dimension=cfg.data.dim,
+                                   groups=cfg.model.conv_groups,
+                                   strided=strided,
+                                   norm_type=cfg.model.norm,
+                                   bn_momentum=cfg.model.bn_momentum)
 
     def forward(self, batch, verbose=False):
 
@@ -444,8 +445,9 @@ class KPFCNN(nn.Module):
         # Remove shared data
         if self.share_kp:
             for l in range(self.num_layers):
-                self.shared_kp[l].pop('neighb_w')
-                self.shared_kp[l].pop('neighb_p')
+                self.shared_kp[l].pop('infl_w', None)
+                self.shared_kp[l].pop('neighb_p', None)
+                self.shared_kp[l].pop('neighb_1nn', None)
 
          
         if verbose:    
