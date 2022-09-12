@@ -829,22 +829,26 @@ def compare_convergences_segment(list_of_cfg, list_of_paths, list_of_names=None)
 
 
     # Figure
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=[8.4, 4.8], sharey=True)
+    fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=[12.4, 4.8], sharey=True)
+    max_v = 0
     for i, name in enumerate(list_of_names):
-        p = ax1.plot(all_pred_epochs[i], all_mIoUs[i], '--', linewidth=1, label=name)
-        ax1.plot(all_snap_epochs[i], np.mean(all_snap_vote_IoUs[i], axis=1), linewidth=1, color=p[-1].get_color())
+        vote_mIoUs = np.mean(all_snap_vote_IoUs[i], axis=1)
+        ax1.plot(all_snap_epochs[i], vote_mIoUs, linewidth=1, label=name)
+        max_v = max(max_v, np.max(vote_mIoUs))
     ax1.set_xlabel('epochs')
     ax1.set_ylabel('IoU')
+    ax1.set_ylim(max(0.0, max_v - 0.18), min(max_v + 0.04, 1.01))
 
-    ax1.set_xlabel('epochs')
     for i, name in enumerate(list_of_names):
         ax2.plot(all_snap_epochs[i], np.mean(all_snap_IoUs[i], axis=1), linewidth=1, label=name)
+    ax2.set_xlabel('epochs')
 
-    # Set limits for y axis
-    #plt.ylim(0.55, 0.95)
+    for i, name in enumerate(list_of_names):
+        ax3.plot(all_pred_epochs[i], all_mIoUs[i], '--', linewidth=1, label=name)
+    ax3.set_xlabel('epochs')
 
     # Display legends and title
-    ax1.legend(loc=4)
+    ax3.legend(loc=4)
 
     # Customize the graph
     ax1.grid(linestyle='-.', which='both')

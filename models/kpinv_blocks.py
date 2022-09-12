@@ -22,45 +22,13 @@ from torch import Tensor
 from torch.nn.init import kaiming_uniform_
 
 from kernels.kernel_points import load_kernels
-from models.generic_blocks import gather, index_select, radius_gaussian, local_maxpool, UnaryBlock
+from models.generic_blocks import gather, index_select, radius_gaussian, local_maxpool, UnaryBlock, build_mlp
 
 # ----------------------------------------------------------------------------------------------------------------------
 #
 #           Simple functions
 #       \**********************/
 #
-
-
-def build_mlp(n_layers,
-              Cin,
-              Cmid,
-              Cout,
-              bias=True,
-              norm_type: str = 'batch',
-              bn_momentum: float = 0.98,
-              activation: nn.Module = nn.LeakyReLU(0.1)):
-    """
-    Function returning a mini mlp network. The output features are not activated.
-    Args:
-        n_layers           (int): The number of layers in this mlp.
-        Cin                (int): The number of input channels.
-        Cmid               (int): The number of hidden channels.
-        Cout               (int): The number of output channels.
-        final_activation  (bool): Activate output features or not
-        norm_type  (str='batch'): type of normalization used in layer ('group', 'batch', 'none')
-        bn_momentum (float=0.98): Momentum for batch normalization
-        activation   (nn.Module): Activation function. Use None for no activation.
-    """
-
-    if n_layers < 2:
-        mlp = nn.Linear(Cin, Cout, bias=bias)
-    else:
-        mlp = nn.Sequential(UnaryBlock(Cin, Cmid, norm_type, bn_momentum, activation))
-        for _ in range(n_layers - 2):
-            mlp.append(UnaryBlock(Cmid, Cmid, norm_type, bn_momentum, activation))
-        mlp.append(nn.Linear(Cmid, Cout, bias=bias))
-
-    return mlp
 
 
 # ----------------------------------------------------------------------------------------------------------------------

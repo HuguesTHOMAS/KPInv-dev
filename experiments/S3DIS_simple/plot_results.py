@@ -727,6 +727,8 @@ def exp_kpmini():
                   'mini 1 14',
                   'mini r=3.0 / 1 14 30 60',
                   'mini mlp',
+                  'mini Cmid=8',
+                  'mini Cmid=8 mlp',
                   '...',]
 
     # TODO: train regular is buggy

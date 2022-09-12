@@ -29,7 +29,7 @@ from torch.nn.init import kaiming_uniform_
 
 from kernels.kernel_points import load_kernels
 from models.generic_blocks import gather, index_select, radius_gaussian, local_maxpool, UnaryBlock, \
-    NormBlock, DropPathPack
+    NormBlock, DropPathPack, build_mlp
 
 # ----------------------------------------------------------------------------------------------------------------------
 #
@@ -128,19 +128,22 @@ class KPMini(nn.Module):
         # self.aggr_op = lambda x, dim=0: torch.max(x, dim=dim)[0]
         self.aggr_op = torch.sum
 
+        # Handle mlp case 
         if self.influence_mode == 'mlp':
-            # Define MLP delta
-            delta_layers = 2
-            C = channels
-            D = self.dimension
-            Cmid = 8
-            if delta_layers < 2:
-                self.delta_mlp = nn.Linear(D, C)
+            if Cmid > 0:
+                # MLP does not have it final linear layer. It is the same as point conv
+                self.delta_mlp = UnaryBlock(self.dimension, Cmid, norm_type, bn_momentum, activation)
+
             else:
-                self.delta_mlp = nn.Sequential(UnaryBlock(D, Cmid, norm_type, bn_momentum, activation))
-                for _ in range(delta_layers - 2):
-                    self.delta_mlp.append(UnaryBlock(Cmid, Cmid, norm_type, bn_momentum, activation))
-                self.delta_mlp.append(nn.Linear(Cmid, C, bias=False))
+                # Complete mlp
+                self.delta_mlp = build_mlp(n_layers=2,
+                                           Cin=self.dimension,
+                                           Cmid=8,
+                                           Cout=channels,
+                                           norm_type=norm_type,
+                                           bn_momentum=bn_momentum,
+                                           activation=activation)
+
 
         return
 
@@ -255,50 +258,29 @@ class KPMini(nn.Module):
             # Generate geometric encodings
             neighbors_weights = self.delta_mlp(neighbors) # (M, H, 3) -> (M, H, C)
 
-            # Apply weights and summation
-            output_feats = self.aggr_op(self.merge_op(neighbor_feats, neighbors_weights), dim=1)  # (M, H, C) -> (M, C)
+        else:
+
+            # Collect nearest kernel point weights -> (M, H, C or Cmid)
+            neighbors_weights = gather(self.weights, neighbors_1nn)
+
+            # Apply influence weights
+            if self.influence_mode != 'constant':
+                neighbors_weights *= influence_weights.unsqueeze(2)
+        
+
+        if self.Cmid > 0:
+
+            # Apply weights via matmul
+            intermediate_feats = torch.matmul(neighbors_weights.transpose(1, 2), neighbor_feats)  # (M, Cmid, H) x (M, H, C) -> (M, Cmid, C)
+
+            # Final linear combination
+            output_feats = self.out_mlp(intermediate_feats.view(-1, self.Cmid * self.channels))
 
         else:
 
-            # Choose between two mode (summation or gathering). Gathering is only worth if K > 20
-            if self.K > 25 or self.Cmid > 0:
+            # Apply weights and summation
+            output_feats = self.aggr_op(self.merge_op(neighbor_feats, neighbors_weights), dim=1)  # (M, H, C) -> (M, C)
 
-                # Collect nearest kernel point weights -> (M, H, C or Cmid)
-                neighbors_weights = gather(self.weights, neighbors_1nn)
-
-                # Apply influence weights
-                if self.influence_mode != 'constant':
-                    neighbors_weights *= influence_weights.unsqueeze(2)
-                    
-                if self.Cmid > 0:
-
-                    # Apply weights via matmul
-                    intermediate_feats = torch.matmul(neighbors_weights.transpose(1, 2), neighbor_feats)  # (M, Cmid, H) x (M, H, C) -> (M, Cmid, C)
-
-                    # Final linear combination
-                    output_feats = self.out_mlp(intermediate_feats.view(-1, self.Cmid * self.channels))
-
-                else:
-
-                    # Apply weights and summation
-                    output_feats = self.aggr_op(self.merge_op(neighbor_feats, neighbors_weights), dim=1)  # (M, H, C) -> (M, C)
-
-            else:
-
-                # WARNING THIS ONLY WORKS WITH merge_op=mul AND aggr_op=sum
-
-                # Create 1-hot weights from 1nn -> (M, K, H)
-                one_hot_w = torch.transpose(nn.functional.one_hot(neighbors_1nn, self.K), 1, 2).type(torch.float32)
-
-                # Apply influence weights
-                if self.influence_mode != 'constant':
-                    one_hot_w *= influence_weights.unsqueeze(1)
-
-                # Apply 1-hot weights to neihbor feature (projection of features on kenrel points)
-                weighted_feats = torch.matmul(one_hot_w, neighbor_feats)  # (M, K, H) x (M, H, C) -> (M, K, C)
-
-                # Sum features over the kenrel points
-                output_feats = torch.sum(weighted_feats * self.weights.unsqueeze(0), dim=1)  # (M, K, C) -> (M, C)
 
         return output_feats
 
@@ -1136,6 +1118,7 @@ class KPConvResidualBlock(nn.Module):
                                 shell_sizes,
                                 radius,
                                 sigma,
+                                Cmid=0,
                                 shared_kp_data=shared_kp_data,
                                 dimension=dimension,
                                 influence_mode=influence_mode,
