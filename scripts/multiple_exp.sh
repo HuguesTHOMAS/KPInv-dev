@@ -19,17 +19,11 @@ training_script="experiments/S3DIS_simple/train_S3DIS_simple.py"
 # Declare an array variable
 # *************************
 
-# declare -a arg_arr=("--kp_radius 2.9"
-#                     "--kp_aggregation nearest"
-#                     "--data_sampler random"
-#                     "--data_sampler regular"
-#                     "--norm layer"
-#                     "--conv_groups 8"
-#                     "--init_channels 80"
-#                     "--init_channels 64")
-declare -a arg_arr=("--conv_groups 1"
-                    "--data_sampler random"
-                    "--conv_groups 8")
+declare -a arg_arr=("--init_channels 64"
+                    "--shell_sizes 1 14"
+                    "--kp_radius 3.0 --shell_sizes 1 14 30 60"
+                    "--kp_influence mlp"
+                    "--kp_influence mlp --kp_radius 3.5 --shell_sizes 1 14 30 60")
 
 
 echo ""

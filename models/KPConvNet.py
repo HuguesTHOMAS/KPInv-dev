@@ -351,6 +351,10 @@ class KPFCNN(nn.Module):
                            bn_momentum=cfg.model.bn_momentum)
 
     def get_conv_block(self, in_C, out_C, radius, sigma, cfg, deformable=False, shared_kp_data=None):
+        
+        stem_influence = cfg.model.kp_influence
+        if 'kpmini' in cfg.model.kp_mode and cfg.model.kp_influence == 'mlp':
+            stem_influence = 'linear'
 
         # First layer is the most simple convolution possible
         return KPConvBlock(in_C,
@@ -362,7 +366,7 @@ class KPFCNN(nn.Module):
                            modulated=False,
                            deformable=False,
                            use_geom=False,
-                           influence_mode=cfg.model.kp_influence,
+                           influence_mode=stem_influence,
                            aggregation_mode=cfg.model.kp_aggregation,
                            dimension=cfg.data.dim,
                            norm_type=cfg.model.norm,

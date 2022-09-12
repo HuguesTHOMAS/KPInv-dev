@@ -682,7 +682,51 @@ def small_test():
     # Give names to the logs (for plot legends)
     logs_names = ['kp=nearest 1 14 28 r=2.5 f64',
                   'same',
-                  'same random',
+                  'same random']
+
+    # TODO: train regular is buggy
+
+    # TODO: Handle kpnextarchitecture like ConvNext, operate DropPath
+    # TODO: Find why augmenting k in depthwise conv augments the FLOPS
+    # TODO: Share kernel influences with consecutives KPConv
+    # TODO: KPInv and more ConvNext optims
+
+
+    # safe check log names
+    if len(logs) > len(logs_names):
+        logs = logs[:len(logs_names)]
+    logs_names = np.array(logs_names[:len(logs)])
+
+    return logs, logs_names
+
+
+def exp_kpmini():
+    """
+    Test shell conv
+    """
+
+    # Using the dates of the logs, you can easily gather consecutive ones. All logs should be of the same dataset.
+    start = 'Log_2022-09-09_18-42-25'
+    end = 'Log_2022-09-29_23-43-08'
+
+    # Name of the result path
+    res_path = 'results'
+
+    # Gather logs and sort by date
+    logs = np.sort([join(res_path, l) for l in listdir_str(res_path) if start <= l <= end])
+
+    # # Optionally add a specific log at a specific place in the log list
+    # logs = logs.astype('<U50')
+    # logs = np.insert(logs, 0, 'results/Log_2022-08-30_18-57-14')
+
+    # Give names to the logs (for plot legends)
+    logs_names = ['mini add sum',
+                  'mini add max',
+                  'mini mul max',
+                  'mini mul sum (we keep this)',
+                  'mini 1 14',
+                  'mini r=3.0 / 1 14 30 60',
+                  'mini mlp',
                   '...',]
 
     # TODO: train regular is buggy
@@ -714,7 +758,7 @@ if __name__ == '__main__':
     ######################################################
 
     # My logs: choose the logs to show
-    logs, logs_names = small_test()
+    logs, logs_names = exp_kpmini()
 
     frame_lines_1(["Plot S3DIS experiments"])
 

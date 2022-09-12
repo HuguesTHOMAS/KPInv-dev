@@ -83,7 +83,7 @@ def my_config():
 
     cfg.model.layer_blocks = (3,  4,  5,  12,  4)
     cfg.model.norm = 'batch' # batch, layer
-    cfg.model.init_channels = 96  # 48, 64, 80, 96
+    cfg.model.init_channels = 64  # 48, 64, 80, 96
 
     cfg.model.kp_mode = 'kpmini'            # Choose ['kpconv', 'kpdef', 'kpinv']. 
                                             # Choose ['inv_v1', 'inv_v2', 'inv_v3', 'inv_v4', 'transformer']
@@ -91,8 +91,8 @@ def my_config():
                                             # Choose ['kpconv-depth'] for depthwise conv (groups = input channels = output chanels)
                                             # Choose ['kpnext'] for better kpconv
                                             # Choose ['kpmini'] for depthwise kpconv
-    cfg.model.shell_sizes = [1, 14, 30, 60]
-    cfg.model.kp_radius = 3.5
+    cfg.model.shell_sizes = [1, 14, 30]
+    cfg.model.kp_radius = 2.5
     cfg.model.kp_influence = 'linear'
     cfg.model.kp_aggregation = 'nearest'  # 'sum', 'nearest'
     cfg.model.conv_groups = -1   # -1 for depthwise convolution       
@@ -137,8 +137,8 @@ def my_config():
     cfg.train.in_radius = 1.5
 
     # Batch related_parames
-    cfg.train.batch_size = 2                 # Target batch size. If you don't want calibration, you can directly set train.batch_limit
-    cfg.train.accum_batch = 10               # Accumulate batches for an effective batch size of batch_size * accum_batch.
+    cfg.train.batch_size = 4                 # Target batch size. If you don't want calibration, you can directly set train.batch_limit
+    cfg.train.accum_batch = 5                # Accumulate batches for an effective batch size of batch_size * accum_batch.
     cfg.train.steps_per_epoch = 250
     
     # Training length
@@ -270,6 +270,7 @@ if __name__ == '__main__':
     str_args = ['model.kp_mode',
                 'train.data_sampler',
                 'model.kp_aggregation',
+                'model.kp_influence',
                 'model.norm']
 
     float_args = ['train.weight_decay',
@@ -468,11 +469,11 @@ if __name__ == '__main__':
     #                       - Point-involution-v4               OK
     #                       - Point-transformers                OK
     #                       - KP-involution (verif si bug)
-    #                       - KPConv-group modulations
+    #                       - KPConv-group modulations          OK
     #                       - KPConv-inv
     #                       - Add geometric encoding to KPConv and related designs
-    #                       TODO - see what Point COnv Former does? https://arxiv.org/pdf/2208.02879.pdf
-    #                       TODO - Also SPNet https://arxiv.org/pdf/2109.11610.pdf
+    #                       TODO - see what Point COnv Former does? https://arxiv.org/pdf/2208.02879.pdf        OK
+    #                       TODO - Also SPNet https://arxiv.org/pdf/2109.11610.pdf                              OK
     #                       TODO - Also Fast Transformer and their geometric encoding (more efficient) https://arxiv.org/pdf/2112.04702.pdf
     #                               it also use cosine similarity instead of softmax
     #
@@ -486,14 +487,12 @@ if __name__ == '__main__':
     #           and classification model on real-world data
     #
     #       3. Optimize operation
-    #           > verify group conv results
-    #           > check the effect of normalization in conv
-    #           > use keops lazytensor in convolution ?
+    #           > TODO check the effect of normalization in conv
     #
     #       4. Optimize network
     #           > Test heads
     #           > Compare deeper architectures
-    #           > Test subsampling ph
+    #           > Test subsampling ph, pds
     #           > Number of parameters. Use groups, reduce some of the mlp operations
     #           > See optimization here:
     #               TODO - https://spell.ml/blog/pytorch-training-tricks-YAnJqBEAACkARhgD
@@ -527,8 +526,17 @@ if __name__ == '__main__':
     #
     #           > Study stronger downsampling at first layer like stems in RedNet101
     #
-    #           > Study the batch size accumulation
+    #           > Study the batch size accumulationv
     #
+    #
+    #       6. Parameters to play with at the end
+    #           > color drop
+    #           > init_feature_dim
+    #           > layers
+    #           > radius (sphere or cylinder)
+    #           > knn
+    #           > kp radius (for kp)
+    #           > trainer
     #
 
     print('\n')

@@ -28,8 +28,8 @@ from torch.nn.init import kaiming_uniform_
 
 
 from kernels.kernel_points import load_kernels
-from models.generic_blocks import gather, index_select, radius_gaussian, local_maxpool, UnaryBlock, BatchNormBlock, \
-    GroupNormBlock, NormBlock, DropPathPack
+from models.generic_blocks import gather, index_select, radius_gaussian, local_maxpool, UnaryBlock, \
+    NormBlock, DropPathPack
 
 # ----------------------------------------------------------------------------------------------------------------------
 #
@@ -54,6 +54,7 @@ class KPMini(nn.Module):
                  shell_sizes: list,
                  radius: float,
                  sigma: float,
+                 Cmid: int = 0,
                  shared_kp_data = None,
                  dimension: int = 3,
                  influence_mode: str = 'linear',
@@ -67,21 +68,18 @@ class KPMini(nn.Module):
         Option to switch final multiplication with another operation
         Option to use MLP instead of kernel to get neighbor weights (then we are similar to PointNeXt)
         Args:
-            in_channels        (int): The number of the input channels.
-            out_channels       (int): The number of the output channels.
-            shell_sizes       (list): The number of kernel points per shell.
-            radius           (float): The radius used for kernel point init.
-            sigma            (float): The influence radius of each kernel point.
-            shared_kp_data (None): Optional data dict shared across the layer
-            modulated   (bool=False): Use modulations (self-attention)
-            use_geom    (bool=False): Use geometric encodings
-            groups           (int=1): Groups in convolution (=in_channels for depthwise conv).
-            dimension        (int=3): The dimension of the point space.
+            channels                     (int): The number of channels.
+            shell_sizes                 (list): The number of kernel points per shell.
+            radius                     (float): The radius used for kernel point init.
+            sigma                      (float): The influence radius of each kernel point.
+            Cmid                         (int): Dimension of mid f. 0 for depthwise conv, > 0 for PointConv style
+            shared_kp_data              (None): Optional data dict shared across the layer
+            dimension                  (int=3): The dimension of the point space.
             influence_mode      (str='linear'): Influence function ('constant', 'linear', 'gaussian').
             fixed_kernel_points (str='center'): kernel points whose position is fixed ('none', 'center' or 'verticals').
             norm_type            (str='batch'): type of normalization used in layer ('group', 'batch', 'none')
             bn_momentum           (float=0.98): Momentum for batch normalization
-            activation (nn.Module|None=nn.LeakyReLU(0.1)): Activation function. Use None for no activation.
+            activation              (nn.Module: Activation function. Use None for no activation.
             inf (float=1e6): The value of infinity to generate the padding point.
         """
         super(KPMini, self).__init__()
@@ -89,16 +87,21 @@ class KPMini(nn.Module):
         # Save parameters
         self.channels = channels
         self.shell_sizes = shell_sizes
-        self.K = np.sum(shell_sizes).item()
+        self.K = int(np.sum(shell_sizes))
         self.radius = radius
         self.sigma = sigma
         self.dimension = dimension
         self.influence_mode = influence_mode
         self.fixed_kernel_points = fixed_kernel_points
         self.inf = inf
+        self.Cmid = Cmid
 
         # Initialize weights
-        self.weights = nn.Parameter(torch.zeros(size=(self.K, channels)), requires_grad=True)
+        if Cmid > 0:
+            self.weights = nn.Parameter(torch.zeros(size=(self.K, Cmid)), requires_grad=True)
+            self.out_mlp = nn.Linear(Cmid * channels, channels)
+        else:
+            self.weights = nn.Parameter(torch.zeros(size=(self.K, channels)), requires_grad=True)
 
         # Reset parameters
         self.reset_parameters()
@@ -122,7 +125,7 @@ class KPMini(nn.Module):
         # Merge and aggregation function
         # self.merge_op = torch.add
         self.merge_op = torch.mul
-        # self.aggr_op = torch.max
+        # self.aggr_op = lambda x, dim=0: torch.max(x, dim=dim)[0]
         self.aggr_op = torch.sum
 
         if self.influence_mode == 'mlp':
@@ -245,7 +248,7 @@ class KPMini(nn.Module):
         neighbor_feats = index_select(padded_s_feats, neighb_inds, dim=0)
 
         # Get nearest kernel point (M, H) and weights applied to each neighbors (M, H)
-        neighbors_1nn, neighbors, influence_weights = self.get_neighbors_influences(q_pts, s_pts, neighb_inds)
+        influence_weights, neighbors, neighbors_1nn = self.get_neighbors_influences(q_pts, s_pts, neighb_inds)
 
         if self.influence_mode == 'mlp':
 
@@ -258,17 +261,27 @@ class KPMini(nn.Module):
         else:
 
             # Choose between two mode (summation or gathering). Gathering is only worth if K > 20
-            if self.K > 25:
+            if self.K > 25 or self.Cmid > 0:
 
-                # Collect nearest kernel point weights -> (M, H, C)
+                # Collect nearest kernel point weights -> (M, H, C or Cmid)
                 neighbors_weights = gather(self.weights, neighbors_1nn)
 
                 # Apply influence weights
                 if self.influence_mode != 'constant':
                     neighbors_weights *= influence_weights.unsqueeze(2)
+                    
+                if self.Cmid > 0:
 
-                # Apply weights and summation
-                output_feats = self.aggr_op(self.merge_op(neighbor_feats, neighbors_weights), dim=1)  # (M, H, C) -> (M, C)
+                    # Apply weights via matmul
+                    intermediate_feats = torch.matmul(neighbors_weights.transpose(1, 2), neighbor_feats)  # (M, Cmid, H) x (M, H, C) -> (M, Cmid, C)
+
+                    # Final linear combination
+                    output_feats = self.out_mlp(intermediate_feats.view(-1, self.Cmid * self.channels))
+
+                else:
+
+                    # Apply weights and summation
+                    output_feats = self.aggr_op(self.merge_op(neighbor_feats, neighbors_weights), dim=1)  # (M, H, C) -> (M, C)
 
             else:
 
