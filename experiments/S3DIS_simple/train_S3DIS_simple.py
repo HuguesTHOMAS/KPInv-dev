@@ -40,7 +40,7 @@ from utils.gpu_init import init_gpu
 
 from models.KPConvNet import KPNeXt
 from models.KPConvNet import KPFCNN as KPConvFCNN
-from models.KPInvNet import KPFCNN as KPInvFCNN
+from models.KPInvNet import KPInvFCNN
 from models.InvolutionNet import InvolutionFCNN
 
 from datasets.scene_seg import SceneSegSampler, SceneSegCollate
@@ -85,7 +85,7 @@ def my_config():
     cfg.model.norm = 'batch' # batch, layer
     cfg.model.init_channels = 64  # 48, 64, 80, 96
 
-    cfg.model.kp_mode = 'kpmini'            # Choose ['kpconv', 'kpdef', 'kpinv']. 
+    cfg.model.kp_mode = 'kpinvx'            # Choose ['kpconv', 'kpdef', 'kpinv', 'kpinvx']. 
                                             # Choose ['inv_v1', 'inv_v2', 'inv_v3', 'inv_v4', 'transformer']
                                             # Choose ['kpconv-mod', 'kpdef-mod', 'kpconv-geom'] for modulations
                                             # Choose ['kpconv-depth'] for depthwise conv (groups = input channels = output chanels)
@@ -97,8 +97,7 @@ def my_config():
     cfg.model.kp_aggregation = 'nearest'  # 'sum', 'nearest'
     cfg.model.conv_groups = -1   # -1 for depthwise convolution       
     
-    cfg.model.share_kp = True       #  share kernels within layers
-                                        
+    cfg.model.share_kp = True       #  share kernels within layers                
 
     cfg.data.init_sub_size = 0.02          # -1.0 so that dataset point clouds are not initially subsampled
     cfg.data.init_sub_mode = 'grid'        # Mode for initial subsampling of data
@@ -117,7 +116,11 @@ def my_config():
     # Specific parameters for involution and transformers
     cfg.model.use_strided_conv = True           # Use convolution op for strided layers instead of involution
     cfg.model.first_inv_layer = 1               # Use involution layers only from this layer index
-    cfg.model.inv_groups = 1
+    cfg.model.inv_groups = 8                    # neagtive values to specify CpG instead of G
+            
+    # Specific parameters for kpinv 
+    cfg.model.kpinv_reduc = 4
+    cfg.model.kpinvx_expansion = 8
 
     # Training parameters
     # -------------------
@@ -138,11 +141,11 @@ def my_config():
 
     # Batch related_parames
     cfg.train.batch_size = 4                 # Target batch size. If you don't want calibration, you can directly set train.batch_limit
-    cfg.train.accum_batch = 5                # Accumulate batches for an effective batch size of batch_size * accum_batch.
+    cfg.train.accum_batch = 10               # Accumulate batches for an effective batch size of batch_size * accum_batch.
     cfg.train.steps_per_epoch = 250
     
     # Training length
-    cfg.train.max_epoch = 180
+    cfg.train.max_epoch = 240
     
     # Deformations
     cfg.train.deform_loss_factor = 0.1      # Reduce to reduce influence for deformation on overall features
@@ -159,7 +162,7 @@ def my_config():
     cfg.train.cyc_lr0 = 5e-4                # Float, Start (minimum) learning rate of 1cycle decay
     cfg.train.cyc_lr1 = 5e-3                # Float, Maximum learning rate of 1cycle decay
     cfg.train.cyc_raise_n = 1               #   Int, Raise rate for first part of 1cycle = number of epoch to multiply lr by 10
-    cfg.train.cyc_decrease10 = 80           #   Int, Decrease rate for second part of 1cycle = number of epoch to divide lr by 10
+    cfg.train.cyc_decrease10 = 60           #   Int, Decrease rate for second part of 1cycle = number of epoch to divide lr by 10
     cfg.train.cyc_plateau = 1               #   Int, Number of epoch for plateau at maximum lr
 
     # import matplotlib.pyplot as plt

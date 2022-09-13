@@ -37,7 +37,7 @@ from utils.config import load_cfg, save_cfg, get_directories
 from utils.printing import frame_lines_1, underline
 
 from models.KPConvNet import KPFCNN as KPConvFCNN
-from models.KPInvNet import KPFCNN as KPInvFCNN
+from models.KPInvNet import KPInvFCNN
 from models.InvolutionNet import InvolutionFCNN
 
 from datasets.scene_seg import SceneSegSampler, SceneSegCollate

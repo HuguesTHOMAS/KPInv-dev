@@ -4,8 +4,8 @@ import torch
 import torch.nn as nn
 import numpy as np
 
-from models.generic_blocks import NearestUpsampleBlock, UnaryBlock, local_nearest_pool
-from models.kpinv_blocks import KPInvResidualBlock
+from models.generic_blocks import LinearUpsampleBlock, UnaryBlock, local_nearest_pool
+from models.kpinv_blocks import KPInvResidualBlock, KPInvXBottleNeckBlock
 from models.kpconv_blocks import KPConvBlock
 
 from utils.torch_pyramid import fill_pyramid
@@ -89,7 +89,6 @@ class KPCNN(nn.Module):
                                                 layer,
                                                 config))
 
-
             # Index of block in this layer
             block_in_layer += 1
 
@@ -98,7 +97,6 @@ class KPCNN(nn.Module):
                 in_dim = out_dim // 2
             else:
                 in_dim = out_dim
-
 
             # Detect change to a subsampled layer
             if 'pool' in block or 'strided' in block:
@@ -179,7 +177,7 @@ class KPCNN(nn.Module):
         return correct / total
 
 
-class KPFCNN(nn.Module):
+class KPInvFCNN(nn.Module):
 
     def __init__(self, cfg):
         """
@@ -188,7 +186,7 @@ class KPFCNN(nn.Module):
         Args:
             cfg (EasyDict): configuration dictionary
         """
-        super(KPFCNN, self).__init__()
+        super(KPInvFCNN, self).__init__()
 
         ############
         # Parameters
@@ -211,7 +209,9 @@ class KPFCNN(nn.Module):
         self.layer_blocks = cfg.model.layer_blocks
         self.num_layers = len(self.layer_blocks)
         self.upsample_n = cfg.model.upsample_n
-        
+        self.share_kp = cfg.model.share_kp
+        self.kp_mode = cfg.model.kp_mode
+
         # List of valid labels (those not ignored in loss)
         self.valid_labels = np.sort([c for c in cfg.data.label_values if c not in cfg.data.ignored_labels])
         self.num_logits = len(self.valid_labels)
@@ -228,64 +228,71 @@ class KPFCNN(nn.Module):
             raise ValueError('First layer must contain at least 2 convolutional layers')
         if np.min(self.layer_blocks) < 1:
             raise ValueError('Each layer must contain at least 1 convolutional layers')
-        
+
         #####################
         # List Encoder blocks
         #####################
-        
-        # ------ Layers 1 ------
 
-        # Initial convolution 
+        # ------ Layers 1 ------
+        if cfg.model.share_kp:
+            self.shared_kp = [{} for _ in range(self.num_layers)]
+        else:
+            self.shared_kp = [None for _ in range(self.num_layers)]
+
+        # Initial convolution
         self.encoder_1 = nn.ModuleList()
         self.encoder_1.append(self.get_conv_block(in_C, C, conv_r, conv_sig, cfg))
-        self.encoder_1.append(self.get_residual_block(C, C * 2, conv_r, conv_sig, cfg))
+        self.encoder_1.append(self.get_residual_block(C, C * 2, conv_r, conv_sig, cfg, shared_kp_data=self.shared_kp[0]))
 
         # Next blocks
         for _ in range(self.layer_blocks[0] - 2):
-            self.encoder_1.append(self.get_residual_block(C * 2, C * 2, conv_r, conv_sig, cfg))
+            self.encoder_1.append(self.get_residual_block(C * 2, C * 2, conv_r, conv_sig, cfg, shared_kp_data=self.shared_kp[0]))
 
         # Pooling block
         self.pooling_1 = self.get_residual_block(C * 2, C * 2, conv_r, conv_sig, cfg, strided=True)
-
 
         # ------ Layers [2, 3, 4, 5] ------
         for layer in range(2, self.num_layers + 1):
 
             # Update features, radius, sigma for this layer
-            C *= 2; conv_r *= 2; conv_sig *= 2
+            C *= 2
+            conv_r *= 2
+            conv_sig *= 2
 
             # First block takes features to new dimension.
             encoder_i = nn.ModuleList()
-            encoder_i.append(self.get_residual_block(C, C * 2, conv_r, conv_sig, cfg))
+            encoder_i.append(self.get_residual_block(C, C * 2, conv_r, conv_sig, cfg,
+                                                     shared_kp_data=self.shared_kp[layer - 1]))
 
             # Next blocks
             for _ in range(self.layer_blocks[layer - 1] - 1):
-                encoder_i.append(self.get_residual_block(C * 2, C * 2, conv_r, conv_sig, cfg))
+                encoder_i.append(self.get_residual_block(C * 2, C * 2, conv_r, conv_sig, cfg,
+                                                         shared_kp_data=self.shared_kp[layer - 1]))
             setattr(self, 'encoder_{:d}'.format(layer), encoder_i)
 
             # Pooling block (not for the last layer)
             if layer < self.num_layers:
-                pooling_i = self.get_residual_block(C * 2, C * 2, conv_r, conv_sig, cfg, strided=True)
+                pooling_i = self.get_residual_block(C * 2, C * 2, conv_r, conv_sig, cfg,
+                                                    strided=True)
                 setattr(self, 'pooling_{:d}'.format(layer), pooling_i)
-
 
         #####################
         # List Decoder blocks
         #####################
-        
+
         # ------ Layers [4, 3, 2, 1] ------
         for layer in range(self.num_layers - 1, 0, -1):
-            
+
             decoder_i = self.get_unary_block(C * 3, C, cfg)
-            upsampling_i = NearestUpsampleBlock()
-            
+            upsampling_i = LinearUpsampleBlock(self.upsample_n)
+
             setattr(self, 'decoder_{:d}'.format(layer), decoder_i)
             setattr(self, 'upsampling_{:d}'.format(layer), upsampling_i)
 
             C = C // 2
 
         #  ------ Head ------
-        
+
         # New head
         self.head = nn.Sequential(self.get_unary_block(first_C * 2, first_C, cfg),
                                   nn.Linear(first_C, self.num_logits))
@@ -298,8 +305,6 @@ class KPFCNN(nn.Module):
         # My old head
         # self.head = nn.Sequential(self.get_unary_block(first_C * 2, first_C, cfg, norm_type='none'),
         #                           nn.Linear(first_C, self.num_logits))
-
-
 
         ################
         # Network Losses
@@ -329,38 +334,62 @@ class KPFCNN(nn.Module):
             norm_type = cfg.model.norm
 
         return UnaryBlock(in_C,
-                           out_C,
-                           norm_type=norm_type,
-                           bn_momentum=cfg.model.bn_momentum)
+                          out_C,
+                          norm_type=norm_type,
+                          bn_momentum=cfg.model.bn_momentum)
 
-    def get_conv_block(self, in_C, out_C, radius, sigma, cfg):
+    def get_conv_block(self, in_C, out_C, radius, sigma, cfg, shared_kp_data=None):
 
         return KPConvBlock(in_C,
                            out_C,
                            cfg.model.shell_sizes,
                            radius,
                            sigma,
+                           shared_kp_data=shared_kp_data,
                            influence_mode=cfg.model.kp_influence,
                            aggregation_mode=cfg.model.kp_aggregation,
                            dimension=cfg.data.dim,
                            norm_type=cfg.model.norm,
                            bn_momentum=cfg.model.bn_momentum)
 
-    def get_residual_block(self, in_C, out_C, radius, sigma, cfg, strided=False):
+    def get_residual_block(self, in_C, out_C, radius, sigma, cfg, strided=False, shared_kp_data=None):
 
-        return KPInvResidualBlock(in_C,
-                                  out_C,
-                                  cfg.model.shell_sizes,
-                                  radius,
-                                  sigma,
-                                  channels_per_group=cfg.model.kpinv_grp_ch,
-                                  reduction_ratio=cfg.model.kpinv_reduc,
-                                  influence_mode=cfg.model.kp_influence,
-                                  aggregation_mode=cfg.model.kp_aggregation,
-                                  dimension=cfg.data.dim,
-                                  strided=strided,
-                                  norm_type=cfg.model.norm,
-                                  bn_momentum=cfg.model.bn_momentum)
+        # 'none', 'sigmoid', 'softmax' or 'tanh'.
+        weight_act = 'none'
+
+        if 'kpinvx' in self.kp_mode:
+
+            return KPInvXBottleNeckBlock(in_C,
+                                         out_C,
+                                         cfg.model.shell_sizes,
+                                         radius,
+                                         sigma,
+                                         expansion=cfg.model.kpinvx_expansion,
+                                         reduction_ratio=cfg.model.kpinv_reduc,
+                                         weight_act=weight_act,
+                                         shared_kp_data=shared_kp_data,
+                                         influence_mode=cfg.model.kp_influence,
+                                         dimension=cfg.data.dim,
+                                         strided=strided,
+                                         norm_type=cfg.model.norm,
+                                         bn_momentum=cfg.model.bn_momentum)
+
+        else:
+
+            return KPInvResidualBlock(in_C,
+                                      out_C,
+                                      cfg.model.shell_sizes,
+                                      radius,
+                                      sigma,
+                                      groups=cfg.model.inv_groups,
+                                      reduction_ratio=cfg.model.kpinv_reduc,
+                                      weight_act=weight_act,
+                                      shared_kp_data=shared_kp_data,
+                                      influence_mode=cfg.model.kp_influence,
+                                      dimension=cfg.data.dim,
+                                      strided=strided,
+                                      norm_type=cfg.model.norm,
+                                      bn_momentum=cfg.model.bn_momentum)
 
     def forward(self, batch, verbose=False):
 
@@ -380,17 +409,16 @@ class KPFCNN(nn.Module):
                          self.upsample_n,
                          sub_mode=self.in_sub_mode)
 
-        if verbose: 
-            torch.cuda.synchronize(batch.device())                           
+        if verbose:
+            torch.cuda.synchronize(batch.device())
             t += [time.time()]
 
         # Get input features
         feats = batch.in_dict.features.clone().detach()
-        
-        if verbose:      
-            torch.cuda.synchronize(batch.device())                        
-            t += [time.time()]
 
+        if verbose:
+            torch.cuda.synchronize(batch.device())
+            t += [time.time()]
 
         #  ------ Encoder ------
 
@@ -398,13 +426,13 @@ class KPFCNN(nn.Module):
         for layer in range(1, self.num_layers + 1):
 
             # Get layer blocks
-            l = layer -1
+            l = layer - 1
             block_list = getattr(self, 'encoder_{:d}'.format(layer))
 
             # Layer blocks
             for block in block_list:
                 feats = block(batch.in_dict.points[l], batch.in_dict.points[l], feats, batch.in_dict.neighbors[l])
-            
+
             if layer < self.num_layers:
 
                 # Skip features
@@ -412,11 +440,17 @@ class KPFCNN(nn.Module):
 
                 # Pooling
                 layer_pool = getattr(self, 'pooling_{:d}'.format(layer))
-                feats = layer_pool(batch.in_dict.points[l+1], batch.in_dict.points[l], feats, batch.in_dict.pools[l])
+                feats = layer_pool(batch.in_dict.points[l + 1], batch.in_dict.points[l], feats, batch.in_dict.pools[l])
 
-         
-        if verbose:    
-            torch.cuda.synchronize(batch.device())                         
+        # Remove shared data
+        if self.share_kp:
+            for l in range(self.num_layers):
+                self.shared_kp[l].pop('infl_w', None)
+                self.shared_kp[l].pop('neighb_p', None)
+                self.shared_kp[l].pop('neighb_1nn', None)
+
+        if verbose:
+            torch.cuda.synchronize(batch.device())
             t += [time.time()]
 
         #  ------ Decoder ------
@@ -424,11 +458,12 @@ class KPFCNN(nn.Module):
         for layer in range(self.num_layers - 1, 0, -1):
 
             # Get layer blocks
-            l = layer -1    # 3, 2, 1, 0
+            l = layer - 1    # 3, 2, 1, 0
             unary = getattr(self, 'decoder_{:d}'.format(layer))
+            upsample = getattr(self, 'upsampling_{:d}'.format(layer))
 
             # Upsample
-            feats = local_nearest_pool(feats, batch.in_dict.upsamples[l])
+            feats = upsample(feats, batch.in_dict.upsamples[l], batch.in_dict.up_distances[l])
 
             # Concat with skip features
             feats = torch.cat([feats, skip_feats[l]], dim=1)
@@ -436,14 +471,12 @@ class KPFCNN(nn.Module):
             # MLP
             feats = unary(feats)
 
-
         #  ------ Head ------
 
         logits = self.head(feats)
-                
 
         if verbose:
-            torch.cuda.synchronize(batch.device())                      
+            torch.cuda.synchronize(batch.device())
             t += [time.time()]
             mean_dt = 1000 * (np.array(t[1:]) - np.array(t[:-1]))
             message = ' ' * 75 + 'net (ms):'
@@ -569,17 +602,3 @@ class KPResNet(nn.Module):
     def forward(self, batch, verbose=False):
 
         return
-
-
-
-
-
-
-
-
-
-
-
-
-
-

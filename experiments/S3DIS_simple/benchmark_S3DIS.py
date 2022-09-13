@@ -131,7 +131,6 @@ def my_config():
     # cfg.model.neighbor_limits = [35, 40, 50, 50, 50]    # Use empty list to let calibration get the values
     cfg.model.neighbor_limits = []
 
-    cfg.model.kpinv_grp_ch = 1          #   Int, number of channels per group in involutions
     cfg.model.kpinv_reduc = 1           #   Int, reduction ration for kpinv gen mlp
 
 

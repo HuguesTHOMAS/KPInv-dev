@@ -86,8 +86,8 @@ def init_cfg():
     cfg.model.share_kp = False         #  Bool, option to share the kenrel point (and thus neighbor influences and weights) 
                                         #        across the KPConv of the same layer
 
-    cfg.model.kpinv_grp_ch = 16         #   Int, number of channels per group in involutions
-    cfg.model.kpinv_reduc = 4           #   Int, reduction ration for kpinv gen mlp
+    cfg.model.kpinv_reduc = 1           #   Int, reduction ration for kpinv gen mlp
+    cfg.model.kpinvx_expansion = 8      #   Int, expansion parameter for kpinvX
 
     cfg.model.use_strided_conv = True   #  Bool, Use convolution op for strided layers instead of involution
     cfg.model.first_inv_layer = 0       #   Int, Use involution layers only from this layer index

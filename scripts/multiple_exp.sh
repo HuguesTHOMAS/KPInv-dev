@@ -19,11 +19,11 @@ training_script="experiments/S3DIS_simple/train_S3DIS_simple.py"
 # Declare an array variable
 # *************************
 
-declare -a arg_arr=("--init_channels 64"
-                    "--shell_sizes 1 14"
-                    "--kp_radius 3.0 --shell_sizes 1 14 30 60"
-                    "--kp_influence mlp"
-                    "--kp_influence mlp --kp_radius 3.5 --shell_sizes 1 14 30 60")
+declare -a arg_arr=("--kp_mode kpinvx"
+                    "--kp_mode kpinv --inv_groups 1"
+                    "--kp_mode kpinv --inv_groups 8"
+                    "--kp_mode kpinv --inv_groups -8"
+                    "--kp_mode kpinv --inv_groups -1")
 
 
 echo ""

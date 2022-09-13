@@ -644,14 +644,6 @@ def exp_shell_optim():
                   '...',
                   '...',]
 
-    # TODO: train regular is buggy
-
-    # TODO: Handle kpnextarchitecture like ConvNext, operate DropPath
-    # TODO: Find why augmenting k in depthwise conv augments the FLOPS
-    # TODO: Share kernel influences with consecutives KPConv
-    # TODO: KPInv and more ConvNext optims
-
-
     # safe check log names
     if len(logs) > len(logs_names):
         logs = logs[:len(logs_names)]
@@ -683,13 +675,6 @@ def small_test():
     logs_names = ['kp=nearest 1 14 28 r=2.5 f64',
                   'same',
                   'same random']
-
-    # TODO: train regular is buggy
-
-    # TODO: Handle kpnextarchitecture like ConvNext, operate DropPath
-    # TODO: Find why augmenting k in depthwise conv augments the FLOPS
-    # TODO: Share kernel influences with consecutives KPConv
-    # TODO: KPInv and more ConvNext optims
 
 
     # safe check log names
@@ -728,15 +713,51 @@ def exp_kpmini():
                   'mini r=3.0 / 1 14 30 60',
                   'mini mlp',
                   'mini Cmid=8',
-                  'mini Cmid=8 mlp',
+                  '...',]
+
+    # safe check log names
+    if len(logs) > len(logs_names):
+        logs = logs[:len(logs_names)]
+    logs_names = np.array(logs_names[:len(logs)])
+
+    return logs, logs_names
+
+
+def exp_kpinv():
+    """
+    Test shell conv
+    """
+
+    # Using the dates of the logs, you can easily gather consecutive ones. All logs should be of the same dataset.
+    start = 'Log_2022-09-12_15-06-06'
+    end = 'Log_2022-09-29_23-43-08'
+
+    # Name of the result path
+    res_path = 'results'
+
+    # Gather logs and sort by date
+    logs = np.sort([join(res_path, l) for l in listdir_str(res_path) if start <= l <= end])
+
+    # # Optionally add a specific log at a specific place in the log list
+    logs = logs.astype('<U50')
+    logs = np.insert(logs, 0, 'results/Log_2022-09-11_20-53-44')
+
+    # Give names to the logs (for plot legends)
+    logs_names = ['kpmini',
+                  'kpminiX',
+                  'kpinvX E=8',
+                  'kpinv  G=1',
+                  'kpinv  G=8',
+                  'kpinv  CpG=8',
+                  'kpinv  CpG=1',
+                  'best-sigm'
+                  'best-tanh'
+                  'best-smax'
+                  'best-sigm+max_aggr' # TODO: see pdf for sparse attention
                   '...',]
 
     # TODO: train regular is buggy
-
     # TODO: Handle kpnextarchitecture like ConvNext, operate DropPath
-    # TODO: Find why augmenting k in depthwise conv augments the FLOPS
-    # TODO: Share kernel influences with consecutives KPConv
-    # TODO: KPInv and more ConvNext optims
 
 
     # safe check log names
@@ -745,6 +766,8 @@ def exp_kpmini():
     logs_names = np.array(logs_names[:len(logs)])
 
     return logs, logs_names
+
+
 
 # ----------------------------------------------------------------------------------------------------------------------
 #
