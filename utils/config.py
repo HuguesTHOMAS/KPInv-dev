@@ -104,7 +104,7 @@ def init_cfg():
     cfg.model.input_channels = 1        #   Int, dimension of input feaures
     cfg.model.init_channels = 64        #   Int, dimension of first network features
     cfg.model.norm = 'batch'            #   Str, type of normalization in the network ('group', 'batch', 'layer' 'none')
-    cfg.model.bn_momentum = 0.98        # Float, Momentum for batch normalization.
+    cfg.model.bn_momentum = 0.1         # Float, Momentum for batch normalization (inverse of what is usually done , 0.01 is strong momentum).
 
     cfg.model.layer_blocks = (2, 1, 1)  # Tuple, number of blocks in each layers (in addition to the strided ones in between).
     cfg.model.neighbor_limits = []      #  List, maximum number of neigbors per layers

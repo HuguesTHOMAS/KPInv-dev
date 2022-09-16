@@ -215,7 +215,7 @@ def training_epoch(epoch, t0, net, optimizer, training_loader, cfg, PID_file, de
                     mean_dt = 0.8 * mean_dt + 0.2 * accum_dt
 
                 # Console display (only one per second)
-                if (t[-1] - last_display) > -1.0:
+                if (t[-1] - last_display) > 1.0:
                     last_display = t[-1]
 
                     message = '{:5d} {:4d} | {:8.3f} | {:7.1f} % | {:7.1f} ins/sec | {:6.1f} {:5.1f} {:5.1f} {:5.1f} {:5.1f}'
@@ -238,19 +238,17 @@ def training_epoch(epoch, t0, net, optimizer, training_loader, cfg, PID_file, de
                                                     accum_loss,
                                                     net.deform_loss,
                                                     t[-1] - t0))
-                          
-
                     
-                    s1, s2, s3  = get_temperatures_linux()
-                    temp_f = join(cfg.exp.log_dir, 'temperatures.txt')
-                    if exists(temp_f):
-                        with open(temp_f, "a") as file:
-                            file.write(s3 + '\n')
-                    else:
-                        with open(temp_f, "a") as file:
-                            file.write(s1 + '\n')
-                            file.write(s2 + '\n')
-                            file.write(s3 + '\n')
+                    # s1, s2, s3  = get_temperatures_linux()
+                    # temp_f = join(cfg.exp.log_dir, 'temperatures.txt')
+                    # if exists(temp_f):
+                    #     with open(temp_f, "a") as file:
+                    #         file.write(s3 + '\n')
+                    # else:
+                    #     with open(temp_f, "a") as file:
+                    #         file.write(s1 + '\n')
+                    #         file.write(s2 + '\n')
+                    #         file.write(s3 + '\n')
 
                 accum_loss = 0
                 step += 1

@@ -753,7 +753,40 @@ def exp_kpinv():
                   'kpmini layernorm',
                   'kpinv  G=1 tanh layernorm',
                   'kpinv  G=1 tanh groupnorm',
-                  'kpinv  G=1 tanh nonorm',
+                  '...',]
+
+
+    # safe check log names
+    if len(logs) > len(logs_names):
+        logs = logs[:len(logs_names)]
+    logs_names = np.array(logs_names[:len(logs)])
+
+    return logs, logs_names
+
+
+def exp_kpinv_bis():
+    """
+    Test shell conv
+    """
+
+    # Using the dates of the logs, you can easily gather consecutive ones. All logs should be of the same dataset.
+    start = 'Log_2022-09-16_17-04-24'
+    end = 'Log_2022-09-29_23-43-08'
+
+    # Name of the result path
+    res_path = 'results'
+
+    # Gather logs and sort by date
+    logs = np.sort([join(res_path, l) for l in listdir_str(res_path) if start <= l <= end])
+
+    # # Optionally add a specific log at a specific place in the log list
+    logs = logs.astype('<U50')
+    logs = np.insert(logs, 0, 'results/Log_2022-09-11_20-53-44')
+
+    # Give names to the logs (for plot legends)
+    logs_names = ['kpmini-old',
+                  'kpmini batchnorm',
+                  'kpinv  batchnorm',
                   'TODO',
                   'kpinvX E=8',
                   'kpinv  G=1',
@@ -795,7 +828,7 @@ if __name__ == '__main__':
     ######################################################
 
     # My logs: choose the logs to show
-    logs, logs_names = exp_kpinv()
+    logs, logs_names = exp_kpinv_bis()
 
     frame_lines_1(["Plot S3DIS experiments"])
 
