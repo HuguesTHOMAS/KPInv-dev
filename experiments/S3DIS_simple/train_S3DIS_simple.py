@@ -85,13 +85,13 @@ def my_config():
     cfg.model.norm = 'batch' # batch, layer
     cfg.model.init_channels = 64  # 48, 64, 80, 96
 
-    cfg.model.kp_mode = 'kpinv'             # Choose ['kpconv', 'kpdef', 'kpinv', 'kpinvx']. 
+    cfg.model.kp_mode = 'kpmini'             # Choose ['kpconv', 'kpdef', 'kpinv', 'kpinvx']. 
                                             # Choose ['inv_v1', 'inv_v2', 'inv_v3', 'inv_v4', 'transformer']
                                             # Choose ['kpconv-mod', 'kpdef-mod', 'kpconv-geom'] for modulations
                                             # Choose ['kpconv-depth'] for depthwise conv (groups = input channels = output chanels)
                                             # Choose ['kpnext'] for better kpconv
                                             # Choose ['kpmini' 'kpminix'] for depthwise kpconv
-    cfg.model.shell_sizes = [1, 14]
+    cfg.model.shell_sizes = [1, 14, 30]
     cfg.model.kp_radius = 2.5
     cfg.model.kp_influence = 'linear'
     cfg.model.kp_aggregation = 'nearest'  # 'sum', 'nearest'
@@ -126,7 +126,7 @@ def my_config():
     # -------------------
 
     # Input threads
-    cfg.train.num_workers = 32
+    cfg.train.num_workers = 16
     
     # Are we using spheres/cubes/cylinders/cubic_cylinders as input
     cfg.data.use_cubes = False
@@ -140,8 +140,8 @@ def my_config():
     cfg.train.in_radius = 1.5  # If negative, =number of points per input
 
     # Batch related_parames
-    cfg.train.batch_size = 12                 # Target batch size. If you don't want calibration, you can directly set train.batch_limit
-    cfg.train.accum_batch = 2                 # Accumulate batches for an effective batch size of batch_size * accum_batch.
+    cfg.train.batch_size = 6                 # Target batch size. If you don't want calibration, you can directly set train.batch_limit
+    cfg.train.accum_batch = 4                 # Accumulate batches for an effective batch size of batch_size * accum_batch.
     cfg.train.steps_per_epoch = 250
     
     # Training length
