@@ -19,11 +19,14 @@ training_script="experiments/S3DIS_simple/train_S3DIS_simple.py"
 # Declare an array variable
 # *************************
 
-declare -a arg_arr=("--kp_mode kpinvx"
-                    "--kp_mode kpinv --inv_groups 1"
-                    "--kp_mode kpinv --inv_groups 8"
-                    "--kp_mode kpinv --inv_groups -8"
-                    "--kp_mode kpinv --inv_groups -1")
+# declare -a arg_arr=("--kp_mode kpinvx"
+#                     "--kp_mode kpinv --inv_groups 1"
+#                     "--kp_mode kpinv --inv_groups 8"
+#                     "--kp_mode kpinv --inv_groups -8"
+#                     "--kp_mode kpinv --inv_groups -1")  TODO after we solve KPInv problem
+
+declare -a arg_arr=("--kp_mode kpinv --norm group"
+                    "--kp_mode kpinv --norm none")
 
 
 echo ""

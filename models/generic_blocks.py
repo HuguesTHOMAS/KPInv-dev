@@ -216,7 +216,7 @@ class BatchNormBlock(nn.Module):
             bn_momentum (float=0.98): Momentum for batch normalization. < 0 to avoid using it.
         """
         super(BatchNormBlock, self).__init__()
-        
+
         # Define parameters
         self.num_channels = num_channels
         self.bn_momentum = bn_momentum
@@ -225,6 +225,7 @@ class BatchNormBlock(nn.Module):
             self.batch_norm = nn.BatchNorm1d(num_channels, momentum=bn_momentum)
         else:
             self.bias = nn.Parameter(torch.zeros(num_channels, dtype=torch.float32), requires_grad=True)
+
         return
 
     def reset_parameters(self):
@@ -250,7 +251,7 @@ class BatchNormBlock(nn.Module):
             return x + self.bias
 
     def __repr__(self):
-        return 'BatchNormBlock(num_C: {:d}, momentum: {:.2f}, only_bias: {:s})'.format(self.in_dim,
+        return 'BatchNormBlock(num_C: {:d}, momentum: {:.2f}, only_bias: {:s})'.format(self.num_channels,
                                                                                        self.bn_momentum,
                                                                                        str(self.bn_momentum <= 0))
 

@@ -49,3 +49,7 @@ def print_color(line):
     print(line)
 
     return
+
+def color_str(s, color):
+    c = getattr(bcolors, color)
+    return '{:}{:s}{:}'.format(c, s, bcolors.ENDC)

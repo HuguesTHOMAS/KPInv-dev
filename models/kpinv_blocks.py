@@ -15,6 +15,7 @@
 #
 
 import math
+import time
 import numpy as np
 import torch
 import torch.nn as nn
@@ -126,8 +127,8 @@ class KPInv(nn.Module):
                                    Cin=channels,
                                    Cmid=channels // reduction_ratio,
                                    Cout=self.K * self.ch_per_grp,
-                                   norm_type=norm_type,
-                                   bn_momentum=bn_momentum,
+                                   norm_type='none',
+                                   bn_momentum=-1,
                                    activation=activation)
 
         # Weight activation
@@ -135,6 +136,8 @@ class KPInv(nn.Module):
             self.weight_activation = torch.sigmoid
         elif weight_act == 'tanh':
             self.weight_activation = torch.tanh
+        elif weight_act == 'tanh2':
+            self.weight_activation = lambda x: torch.tanh(x) + 1
         elif weight_act == 'softmax':
             self.weight_activation = torch.softmax(dim=1)
         else:
@@ -358,7 +361,6 @@ class KPInvX(nn.Module):
             self.shared_kp_data['k_pts'] = kernel_points
 
         # Weight generation function
-        reduction_ratio = 1
         self.alpha_mlp = build_mlp(n_layers=2,
                                    Cin=in_channels,
                                    Cmid=in_channels // reduction_ratio,

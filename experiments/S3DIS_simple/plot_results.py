@@ -745,6 +745,16 @@ def exp_kpinv():
     # Give names to the logs (for plot legends)
     logs_names = ['kpmini',
                   'kpminiX',
+                  'kpinvX E=8 none',
+                  'kpinv  G=1 none',
+                  'kpminiX_bis',
+                  'kpinv  G=1 sigm',
+                  'kpinv  G=1 sigm layernorm',
+                  'kpmini layernorm',
+                  'kpinv  G=1 tanh layernorm',
+                  'kpinv  G=1 tanh groupnorm',
+                  'kpinv  G=1 tanh nonorm',
+                  'TODO',
                   'kpinvX E=8',
                   'kpinv  G=1',
                   'kpinv  G=8',
@@ -755,6 +765,8 @@ def exp_kpinv():
                   'best-smax'
                   'best-sigm+max_aggr' # TODO: see pdf for sparse attention
                   '...',]
+
+    # TODO PLOTS: Show model size and GPU consumption
 
     # TODO: train regular is buggy
     # TODO: Handle kpnextarchitecture like ConvNext, operate DropPath
@@ -783,7 +795,7 @@ if __name__ == '__main__':
     ######################################################
 
     # My logs: choose the logs to show
-    logs, logs_names = exp_kpmini()
+    logs, logs_names = exp_kpinv()
 
     frame_lines_1(["Plot S3DIS experiments"])
 

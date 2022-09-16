@@ -1114,6 +1114,7 @@ class SceneSegSampler(Sampler):
         if dataset.set =='validation' and dataset.data_sampler == 'regular':
             reg_sampling_N = int(dataset.reg_sample_pts.shape[0])
             self.N = min(self.N, int(np.ceil(reg_sampling_N * 0.6)))
+            self.N = max(self.N, int(np.ceil(reg_sampling_N * 0.2)))
 
         return
 

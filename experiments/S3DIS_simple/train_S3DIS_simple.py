@@ -85,13 +85,13 @@ def my_config():
     cfg.model.norm = 'batch' # batch, layer
     cfg.model.init_channels = 64  # 48, 64, 80, 96
 
-    cfg.model.kp_mode = 'kpinvx'            # Choose ['kpconv', 'kpdef', 'kpinv', 'kpinvx']. 
+    cfg.model.kp_mode = 'kpinv'             # Choose ['kpconv', 'kpdef', 'kpinv', 'kpinvx']. 
                                             # Choose ['inv_v1', 'inv_v2', 'inv_v3', 'inv_v4', 'transformer']
                                             # Choose ['kpconv-mod', 'kpdef-mod', 'kpconv-geom'] for modulations
                                             # Choose ['kpconv-depth'] for depthwise conv (groups = input channels = output chanels)
                                             # Choose ['kpnext'] for better kpconv
-                                            # Choose ['kpmini'] for depthwise kpconv
-    cfg.model.shell_sizes = [1, 14, 30]
+                                            # Choose ['kpmini' 'kpminix'] for depthwise kpconv
+    cfg.model.shell_sizes = [1, 14]
     cfg.model.kp_radius = 2.5
     cfg.model.kp_influence = 'linear'
     cfg.model.kp_aggregation = 'nearest'  # 'sum', 'nearest'
@@ -116,17 +116,17 @@ def my_config():
     # Specific parameters for involution and transformers
     cfg.model.use_strided_conv = True           # Use convolution op for strided layers instead of involution
     cfg.model.first_inv_layer = 1               # Use involution layers only from this layer index
-    cfg.model.inv_groups = 8                    # neagtive values to specify CpG instead of G
+    cfg.model.inv_groups = 1                    # neagtive values to specify CpG instead of G
             
     # Specific parameters for kpinv 
-    cfg.model.kpinv_reduc = 4
+    cfg.model.kpinv_reduc = 1
     cfg.model.kpinvx_expansion = 8
 
     # Training parameters
     # -------------------
 
     # Input threads
-    cfg.train.num_workers = 16
+    cfg.train.num_workers = 32
     
     # Are we using spheres/cubes/cylinders/cubic_cylinders as input
     cfg.data.use_cubes = False
@@ -137,11 +137,11 @@ def my_config():
     cfg.train.max_points = -1           # positive value will reduce the input size to have exactly the asked number of points
 
     # Input spheres radius. Adapt this with model.in_sub_size. Try to keep a ratio of ~50
-    cfg.train.in_radius = 1.5
+    cfg.train.in_radius = 1.5  # If negative, =number of points per input
 
     # Batch related_parames
-    cfg.train.batch_size = 4                 # Target batch size. If you don't want calibration, you can directly set train.batch_limit
-    cfg.train.accum_batch = 10               # Accumulate batches for an effective batch size of batch_size * accum_batch.
+    cfg.train.batch_size = 12                 # Target batch size. If you don't want calibration, you can directly set train.batch_limit
+    cfg.train.accum_batch = 2                 # Accumulate batches for an effective batch size of batch_size * accum_batch.
     cfg.train.steps_per_epoch = 250
     
     # Training length
@@ -201,7 +201,7 @@ def my_config():
     cfg.test.data_sampler = 'regular'       # 'regular' to pick spheres regularly accross the data.
     cfg.test.max_points = -1                # positive value will reduce the input size to have exactly the asked number of points
 
-    cfg.test.max_steps_per_epoch = 50       # Size of one validation epoch (should be small)
+    cfg.test.max_steps_per_epoch = 100       # Size of one validation epoch (should be small)
     cfg.test.batch_limit = 1
     cfg.test.batch_size = 1
 

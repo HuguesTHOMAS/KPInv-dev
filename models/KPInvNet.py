@@ -354,8 +354,26 @@ class KPInvFCNN(nn.Module):
 
     def get_residual_block(self, in_C, out_C, radius, sigma, cfg, strided=False, shared_kp_data=None):
 
-        # 'none', 'sigmoid', 'softmax' or 'tanh'.
-        weight_act = 'none'
+        # 'none', 'sigmoid', 'softmax', 'tanh' or 'tanh2'.
+        weight_act = 'tanh'
+        
+        # Warning when testing be sure this is the same as when test
+        
+        # TODO: print features value sbefore and after kpinv
+        # TODO: sigmoid or tanh should fix the nan problem (verify that with last trained net)
+        # TODO: However the fact than nan arrive is strange they do not seem to be here at training... I it because of batch norm???
+        
+        # TODO: Problem with kpinv could be the empty space
+        #           > with kpconv, the same weight is applied everywhere whihc means on the whole point cloud, 
+        #             every kernel weight should get some data
+        #           > with kpinv, we generate a kernel for each neighbor, so when empy space what happend 
+        #             to the generate weights and their gradient???
+        # 
+        # Todo: return to equation, i think their could be two problems:
+        #   > the vraible amount of zero features from neighbors out or kernel range
+        #   > the varaible amount of kernel points having zero neighbors, and thus their generated weight 
+        #     not being used and that mess up with the normalization??? Also some kernel points have 
+        #     multiple neighbors could that create redudancy in the gradient back prop???
 
         if 'kpinvx' in self.kp_mode:
 

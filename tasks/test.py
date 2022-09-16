@@ -16,7 +16,7 @@ import numpy as np
 
 import matplotlib.pyplot as plt
 
-from utils.printing import underline, frame_lines_1
+from utils.printing import underline, frame_lines_1, color_str
 from utils.gpu_init import init_gpu
 from utils.ply import read_ply, write_ply
 from utils.config import save_cfg
@@ -263,16 +263,44 @@ def cloud_segmentation_test(epoch, net, test_loader, cfg, test_data, device, sav
             test_data.probs[c_i][inds] *= test_smooth
             test_data.probs[c_i][inds] += (1 - test_smooth) * probs[invs]
 
+
+            ####
+            # truths = test_loader.dataset.input_labels[c_i][inds]
+
+            # print('')
+            # for pppi, ppp in enumerate((probs[invs] * 100).type(torch.int32)):
+            #     s = ''
+            #     for ppi, pp in enumerate(ppp):
+            #         if ppi == truths[pppi]:
+            #             s += color_str('{:3d} '.format(pp.item()), 'OKGREEN')
+            #         else:
+            #             s += color_str('{:3d} '.format(pp.item()), 'FAIL')
+            #     print(s)
+            # print('')
+            
+            # print('-------------------------------------------------------------------------------------')
+            
+            # pred_values = np.array(cfg.data.pred_values, dtype=np.int32)
+            # sub_preds = test_loader.dataset.probs_to_preds(probs[invs].cpu().numpy())
+            # ccc = fast_confusion(truths, sub_preds, pred_values).astype(np.float32)
+
+            # ccc = (10000 * ccc / np.sum(ccc)).astype(np.int64)
+            # print(ccc)
+            # print('')
+            ####
+
             i0 += length
             j0 += length0
 
-
         # Get CUDA memory stat to see what space is used on GPU
-        cuda_stats = torch.cuda.memory_stats(device)
-        used_GPU_MB = cuda_stats["allocated_bytes.all.peak"]
-        _, tot_GPU_MB = torch.cuda.mem_get_info(device)
-        gpu_usage = 100 * used_GPU_MB / tot_GPU_MB
-        torch.cuda.reset_peak_memory_stats(device)
+        if 'cuda' in device.type:
+            cuda_stats = torch.cuda.memory_stats(device)
+            used_GPU_MB = cuda_stats["allocated_bytes.all.peak"]
+            _, tot_GPU_MB = torch.cuda.mem_get_info(device)
+            gpu_usage = 100 * used_GPU_MB / tot_GPU_MB
+            torch.cuda.reset_peak_memory_stats(device)
+        else:
+            gpu_usage = 0
 
         # # Empty GPU cache (helps avoiding OOM errors)
         # # Loses ~10% of speed but allows batch 2 x bigger.

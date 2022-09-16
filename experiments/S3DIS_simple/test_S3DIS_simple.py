@@ -36,7 +36,7 @@ sys.path.append(parent)
 from utils.config import load_cfg, save_cfg, get_directories
 from utils.printing import frame_lines_1, underline
 
-from models.KPConvNet import KPFCNN as KPConvFCNN
+from models.KPConvNet import KPNeXt, KPFCNN as KPConvFCNN
 from models.KPInvNet import KPInvFCNN
 from models.InvolutionNet import InvolutionFCNN
 
@@ -96,7 +96,7 @@ def test_log(chosen_log, new_cfg, save_visu=False):
     if 'mod' in new_cfg.model.kp_mode:
         modulated = True
 
-    if new_cfg.model.kp_mode.startswith('kpconv'):
+    if new_cfg.model.kp_mode.startswith('kpconv') or new_cfg.model.kp_mode.startswith('kpmini'):
         net = KPConvFCNN(new_cfg, modulated=modulated, deformable=False)
     elif new_cfg.model.kp_mode.startswith('kpdef'):
         net = KPConvFCNN(new_cfg, modulated=modulated, deformable=True)
@@ -104,6 +104,8 @@ def test_log(chosen_log, new_cfg, save_visu=False):
         net = KPInvFCNN(new_cfg)
     elif new_cfg.model.kp_mode.startswith('transformer') or new_cfg.model.kp_mode.startswith('inv_'):
         net = InvolutionFCNN(new_cfg)
+    elif new_cfg.model.kp_mode.startswith('kpnext'):
+        net = KPNeXt(new_cfg, modulated=modulated, deformable=False)
 
         
     #########################
@@ -160,7 +162,9 @@ if __name__ == '__main__':
     #       > 'last_XXX': Automatically retrieve the last trained model on dataset XXX
     #       > '(old_)results/Log_YYYY-MM-DD_HH-MM-SS': Directly provide the path of a trained model
 
-    chosen_log = 'results/Log_2022-08-30_18-57-14'
+    # chosen_log = 'results/Log_2022-08-30_18-57-14'
+    chosen_log = 'results/Log_2022-09-13_10-19-38'
+    
 
     # Add argument here to handle it
     parser = argparse.ArgumentParser()
@@ -184,10 +188,10 @@ if __name__ == '__main__':
     ###################
     
     # Checkpoint index for testing
-    new_cfg.test.chkp_idx = -2
+    new_cfg.test.chkp_idx = None
 
     # Change some parameters
-    new_cfg.test.in_radius = new_cfg.train.in_radius * 4
+    new_cfg.test.in_radius = new_cfg.train.in_radius * 2
     new_cfg.test.batch_limit = 1
     new_cfg.test.max_steps_per_epoch = 9999999
     new_cfg.test.max_votes = 15

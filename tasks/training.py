@@ -14,6 +14,78 @@ import time
 
 from utils.printing import underline
 
+import subprocess
+
+
+def get_temperatures_linux():
+
+    # GPU data:
+
+    cmd = 'nvidia-smi dmon -c 1'
+    cmd = cmd.split()
+    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    o, e = proc.communicate()
+    smi_lines = o.decode('ascii').split('\n')
+
+    metrics = smi_lines[0].split()[1:]
+    units   = smi_lines[1].split()[1:]
+    measures = [smi_line.split() for smi_line in smi_lines[2:]]
+    measures = [meas for meas in measures if len(meas) > 1]
+
+    s1 = ''
+    for i in range(len(measures)):
+        for m in metrics:
+            s1 += ' {:^6s}'.format(m)
+
+    s2 = ''
+    for i in range(len(measures)):
+        for u in units:
+            s2 += ' {:^6s}'.format(u)
+
+    s3 = ''
+    for meas in measures:
+        for m in meas:
+            s3 += ' {:^6s}'.format(m)
+            
+    # CPU data:
+    cmd = 'sensors'
+    cmd = cmd.split()
+    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    o, e = proc.communicate()
+
+
+    sensor_lines = o.decode('utf8', 'ignore').split('\n')
+
+
+    metrics = ['SYSTIN', 'CPUTIN', 'AUXTIN', 'Core']
+    data = [[] for _ in metrics]
+
+    for line in sensor_lines:
+
+        for d, m in zip(data, metrics):
+
+            if '°C' in line and line.startswith(m):
+                if m == 'Core':
+                    d.append(float(line.split()[2][:-2]))
+                else:
+                    d.append(float(line.split()[1][:-2]))
+
+    cpu1 = ''
+    for m in metrics:
+        cpu1 += ' {:^8s}'.format(m)
+
+    cpu2 = ''
+    for m in metrics:
+        cpu2 += ' {:^8s}'.format('C')
+
+    cpu3 = ''
+    for d in data:
+        cpu3 += ' {:^8.1f}'.format(np.max(d))
+
+
+    return cpu1+s1, cpu2+s2, cpu3+s3 
+
+
 
 # ----------------------------------------------------------------------------------------------------------------------
 #
@@ -166,7 +238,19 @@ def training_epoch(epoch, t0, net, optimizer, training_loader, cfg, PID_file, de
                                                     accum_loss,
                                                     net.deform_loss,
                                                     t[-1] - t0))
+                          
 
+                    
+                    s1, s2, s3  = get_temperatures_linux()
+                    temp_f = join(cfg.exp.log_dir, 'temperatures.txt')
+                    if exists(temp_f):
+                        with open(temp_f, "a") as file:
+                            file.write(s3 + '\n')
+                    else:
+                        with open(temp_f, "a") as file:
+                            file.write(s1 + '\n')
+                            file.write(s2 + '\n')
+                            file.write(s3 + '\n')
 
                 accum_loss = 0
                 step += 1

@@ -294,6 +294,7 @@ class KPMini(nn.Module):
 
         return repr_str
 
+
 class KPConv(nn.Module):
 
     def __init__(self,
@@ -1064,7 +1065,7 @@ class KPConvResidualBlock(nn.Module):
                  sigma: float,
                  shared_kp_data = None,
                  modulated: bool = False,
-                 mini: bool = False,
+                 minix_C: int = -1,
                  use_geom: bool = False,
                  influence_mode: str = 'linear',
                  aggregation_mode: str = 'sum',
@@ -1084,7 +1085,7 @@ class KPConvResidualBlock(nn.Module):
             sigma                 (float): influence radius of each kernel point
             shared_kp_data      (None): Optional data dict shared across the layer
             modulated        (bool=False): Use modulations (self-attention)
-            mini             (bool=False): Use mini KPConv
+            minix_C               (int=0): "<0" use kpconv / "0" use mini / ">0" Use miniX with this number of channels
             use_geom         (bool=False): Use geometric encodings
             influence_mode (str='linear'): Influence function ('constant', 'linear', 'gaussian')
             aggregation_mode  (str='sum'): Aggregation mode ('nearest', 'sum')
@@ -1113,12 +1114,12 @@ class KPConvResidualBlock(nn.Module):
             self.unary1 = nn.Identity()
 
         # KPConv block with normalizatiom and activation
-        if mini:
+        if minix_C >= 0:
             self.conv = KPMini(mid_channels,
                                 shell_sizes,
                                 radius,
                                 sigma,
-                                Cmid=0,
+                                Cmid=minix_C,
                                 shared_kp_data=shared_kp_data,
                                 dimension=dimension,
                                 influence_mode=influence_mode,
