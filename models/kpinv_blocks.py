@@ -130,6 +130,9 @@ class KPInv(nn.Module):
                                    norm_type='none',
                                    bn_momentum=-1,
                                    activation=activation)
+            
+        # Optional final group norm for each kernel weights    
+        self.grpnorm = nn.GroupNorm(self.K, self.K * self.ch_per_grp)
 
         # Weight activation
         if weight_act == 'sigmoid':
@@ -254,7 +257,15 @@ class KPInv(nn.Module):
             # pooled_feats = torch.max(neighbor_feats, dim=1)  # max pool (M, H, C) -> (M, C)
             # pooled_feats = torch.mean(neighbor_feats, dim=1)  # avg pool (M, H, C) -> (M, C)
 
+        # MLP to get weights
         conv_weights = self.alpha_mlp(pooled_feats)  # (M, C) -> (M, C//r) -> (M, K*CpG)
+
+        # # Optional normalization per kernel
+        # conv_weights = conv_weights.transpose(0, 1).unsqueeze(0)  # (M, K*CpG) -> (B=1, K*CpG, M)
+        # conv_weights = self.grpnorm(conv_weights)
+        # conv_weights = conv_weights.squeeze(0).transpose(0, 1)  # (B=1, K*CpG, M) -> (M, K*CpG)
+
+        # Final reshape, verify that reshaped kernels correspond to groups in grpnorm
         conv_weights = conv_weights.view(-1, self.K, self.ch_per_grp)  # -> (M, K, CpG)
 
         # Apply convolution weights

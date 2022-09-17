@@ -25,8 +25,8 @@ training_script="experiments/S3DIS_simple/train_S3DIS_simple.py"
 #                     "--kp_mode kpinv --inv_groups -8"
 #                     "--kp_mode kpinv --inv_groups -1")  TODO after we solve KPInv problem
 
-declare -a arg_arr=("--kp_mode kpinv --norm group"
-                    "--kp_mode kpinv --norm none")
+declare -a arg_arr=("--kp_mode kpmini"
+                    "--kp_mode kpinv")
 
 
 echo ""

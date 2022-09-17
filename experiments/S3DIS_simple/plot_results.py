@@ -785,8 +785,10 @@ def exp_kpinv_bis():
 
     # Give names to the logs (for plot legends)
     logs_names = ['kpmini-old',
-                  'kpmini batchnorm',
-                  'kpinv  batchnorm',
+                  'kpmini batchnorm 0.98',
+                  'kpinv  batchnorm 0.98',
+                  'kpmini batchnorm 0.1',
+                  'kpinv  batchnorm 0.1',
                   'TODO',
                   'kpinvX E=8',
                   'kpinv  G=1',

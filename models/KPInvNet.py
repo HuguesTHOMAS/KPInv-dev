@@ -6,7 +6,9 @@ import numpy as np
 
 from models.generic_blocks import LinearUpsampleBlock, UnaryBlock, local_nearest_pool
 from models.kpinv_blocks import KPInvResidualBlock, KPInvXBottleNeckBlock
-from models.kpconv_blocks import KPConvBlock
+from models.kpconv_blocks import KPConvBlock, KPConvResidualBlock
+
+
 
 from utils.torch_pyramid import fill_pyramid
 
@@ -233,6 +235,8 @@ class KPInvFCNN(nn.Module):
         # List Encoder blocks
         #####################
 
+        get_conv_residual_block
+
         # ------ Layers 1 ------
         if cfg.model.share_kp:
             self.shared_kp = [{} for _ in range(self.num_layers)]
@@ -242,14 +246,20 @@ class KPInvFCNN(nn.Module):
         # Initial convolution
         self.encoder_1 = nn.ModuleList()
         self.encoder_1.append(self.get_conv_block(in_C, C, conv_r, conv_sig, cfg))
-        self.encoder_1.append(self.get_residual_block(C, C * 2, conv_r, conv_sig, cfg, shared_kp_data=self.shared_kp[0]))
+        self.encoder_1.append(self.get_residual_block(C, C * 2, conv_r, conv_sig, cfg, 
+        shared_kp_data=self.shared_kp[0], 
+        conv_layer=use_conv))
 
         # Next blocks
         for _ in range(self.layer_blocks[0] - 2):
-            self.encoder_1.append(self.get_residual_block(C * 2, C * 2, conv_r, conv_sig, cfg, shared_kp_data=self.shared_kp[0]))
+            self.encoder_1.append(self.get_residual_block(C * 2, C * 2, conv_r, conv_sig, cfg, 
+            shared_kp_data=self.shared_kp[0], 
+            conv_layer=use_conv))
 
         # Pooling block
-        self.pooling_1 = self.get_residual_block(C * 2, C * 2, conv_r, conv_sig, cfg, strided=True)
+        self.pooling_1 = self.get_residual_block(C * 2, C * 2, conv_r, conv_sig, cfg, 
+        strided=True, 
+        conv_layer=use_conv)
 
         # ------ Layers [2, 3, 4, 5] ------
         for layer in range(2, self.num_layers + 1):
@@ -262,18 +272,21 @@ class KPInvFCNN(nn.Module):
             # First block takes features to new dimension.
             encoder_i = nn.ModuleList()
             encoder_i.append(self.get_residual_block(C, C * 2, conv_r, conv_sig, cfg,
-                                                     shared_kp_data=self.shared_kp[layer - 1]))
+                                                     shared_kp_data=self.shared_kp[layer - 1], 
+                                                     conv_layer=use_conv))
 
             # Next blocks
             for _ in range(self.layer_blocks[layer - 1] - 1):
                 encoder_i.append(self.get_residual_block(C * 2, C * 2, conv_r, conv_sig, cfg,
-                                                         shared_kp_data=self.shared_kp[layer - 1]))
+                                                         shared_kp_data=self.shared_kp[layer - 1], 
+                                                         conv_layer=use_conv))
             setattr(self, 'encoder_{:d}'.format(layer), encoder_i)
 
             # Pooling block (not for the last layer)
             if layer < self.num_layers:
                 pooling_i = self.get_residual_block(C * 2, C * 2, conv_r, conv_sig, cfg,
-                                                    strided=True)
+                                                    strided=True, 
+                                                    conv_layer=use_conv)
                 setattr(self, 'pooling_{:d}'.format(layer), pooling_i)
 
         #####################
@@ -352,28 +365,17 @@ class KPInvFCNN(nn.Module):
                            norm_type=cfg.model.norm,
                            bn_momentum=cfg.model.bn_momentum)
 
-    def get_residual_block(self, in_C, out_C, radius, sigma, cfg, strided=False, shared_kp_data=None):
+    def get_residual_block(self, in_C, out_C, radius, sigma, cfg, strided=False, shared_kp_data=None, conv_layer=False):
+        
+        if conv_layer:
+            return self.get_conv_residual_block(in_C, out_C, radius, sigma, cfg, 
+            strided=strided, 
+            shared_kp_data=shared_kp_data)
 
         # 'none', 'sigmoid', 'softmax', 'tanh' or 'tanh2'.
         weight_act = 'tanh'
         
         # Warning when testing be sure this is the same as when test
-        
-        # TODO: print features value sbefore and after kpinv
-        # TODO: sigmoid or tanh should fix the nan problem (verify that with last trained net)
-        # TODO: However the fact than nan arrive is strange they do not seem to be here at training... I it because of batch norm???
-        
-        # TODO: Problem with kpinv could be the empty space
-        #           > with kpconv, the same weight is applied everywhere whihc means on the whole point cloud, 
-        #             every kernel weight should get some data
-        #           > with kpinv, we generate a kernel for each neighbor, so when empy space what happend 
-        #             to the generate weights and their gradient???
-        # 
-        # Todo: return to equation, i think their could be two problems:
-        #   > the vraible amount of zero features from neighbors out or kernel range
-        #   > the varaible amount of kernel points having zero neighbors, and thus their generated weight 
-        #     not being used and that mess up with the normalization??? Also some kernel points have 
-        #     multiple neighbors could that create redudancy in the gradient back prop???
 
         if 'kpinvx' in self.kp_mode:
 
@@ -408,6 +410,27 @@ class KPInvFCNN(nn.Module):
                                       strided=strided,
                                       norm_type=cfg.model.norm,
                                       bn_momentum=cfg.model.bn_momentum)
+
+    def get_conv_residual_block(self, in_C, out_C, radius, sigma, cfg, strided=False, shared_kp_data=None):
+        
+        if 'kpinvx' in self.kp_mode:
+            minix_C = cfg.model.kpinvx_expansion
+        else:
+            minix_C = 0
+
+        return KPConvResidualBlock(in_C,
+                                   out_C,
+                                   cfg.model.shell_sizes,
+                                   radius,
+                                   sigma,
+                                   shared_kp_data=shared_kp_data,
+                                   minix_C=minix_C,
+                                   influence_mode=cfg.model.kp_influence,
+                                   aggregation_mode=cfg.model.kp_aggregation,
+                                   dimension=cfg.data.dim,
+                                   strided=strided,
+                                   norm_type=cfg.model.norm,
+                                   bn_momentum=cfg.model.bn_momentum)
 
     def forward(self, batch, verbose=False):
 
