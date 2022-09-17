@@ -9,7 +9,6 @@ from models.kpinv_blocks import KPInvResidualBlock, KPInvXBottleNeckBlock
 from models.kpconv_blocks import KPConvBlock, KPConvResidualBlock
 
 
-
 from utils.torch_pyramid import fill_pyramid
 
 
@@ -244,22 +243,23 @@ class KPInvFCNN(nn.Module):
             self.shared_kp = [None for _ in range(self.num_layers)]
 
         # Initial convolution
+        use_conv = cfg.model.first_inv_layer > 0
         self.encoder_1 = nn.ModuleList()
         self.encoder_1.append(self.get_conv_block(in_C, C, conv_r, conv_sig, cfg))
-        self.encoder_1.append(self.get_residual_block(C, C * 2, conv_r, conv_sig, cfg, 
-        shared_kp_data=self.shared_kp[0], 
-        conv_layer=use_conv))
+        self.encoder_1.append(self.get_residual_block(C, C * 2, conv_r, conv_sig, cfg,
+                                                      shared_kp_data=self.shared_kp[0],
+                                                      conv_layer=use_conv))
 
         # Next blocks
         for _ in range(self.layer_blocks[0] - 2):
-            self.encoder_1.append(self.get_residual_block(C * 2, C * 2, conv_r, conv_sig, cfg, 
-            shared_kp_data=self.shared_kp[0], 
-            conv_layer=use_conv))
+            self.encoder_1.append(self.get_residual_block(C * 2, C * 2, conv_r, conv_sig, cfg,
+                                                          shared_kp_data=self.shared_kp[0],
+                                                          conv_layer=use_conv))
 
         # Pooling block
-        self.pooling_1 = self.get_residual_block(C * 2, C * 2, conv_r, conv_sig, cfg, 
-        strided=True, 
-        conv_layer=use_conv)
+        self.pooling_1 = self.get_residual_block(C * 2, C * 2, conv_r, conv_sig, cfg,
+                                                 strided=True,
+                                                 conv_layer=cfg.model.use_strided_conv or use_conv)
 
         # ------ Layers [2, 3, 4, 5] ------
         for layer in range(2, self.num_layers + 1):
@@ -270,23 +270,24 @@ class KPInvFCNN(nn.Module):
             conv_sig *= 2
 
             # First block takes features to new dimension.
+            use_conv = cfg.model.first_inv_layer > layer - 1
             encoder_i = nn.ModuleList()
             encoder_i.append(self.get_residual_block(C, C * 2, conv_r, conv_sig, cfg,
-                                                     shared_kp_data=self.shared_kp[layer - 1], 
+                                                     shared_kp_data=self.shared_kp[layer - 1],
                                                      conv_layer=use_conv))
 
             # Next blocks
             for _ in range(self.layer_blocks[layer - 1] - 1):
                 encoder_i.append(self.get_residual_block(C * 2, C * 2, conv_r, conv_sig, cfg,
-                                                         shared_kp_data=self.shared_kp[layer - 1], 
+                                                         shared_kp_data=self.shared_kp[layer - 1],
                                                          conv_layer=use_conv))
             setattr(self, 'encoder_{:d}'.format(layer), encoder_i)
 
             # Pooling block (not for the last layer)
             if layer < self.num_layers:
                 pooling_i = self.get_residual_block(C * 2, C * 2, conv_r, conv_sig, cfg,
-                                                    strided=True, 
-                                                    conv_layer=use_conv)
+                                                    strided=True,
+                                                    conv_layer=cfg.model.use_strided_conv or use_conv)
                 setattr(self, 'pooling_{:d}'.format(layer), pooling_i)
 
         #####################
@@ -366,15 +367,15 @@ class KPInvFCNN(nn.Module):
                            bn_momentum=cfg.model.bn_momentum)
 
     def get_residual_block(self, in_C, out_C, radius, sigma, cfg, strided=False, shared_kp_data=None, conv_layer=False):
-        
+
         if conv_layer:
-            return self.get_conv_residual_block(in_C, out_C, radius, sigma, cfg, 
-            strided=strided, 
-            shared_kp_data=shared_kp_data)
+            return self.get_conv_residual_block(in_C, out_C, radius, sigma, cfg,
+                                                strided=strided,
+                                                shared_kp_data=shared_kp_data)
 
         # 'none', 'sigmoid', 'softmax', 'tanh' or 'tanh2'.
         weight_act = 'tanh'
-        
+
         # Warning when testing be sure this is the same as when test
 
         if 'kpinvx' in self.kp_mode:
@@ -384,7 +385,7 @@ class KPInvFCNN(nn.Module):
                                          cfg.model.shell_sizes,
                                          radius,
                                          sigma,
-                                         expansion=cfg.model.kpinvx_expansion,
+                                         expansion=cfg.model.kpx_expansion,
                                          reduction_ratio=cfg.model.kpinv_reduc,
                                          weight_act=weight_act,
                                          shared_kp_data=shared_kp_data,
@@ -412,9 +413,9 @@ class KPInvFCNN(nn.Module):
                                       bn_momentum=cfg.model.bn_momentum)
 
     def get_conv_residual_block(self, in_C, out_C, radius, sigma, cfg, strided=False, shared_kp_data=None):
-        
+
         if 'kpinvx' in self.kp_mode:
-            minix_C = cfg.model.kpinvx_expansion
+            minix_C = cfg.model.kpx_expansion
         else:
             minix_C = 0
 

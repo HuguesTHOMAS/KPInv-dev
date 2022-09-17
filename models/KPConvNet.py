@@ -377,7 +377,7 @@ class KPFCNN(nn.Module):
         use_geom = 'geom' in cfg.model.kp_mode
         
         if 'kpminix' in cfg.model.kp_mode:
-            minix_C = 16
+            minix_C = cfg.model.kpx_expansion
         elif 'kpmini' in cfg.model.kp_mode:
             minix_C = 0
         else:
