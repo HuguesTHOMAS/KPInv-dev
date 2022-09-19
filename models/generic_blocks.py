@@ -14,6 +14,7 @@
 #      Hugues THOMAS - 06/03/2020
 #
 
+from multiprocessing.sharedctypes import Value
 import torch
 import torch.nn as nn
 from torch import Tensor
@@ -165,6 +166,50 @@ def global_avgpool(x, lengths):
     return torch.stack(averaged_features)
 
 
+def mlp_from_list(Cin,
+                  layer_list,
+                  final_bias=True,
+                  norm_type: str = 'batch',
+                  bn_momentum: float = 0.98,
+                  activation: nn.Module = nn.LeakyReLU(0.1)):
+    """
+    Function returning a mini mlp network defined by a list like:
+        [32, 'N', 'A', 64, 'NA', 32]
+    where:
+        >  X  (int) means a linear layer with output size X
+        > 'N' (str) means a normalization layer
+        > 'A' (str) means an activation layer
+        > 'NA' (str) means both norm and activation layers.
+    Args:
+        Cin                (int): The number of input channels.
+        layer_list        (list): List of layer.
+        final_bias        (bool): If last layer is linear, do we have biases.
+        norm_type  (str='batch'): type of normalization used in layer ('group', 'batch', 'none')
+        bn_momentum (float=0.98): Momentum for batch normalization
+        activation   (nn.Module): Activation function. Use None for no activation.
+    """
+
+    mlp = nn.Sequential()
+
+    for li, layer in enumerate(layer_list):
+
+        if isinstance(layer, int):
+            bias = False
+            if li >= len(layer_list) - 1:
+                bias = final_bias
+            mlp.append(nn.Linear(Cin, layer, bias=bias))
+            Cin = layer
+        elif layer == 'N':
+            mlp.append(NormBlock(Cin, norm_type, bn_momentum))
+        elif layer == 'A':
+            mlp.append(activation)
+        elif layer == 'NA':
+            mlp.append(NormBlock(Cin, norm_type, bn_momentum))
+            mlp.append(activation)
+
+    return mlp
+
+
 def build_mlp(n_layers,
               Cin,
               Cmid,
@@ -245,6 +290,9 @@ class BatchNormBlock(nn.Module):
                 x = self.batch_norm(x)
                 x = torch.permute(x, (2, 0, 1))  # (K, C, N) -> (N, K, C)
 
+            else:
+                raise ValueError('Dimension not handled')
+
             return x
 
         else:
@@ -300,9 +348,20 @@ class GroupNormBlock(nn.Module):
         nn.init.zeros_(self.bias)
          
     def forward(self, x):
-        x = x.transpose(0, 1).unsqueeze(0)  # (N, C) -> (B=1, C, N)
-        x = self.norm(x)
-        x = x.squeeze(0).transpose(0, 1)  # (B=1, C, N) -> (N, C)
+       
+        if x.ndim == 2:
+            x = x.transpose(0, 1).unsqueeze(0)  # (N, C) -> (B=1, C, N)
+            x = self.norm(x)
+            x = x.squeeze(0).transpose(0, 1)  # (B=1, C, N) -> (N, C)
+
+        elif x.ndim == 3:
+            x = torch.permute(x, (1, 2, 0))  # (N, K, C) -> (K, C, N)
+            x = self.norm(x)
+            x = torch.permute(x, (2, 0, 1))  # (K, C, N) -> (N, K, C)
+
+        else:
+            raise ValueError('Dimension not handled')
+
         return x
 
     def __repr__(self):

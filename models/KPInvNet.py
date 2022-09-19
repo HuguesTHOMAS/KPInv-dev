@@ -7,6 +7,7 @@ import numpy as np
 from models.generic_blocks import LinearUpsampleBlock, UnaryBlock, local_nearest_pool
 from models.kpinv_blocks import KPInvResidualBlock, KPInvXBottleNeckBlock
 from models.kpconv_blocks import KPConvBlock, KPConvResidualBlock
+from models.kptran_blocks import KPTransformerResidualBlock
 
 
 from utils.torch_pyramid import fill_pyramid
@@ -234,8 +235,6 @@ class KPInvFCNN(nn.Module):
         # List Encoder blocks
         #####################
 
-        get_conv_residual_block
-
         # ------ Layers 1 ------
         if cfg.model.share_kp:
             self.shared_kp = [{} for _ in range(self.num_layers)]
@@ -243,7 +242,7 @@ class KPInvFCNN(nn.Module):
             self.shared_kp = [None for _ in range(self.num_layers)]
 
         # Initial convolution
-        use_conv = cfg.model.first_inv_layer > 0
+        use_conv = cfg.model.first_inv_layer >= 1
         self.encoder_1 = nn.ModuleList()
         self.encoder_1.append(self.get_conv_block(in_C, C, conv_r, conv_sig, cfg))
         self.encoder_1.append(self.get_residual_block(C, C * 2, conv_r, conv_sig, cfg,
@@ -270,7 +269,7 @@ class KPInvFCNN(nn.Module):
             conv_sig *= 2
 
             # First block takes features to new dimension.
-            use_conv = cfg.model.first_inv_layer > layer - 1
+            use_conv = cfg.model.first_inv_layer >= layer
             encoder_i = nn.ModuleList()
             encoder_i.append(self.get_residual_block(C, C * 2, conv_r, conv_sig, cfg,
                                                      shared_kp_data=self.shared_kp[layer - 1],
@@ -366,6 +365,27 @@ class KPInvFCNN(nn.Module):
                            norm_type=cfg.model.norm,
                            bn_momentum=cfg.model.bn_momentum)
 
+    def get_conv_residual_block(self, in_C, out_C, radius, sigma, cfg, strided=False, shared_kp_data=None):
+
+        if 'kpinvx' in self.kp_mode:
+            minix_C = cfg.model.kpx_expansion
+        else:
+            minix_C = 0
+
+        return KPConvResidualBlock(in_C,
+                                   out_C,
+                                   cfg.model.shell_sizes,
+                                   radius,
+                                   sigma,
+                                   shared_kp_data=shared_kp_data,
+                                   minix_C=minix_C,
+                                   influence_mode=cfg.model.kp_influence,
+                                   aggregation_mode=cfg.model.kp_aggregation,
+                                   dimension=cfg.data.dim,
+                                   strided=strided,
+                                   norm_type=cfg.model.norm,
+                                   bn_momentum=cfg.model.bn_momentum)
+
     def get_residual_block(self, in_C, out_C, radius, sigma, cfg, strided=False, shared_kp_data=None, conv_layer=False):
 
         if conv_layer:
@@ -377,8 +397,23 @@ class KPInvFCNN(nn.Module):
         weight_act = 'tanh'
 
         # Warning when testing be sure this is the same as when test
+        if 'kptran' in self.kp_mode:
 
-        if 'kpinvx' in self.kp_mode:
+            return KPTransformerResidualBlock(in_C,
+                                              out_C,
+                                              cfg.model.shell_sizes,
+                                              radius,
+                                              sigma,
+                                              attention_groups=cfg.model.inv_groups,
+                                              attention_act=weight_act,
+                                              shared_kp_data=shared_kp_data,
+                                              influence_mode=cfg.model.kp_influence,
+                                              dimension=cfg.data.dim,
+                                              strided=strided,
+                                              norm_type=cfg.model.norm,
+                                              bn_momentum=cfg.model.bn_momentum)
+
+        elif 'kpinvx' in self.kp_mode:
 
             return KPInvXBottleNeckBlock(in_C,
                                          out_C,
@@ -411,27 +446,6 @@ class KPInvFCNN(nn.Module):
                                       strided=strided,
                                       norm_type=cfg.model.norm,
                                       bn_momentum=cfg.model.bn_momentum)
-
-    def get_conv_residual_block(self, in_C, out_C, radius, sigma, cfg, strided=False, shared_kp_data=None):
-
-        if 'kpinvx' in self.kp_mode:
-            minix_C = cfg.model.kpx_expansion
-        else:
-            minix_C = 0
-
-        return KPConvResidualBlock(in_C,
-                                   out_C,
-                                   cfg.model.shell_sizes,
-                                   radius,
-                                   sigma,
-                                   shared_kp_data=shared_kp_data,
-                                   minix_C=minix_C,
-                                   influence_mode=cfg.model.kp_influence,
-                                   aggregation_mode=cfg.model.kp_aggregation,
-                                   dimension=cfg.data.dim,
-                                   strided=strided,
-                                   norm_type=cfg.model.norm,
-                                   bn_momentum=cfg.model.bn_momentum)
 
     def forward(self, batch, verbose=False):
 

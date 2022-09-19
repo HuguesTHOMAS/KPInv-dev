@@ -38,15 +38,13 @@ from matplotlib.widgets import Slider, Button, RadioButtons
 import imageio
 
 # My libs
-from utils.printing import frame_lines_1, underline, print_color
+from utils.printing import frame_lines_1, underline, print_color, table_to_str
 from utils.metrics import IoU_from_confusions, smooth_metrics, fast_confusion
 from utils.ply import read_ply, write_ply
 from utils.config import load_cfg
 
 from experiments.S3DIS_simple.S3DIS import S3DISDataset
 from experiments.S3DIS_simple.test_S3DIS_simple import test_log
-
-
 
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -108,6 +106,54 @@ def running_mean(signal, n, axis=0, stride=1):
         return None
 
 
+def cleanup(res_path, max_clean_date, keep_val_ply=True, keep_last_ckpt=True):
+
+    # Removing data:
+    #   > all checkpoints except last
+    #   > optionally last chackpoint
+    #   > optionally validation point clouds
+
+    # List results folders
+    res_folders = np.sort([f for f in listdir(res_path) if f.startswith('Log_')])
+
+    # Only consider folder up to max_clean_date
+    res_folders = res_folders[res_folders < max_clean_date]
+
+    for res_folder in res_folders:
+
+        print('Erasing useless data for:', res_folder)
+
+        # checkpoints
+        chkp_path = join(res_path, res_folder, 'checkpoints')
+
+        # Remove 'current_chkp.tar'
+        current_chkp = join(chkp_path, 'current_chkp.tar')
+        if exists(current_chkp):
+            remove(current_chkp)
+
+        # List checkpoints, keep last one
+        chkps = np.sort([join(chkp_path, f) for f in listdir(chkp_path) if f.endswith('.tar')])
+        if keep_last_ckpt:
+            chkps = chkps[:-1]
+        for chkp in chkps:
+            remove(chkp)
+
+        # Validation clouds
+        if not keep_val_ply:
+            val_path = join(res_path, res_folder, 'validation')
+            if (os.path.isdir(val_path)):
+                clouds = np.sort([join(val_path, f) for f in listdir(val_path) if f.endswith('.ply') or f.endswith('.pkl')])
+                for cloud in clouds:
+                    remove(cloud)
+
+        # Remove test folder
+        test_path = join(res_path, res_folder, 'test')
+        if (os.path.isdir(test_path)):
+            shutil.rmtree(test_path)
+
+    return
+
+
 def IoU_class_metrics(all_IoUs, smooth_n):
 
     # Get mean IoU per class for consecutive epochs to directly get a mean without further smoothing
@@ -159,6 +205,43 @@ def load_training_results(path):
             break
 
     return epochs, steps, L_out, L_p, t
+
+
+def get_log_info(path):
+
+    filename = join(path, 'log.txt')
+    with open(filename, 'r') as f:
+        lines = f.readlines()
+
+    n_params = None
+    split = None
+    gpu_memory = {'train': [], 'validation': []}
+    throughput = {'train': [], 'validation': []}
+    for line in lines[1:]:
+        if line.startswith('Model size'):
+            n_params = int(line[11:])
+        
+        if line.startswith('Training epoch'):
+            split = 'train'
+            epoch = int(line[15:])
+            gpu_memory[split].append([])
+            throughput[split].append([])
+
+        if line.startswith('Validation epoch'):
+            split = 'validation'
+            gpu_memory[split].append([])
+            throughput[split].append([])
+
+        if split is not None and 'ins/sec' in line:
+            line_data = line.replace("|", " " ).split()
+            data_i = 2
+            if split == 'train':
+                data_i += 1
+            
+            gpu_memory[split][-1].append(float(line_data[data_i]))
+            throughput[split][-1].append(float(line_data[data_i + 2]))
+            
+    return n_params, gpu_memory, throughput
 
 
 def load_single_IoU(filename, n_parts):
@@ -484,11 +567,25 @@ def compare_trainings(list_of_cfg, list_of_paths, list_of_labels=None):
     all_epoch_dt = []
     all_val_dt = []
 
+    all_n_params = []
+    all_train_gpu = []
+    all_val_gpu = []
+    all_train_TP = []
+    all_val_TP = []
+
     for path, cfg in zip(list_of_paths, list_of_cfg):
         
 
         if not (('val_IoUs.txt' in [f for f in listdir_str(path)]) or ('val_confs.txt' in [f for f in listdir_str(path)])):
             continue
+
+        # Get model size (number of parameters)
+        n_params, gpu_memory, throughput = get_log_info(path)
+        all_n_params.append(n_params)
+        all_train_gpu.append(np.mean([np.mean(gpu_mem[8:-8]) for gpu_mem in gpu_memory['train'][:-1]]))
+        all_val_gpu.append(np.mean([gpu_mem[len(gpu_mem) // 2 + 1] for gpu_mem in gpu_memory['validation'][:-1]]))
+        all_train_TP.append(np.mean([np.mean(tp[8:-8]) for tp in throughput['train'][:-1]]))
+        all_val_TP.append(np.mean([tp[len(tp) // 2 + 1] for tp in throughput['validation'][:-1]]))
 
         # Load results
         epochs, steps, L_out, L_p, t = load_training_results(path)
@@ -556,6 +653,24 @@ def compare_trainings(list_of_cfg, list_of_paths, list_of_labels=None):
         all_val_dt.append(val_dt)
 
     print('Done in {:.3f} s'.format(time.time() - t0))
+
+    # Log report
+    # **********
+
+    columns = [list_of_labels,
+               np.array(all_n_params) * 1e-6,
+               all_train_gpu,
+               all_train_TP,
+               all_val_gpu,
+               all_val_TP]
+
+    table_str = table_to_str(['logs', '#params', 'train_gpu', 'train_TP', 'val_gpu', 'val_TP'],
+                             columns,
+                             ['{:s}', '{:.3f} M', '{:.1f} %', '{:.1f} ins/sec', '{:.1f} %', '{:.1f} ins/sec'])
+
+    print()
+    print(table_str)
+    print()
 
 
     # Timing report

@@ -48,7 +48,8 @@ from utils.printing import frame_lines_1, underline
 from utils.ply import read_ply, write_ply
 from utils.config import load_cfg
 
-from utils.plot_utilities import listdir_str, print_cfg_diffs, compare_trainings, compare_convergences_segment, compare_on_test_set
+from utils.plot_utilities import listdir_str, print_cfg_diffs, compare_trainings, compare_convergences_segment, \
+    compare_on_test_set, cleanup
 
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -766,7 +767,7 @@ def exp_kpinv():
 
 def exp_kpinv_bis():
     """
-    Test shell conv
+    Here we just realise that we hade a bad momentum for batch norm
     """
 
     # Using the dates of the logs, you can easily gather consecutive ones. All logs should be of the same dataset.
@@ -788,20 +789,83 @@ def exp_kpinv_bis():
                   'kpmini batchnorm 0.98',
                   'kpinv  batchnorm 0.98',
                   'kpmini batchnorm 0.1',
-                  'kpinv  batchnorm 0.1',
-                  'TODO',
-                  'kpinvX E=8',
-                  'kpinv  G=1',
+                  'kpinv  batchnorm 0.1',]
+
+
+    # safe check log names
+    if len(logs) > len(logs_names):
+        logs = logs[:len(logs_names)]
+    logs_names = np.array(logs_names[:len(logs)])
+
+    return logs, logs_names
+
+
+def exp_kpinv_tris():
+    """
+    Here we eventually test KPmini and KPInv with good parameters and they perform quite well!
+    """
+
+    # Using the dates of the logs, you can easily gather consecutive ones. All logs should be of the same dataset.
+    start = 'Log_2022-09-17_02-15-39'
+    end = 'Log_2022-09-29_23-43-08'
+
+    # Name of the result path
+    res_path = 'results'
+
+    # Gather logs and sort by date
+    logs = np.sort([join(res_path, l) for l in listdir_str(res_path) if start <= l <= end])
+
+    # Give names to the logs (for plot legends)
+    logs_names = ['kpmini-old',
+                  'kpinv-old',
+                  'kpinv grpnorm (G=1)',
+                  'kpinv no grpnorm ',
+                  'kpinvx',
+                  'kpminix',
+                  'kpmini',
                   'kpinv  G=8',
                   'kpinv  CpG=8',
-                  'kpinv  CpG=1',
-                  'best-sigm'
-                  'best-tanh'
-                  'best-smax'
-                  'best-sigm+max_aggr' # TODO: see pdf for sparse attention
+                  'kpinv  CpG=1',]
+
+
+    # safe check log names
+    if len(logs) > len(logs_names):
+        logs = logs[:len(logs_names)]
+    logs_names = np.array(logs_names[:len(logs)])
+
+    return logs, logs_names
+
+
+def retry_kpmini():
+    """
+    Here we eventually test KPmini and KPInv with good parameters and they perform quite well!
+    """
+
+    # Using the dates of the logs, you can easily gather consecutive ones. All logs should be of the same dataset.
+    start = 'Log_2022-09-19_10-09-44'
+    end = 'Log_2022-09-29_23-43-08'
+
+    # Name of the result path
+    res_path = 'results'
+
+    # Gather logs and sort by date
+    logs = np.sort([join(res_path, l) for l in listdir_str(res_path) if start <= l <= end])
+
+    # Optionally add a specific log at a specific place in the log list
+    logs = logs.astype('<U50')
+    logs = np.insert(logs, 0, 'results/Log_2022-09-18_21-45-51')
+
+    # Give names to the logs (for plot legends)
+    logs_names = ['kpmini mulsum',
+                  'kpmini addmax',
+                  'kpmini mulmax',
+                  'kpmini mlp1',
+                  'kpmini mlp2',
+                  'kptran nolinear'
+                  'kptran qk_linear'
+                  'kptran all_linear'
                   '...',]
 
-    # TODO PLOTS: Show model size and GPU consumption
 
     # TODO: train regular is buggy
     # TODO: Handle kpnextarchitecture like ConvNext, operate DropPath
@@ -814,6 +878,7 @@ def exp_kpinv_bis():
 
     return logs, logs_names
 
+  
 
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -825,12 +890,37 @@ def exp_kpinv_bis():
 
 if __name__ == '__main__':
 
+
+    ##########
+    # Clean-up
+    ##########
+    #
+    # Optional. Do it to save space but you will lose some data:
+    #   > all checkpoints except last
+    #   > all future_visu
+    #   > all val_preds
+    #   > (option) all test temp data
+    #
+
+    cleaning = False
+    res_path = 'results'
+    if cleaning:
+
+         # 1. Hard clean very old stuff
+        max_clean_date = 'Log_2022-09-16_17-04-21'
+        cleanup(res_path, max_clean_date, keep_val_ply=False, keep_last_ckpt=False)
+
+         # 1. Soft clean old stuff
+        max_clean_date = 'Log_2022-09-16_17-04-53'
+        cleanup(res_path, max_clean_date)
+
+
     ######################################################
     # Choose a list of log to plot together for comparison
     ######################################################
 
     # My logs: choose the logs to show
-    logs, logs_names = exp_kpinv_bis()
+    logs, logs_names = retry_kpmini()
 
     frame_lines_1(["Plot S3DIS experiments"])
 
