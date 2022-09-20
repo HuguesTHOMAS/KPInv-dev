@@ -405,7 +405,7 @@ class KPInvFCNN(nn.Module):
                                               radius,
                                               sigma,
                                               attention_groups=cfg.model.inv_groups,
-                                              attention_act=weight_act,
+                                              attention_act='softmax',
                                               shared_kp_data=shared_kp_data,
                                               influence_mode=cfg.model.kp_influence,
                                               dimension=cfg.data.dim,

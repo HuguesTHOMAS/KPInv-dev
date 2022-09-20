@@ -421,7 +421,7 @@ class KPMini_v2(nn.Module):
         elif attention_act == 'tanh':
             self.attention_act = torch.tanh
         elif attention_act == 'softmax':
-            self.attention_act = torch.softmax(dim=1)
+            self.attention_act = nn.Softmax(dim=1)
         else:
             self.attention_act = nn.Identity()
 

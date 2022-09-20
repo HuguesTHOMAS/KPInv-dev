@@ -142,7 +142,7 @@ class KPInv(nn.Module):
         elif weight_act == 'tanh2':
             self.weight_activation = lambda x: torch.tanh(x) + 1
         elif weight_act == 'softmax':
-            self.weight_activation = torch.softmax(dim=1)
+            self.weight_activation = nn.Softmax(dim=1)
         else:
             self.weight_activation = nn.Identity()
 
@@ -391,7 +391,7 @@ class KPInvX(nn.Module):
         elif weight_act == 'tanh2':
             self.weight_activation = lambda x: torch.tanh(x) + 1
         elif weight_act == 'softmax':
-            self.weight_activation = torch.softmax(dim=1)
+            self.weight_activation = nn.Softmax(dim=1)
         else:
             self.weight_activation = nn.Identity()
 

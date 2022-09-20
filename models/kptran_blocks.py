@@ -151,7 +151,7 @@ class KPTransformer(nn.Module):
             self.linear_v = nn.Identity()
 
         # First linear transform for queries and keys
-        self.use_qk_linear = in_channels != out_channels  # or always True
+        self.use_qk_linear = in_channels != out_channels or True  # or always True
         if self.use_qk_linear:
             self.linear_q = nn.Linear(in_channels, out_channels)
             self.linear_k = nn.Linear(in_channels, out_channels)
@@ -179,7 +179,7 @@ class KPTransformer(nn.Module):
         elif attention_act == 'tanh':
             self.attention_act = torch.tanh
         elif attention_act == 'softmax':
-            self.attention_act = torch.softmax(dim=1)
+            self.attention_act = nn.Softmax(dim=1)
         else:
             self.attention_act = nn.Identity()
 
@@ -277,6 +277,10 @@ class KPTransformer(nn.Module):
         #   Here, because we multiply by the kernel influence, it is already handled.
         #
 
+        with torch.no_grad():
+            valid_mask = neighb_inds < int(s_feats.shape[0])
+            shadow_bool = not torch.all(valid_mask).item()
+
 
         # Get Neighbor features
         # *********************
@@ -291,79 +295,91 @@ class KPTransformer(nn.Module):
         neighb_v_feats = index_select(padded_v_feats, neighb_inds, dim=0)  # -> (M, H, C)
 
 
-        # Depthwise convolution
-        # *********************
+        use_conv = False
+        if use_conv:
 
-        # Get nearest kernel point (M, H) and weights applied to each neighbors (M, H)
-        influence_weights, neighbors, neighbors_1nn = self.get_neighbors_influences(q_pts, s_pts, neighb_inds)
+            # Depthwise convolution
+            # *********************
 
-        # Collect nearest kernel point weights -> (M, H, C)
-        neighbors_weights = gather(self.weights, neighbors_1nn)
+            # Get nearest kernel point (M, H) and weights applied to each neighbors (M, H)
+            influence_weights, neighbors, neighbors_1nn = self.get_neighbors_influences(q_pts, s_pts, neighb_inds)
 
-        # Adjust weights with influence
-        if self.influence_mode != 'constant':
-            neighbors_weights *= influence_weights.unsqueeze(2)
+            # Collect nearest kernel point weights -> (M, H, C)
+            neighbors_weights = gather(self.weights, neighbors_1nn)
 
-        # Apply convolution weights
-        neighb_v_feats = self.merge_op(neighb_v_feats, neighbors_weights)  # (M, H, C)
+            # Adjust weights with influence
+            if self.influence_mode != 'constant':
+                neighbors_weights *= influence_weights.unsqueeze(2)
 
+            # Apply convolution weights
+            neighb_v_feats = self.merge_op(neighb_v_feats, neighbors_weights)  # (M, H, C)
 
-        # Get transformers keys and values
-        # ********************************
-
-        if self.use_qk_linear:
-
-            # Get keys features from neighbors
-            k_feats = self.linear_k(s_feats)
-            padded_k_feats = torch.cat((k_feats, torch.zeros_like(k_feats[:1, :])), 0)  # (N, C) -> (N+1, C)
-            neighb_k_feats = index_select(padded_k_feats, neighb_inds, dim=0)  # -> (M, H, C)
             
-            # Get query features from the center point
-            q_feats = self.linear_q(s_feats)
+        use_tran = True
+        if use_tran:
 
-            # In case M != N, pool features to query positions
-            if q_pts.shape[0] != s_pts.shape[0]:
-                padded_q_feats = torch.cat((q_feats, torch.zeros_like(q_feats[:1, :])), 0)  # (N, C) -> (N+1, C)
-                if self.stride_mode == 'nearest':
-                    q_feats = index_select(padded_q_feats, neighb_inds[:, 0], dim=0)  # nearest pool -> (M, C)
-                elif self.stride_mode == 'max':
-                    q_feats = torch.max(index_select(padded_q_feats, neighb_inds, dim=0), dim=1)  # max pool (M, H, C) -> (M, C)
-                elif self.stride_mode == 'avg':
-                    q_feats = torch.mean(index_select(padded_q_feats, neighb_inds, dim=0), dim=1)  # avg pool (M, H, C) -> (M, C)
 
-        else:
-            neighb_k_feats = neighb_v_feats
-            if q_pts.shape[0] == s_pts.shape[0]:
-                q_feats = s_feats
+            # Get transformers keys and values
+            # ********************************
+
+            if self.use_qk_linear:
+
+                # Get keys features from neighbors
+                k_feats = self.linear_k(s_feats)
+                padded_k_feats = torch.cat((k_feats, torch.zeros_like(k_feats[:1, :])), 0)  # (N, C) -> (N+1, C)
+                neighb_k_feats = index_select(padded_k_feats, neighb_inds, dim=0)  # -> (M, H, C)
+                
+                # Get query features from the center point
+                q_feats = self.linear_q(s_feats)
+
+                # In case M != N, pool features to query positions
+                if q_pts.shape[0] != s_pts.shape[0]:
+                    padded_q_feats = torch.cat((q_feats, torch.zeros_like(q_feats[:1, :])), 0)  # (N, C) -> (N+1, C)
+                    if self.stride_mode == 'nearest':
+                        q_feats = index_select(padded_q_feats, neighb_inds[:, 0], dim=0)  # nearest pool -> (M, C)
+                    elif self.stride_mode == 'max':
+                        q_feats = torch.max(index_select(padded_q_feats, neighb_inds, dim=0), dim=1)  # max pool (M, H, C) -> (M, C)
+                    elif self.stride_mode == 'avg':
+                        q_feats = torch.mean(index_select(padded_q_feats, neighb_inds, dim=0), dim=1)  # avg pool (M, H, C) -> (M, C)
+
             else:
-                if self.stride_mode == 'nearest':
-                    q_feats = neighb_v_feats[:, 0]  # nearest pool -> (M, C)
-                elif self.stride_mode == 'max':
-                    q_feats = torch.max(neighb_v_feats, dim=1)  # max pool (M, H, C) -> (M, C)
-                elif self.stride_mode == 'avg':
-                    q_feats = torch.mean(neighb_v_feats, dim=1)  # avg pool (M, H, C) -> (M, C)
+                neighb_k_feats = neighb_v_feats
+                if q_pts.shape[0] == s_pts.shape[0]:
+                    q_feats = v_feats
+                else:
+                    if self.stride_mode == 'nearest':
+                        q_feats = neighb_v_feats[:, 0]  # nearest pool -> (M, C)
+                    elif self.stride_mode == 'max':
+                        q_feats = torch.max(neighb_v_feats, dim=1)  # max pool (M, H, C) -> (M, C)
+                    elif self.stride_mode == 'avg':
+                        q_feats = torch.mean(neighb_v_feats, dim=1)  # avg pool (M, H, C) -> (M, C)
 
 
-        # Get attention weights
-        # *********************
+            # Get attention weights
+            # *********************
 
-        # Merge queries with keys
-        qk_feats = q_feats.unsqueeze(1) - neighb_k_feats  # (M, 1, C) -> (M, H, C)
+            # Merge queries with keys
+            qk_feats = q_feats.unsqueeze(1) - neighb_k_feats  # (M, 1, C) -> (M, H, C)
 
-        # Generate attention weights
-        attention_weights = self.alpha_mlp(qk_feats) # (M, H, C) -> (M, H, CpG)
-        attention_weights = self.attention_act(attention_weights)
+            # Generate attention weights
+            attention_weights = self.alpha_mlp(qk_feats) # (M, H, C) -> (M, H, CpG)
+            attention_weights = self.attention_act(attention_weights)
 
-        # Apply attention weights
-        # ************************
+            # Apply attention weights
+            # ************************
 
-        # Separate features in groups
-        H = int(neighb_inds.shape[1])
-        neighb_v_feats = neighb_v_feats.view(-1, H, self.ch_per_grp, self.groups)  # (M, H, C) -> (M, H, CpG, G)
-        attention_weights = attention_weights.view(-1, H, self.ch_per_grp, 1)  # (M, H*CpG) -> (M, H, CpG, 1)
+            # Separate features in groups
+            H = int(neighb_inds.shape[1])
+            neighb_v_feats = neighb_v_feats.view(-1, H, self.ch_per_grp, self.groups)  # (M, H, C) -> (M, H, CpG, G)
+            attention_weights = attention_weights.view(-1, H, self.ch_per_grp, 1)  # (M, H*CpG) -> (M, H, CpG, 1)
 
-        # Multiply features with attention
-        neighb_v_feats *= attention_weights  # -> (M, H, CpG, G)
+            # Multiply features with attention
+            neighb_v_feats *= attention_weights  # -> (M, H, CpG, G)
+                
+            # Apply shadow mask (every gradient for shadow neighbors will be zero)
+            if shadow_bool:
+                # print('shadow neighbors present', s_feats.shape)
+                neighb_v_feats *= valid_mask.type(torch.float32).unsqueeze(2).unsqueeze(3)
 
 
         # Output

@@ -860,10 +860,48 @@ def retry_kpmini():
                   'kpmini addmax',
                   'kpmini mulmax',
                   'kpmini mlp1',
-                  'kpmini mlp2',
-                  'kptran nolinear'
-                  'kptran qk_linear'
-                  'kptran all_linear'
+                  'kpmini mlp2']
+
+
+    # TODO: train regular is buggy
+    # TODO: Handle kpnextarchitecture like ConvNext, operate DropPath
+
+
+    # safe check log names
+    if len(logs) > len(logs_names):
+        logs = logs[:len(logs_names)]
+    logs_names = np.array(logs_names[:len(logs)])
+
+    return logs, logs_names
+
+
+def test_kptransformer():
+    """
+    test of kp transformer
+    """
+
+    # Using the dates of the logs, you can easily gather consecutive ones. All logs should be of the same dataset.
+    start = 'Log_2022-09-19_16-38-38'
+    end = 'Log_2022-09-29_23-43-08'
+
+    # Name of the result path
+    res_path = 'results'
+
+    # Gather logs and sort by date
+    logs = np.sort([join(res_path, l) for l in listdir_str(res_path) if start <= l <= end])
+
+    # Optionally add a specific log at a specific place in the log list
+    logs = logs.astype('<U50')
+    logs = np.insert(logs, 0, 'results/Log_2022-09-18_21-45-51')
+
+    # Give names to the logs (for plot legends)
+    logs_names = ['kpmini (autoH)',
+                  'kptran nolinear',
+                  'kptran qk_linear',
+                  'kptran all_linear',
+                  'kptran all_linear G8',
+                  'kptran onlytran (H=16)',
+                  'kptran onlymini (H=16)',
                   '...',]
 
 
@@ -878,7 +916,6 @@ def retry_kpmini():
 
     return logs, logs_names
 
-  
 
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -890,29 +927,16 @@ def retry_kpmini():
 
 if __name__ == '__main__':
 
-
     ##########
     # Clean-up
     ##########
-    #
-    # Optional. Do it to save space but you will lose some data:
-    #   > all checkpoints except last
-    #   > all future_visu
-    #   > all val_preds
-    #   > (option) all test temp data
-    #
 
+    # Optional. Do it to save space but you will lose some data:
     cleaning = False
     res_path = 'results'
     if cleaning:
-
-         # 1. Hard clean very old stuff
-        max_clean_date = 'Log_2022-09-16_17-04-21'
-        cleanup(res_path, max_clean_date, keep_val_ply=False, keep_last_ckpt=False)
-
-         # 1. Soft clean old stuff
-        max_clean_date = 'Log_2022-09-16_17-04-53'
-        cleanup(res_path, max_clean_date)
+        cleanup(res_path, 'Log_2022-09-16_17-04-21', keep_val_ply=False, keep_last_ckpt=False)
+        cleanup(res_path, 'Log_2022-09-16_17-04-53')
 
 
     ######################################################
@@ -920,7 +944,7 @@ if __name__ == '__main__':
     ######################################################
 
     # My logs: choose the logs to show
-    logs, logs_names = retry_kpmini()
+    logs, logs_names = test_kptransformer()
 
     frame_lines_1(["Plot S3DIS experiments"])
 
