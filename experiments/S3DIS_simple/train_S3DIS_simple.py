@@ -85,13 +85,13 @@ def my_config():
     cfg.model.norm = 'batch' # batch, layer
     cfg.model.init_channels = 64  # 48, 64, 80, 96
 
-    cfg.model.kp_mode = 'kptran'             # Choose ['kpconv', 'kpdef', 'kpinv', 'kpinvx']. 
+    cfg.model.kp_mode = 'kpminimod'         # Choose ['kpconv', 'kpdef', 'kpinv', 'kpinvx']. 
                                             # Choose ['inv_v1', 'inv_v2', 'inv_v3', 'inv_v4', 'transformer']
                                             # Choose ['kpconv-mod', 'kpdef-mod', 'kpconv-geom'] for modulations
                                             # Choose ['kpconv-depth'] for depthwise conv (groups = input channels = output chanels)
                                             # Choose ['kpnext'] for better kpconv
                                             # Choose ['kpmini' 'kpminix'] for depthwise kpconv
-                                            # Choose ['kptran'] for kp transformer: depthwise kpconv with attention
+                                            # Choose ['kptran', 'kpminimod'] for kp transformer: depthwise kpconv with attention
     cfg.model.shell_sizes = [1, 14]
     cfg.model.kp_radius = 2.0
     cfg.model.kp_influence = 'linear'
@@ -109,15 +109,15 @@ def my_config():
 
     cfg.model.input_channels = 5    # This value has to be compatible with one of the dataset input features definition
 
-    # cfg.model.neighbor_limits = []                      # Use empty list to let calibration get the values
+    cfg.model.neighbor_limits = []                      # Use empty list to let calibration get the values
     # cfg.model.neighbor_limits = [35, 40, 50, 50, 50]    # Use empty list to let calibration get the values
-    cfg.model.neighbor_limits = [16, 16, 16, 16, 16]    # List for point_transformer
+    # cfg.model.neighbor_limits = [16, 16, 16, 16, 16]    # List for point_transformer
 
 
     # Specific parameters for involution and transformers
     cfg.model.use_strided_conv = True           # Use convolution op for strided layers instead of involution
-    cfg.model.first_inv_layer = 1               # Use involution layers only from this layer index
-    cfg.model.inv_groups = 1                    # neagtive values to specify CpG instead of G
+    cfg.model.first_inv_layer = 2               # Use involution layers only from this layer index
+    cfg.model.inv_groups = -1                   # neagtive values to specify CpG instead of G
             
     # Specific parameters for kpinv 
     cfg.model.kpinv_reduc = 1
@@ -418,11 +418,11 @@ if __name__ == '__main__':
     if 'mod' in cfg.model.kp_mode:
         modulated = True
 
-    if cfg.model.kp_mode.startswith('kpconv') or cfg.model.kp_mode.startswith('kpmini'):
+    if cfg.model.kp_mode.startswith('kpconv') or cfg.model.kp_mode in ['kpmini', 'kpminix']:
         net = KPConvFCNN(cfg, modulated=modulated, deformable=False)
     elif cfg.model.kp_mode.startswith('kpdef'):
         net = KPConvFCNN(cfg, modulated=modulated, deformable=True)
-    elif cfg.model.kp_mode.startswith('kpinv') or cfg.model.kp_mode.startswith('kptran'):
+    elif cfg.model.kp_mode.startswith('kpinv') or cfg.model.kp_mode.startswith('kptran') or cfg.model.kp_mode.startswith('kpminimod'):
         net = KPInvFCNN(cfg)
     elif cfg.model.kp_mode.startswith('transformer') or cfg.model.kp_mode.startswith('inv_'):
         net = InvolutionFCNN(cfg)

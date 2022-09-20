@@ -206,12 +206,10 @@ class InvolutionFCNN(nn.Module):
                                    cfg.model.shell_sizes,
                                    radius,
                                    sigma,
-                                   modulated=False,
-                                   deformable=deformable,
+                                   minix_C=0,
                                    influence_mode=cfg.model.kp_influence,
                                    aggregation_mode=cfg.model.kp_aggregation,
                                    dimension=cfg.data.dim,
-                                   groups=cfg.model.conv_groups,
                                    strided=strided,
                                    norm_type=cfg.model.norm,
                                    bn_momentum=cfg.model.bn_momentum)

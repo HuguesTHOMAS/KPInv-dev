@@ -397,15 +397,20 @@ class KPInvFCNN(nn.Module):
         weight_act = 'tanh'
 
         # Warning when testing be sure this is the same as when test
-        if 'kptran' in self.kp_mode:
 
+        if 'kptran' in self.kp_mode or 'kpminimod' in self.kp_mode:
+
+            minimod = False
+            if 'kpminimod' in self.kp_mode:
+                minimod = True
             return KPTransformerResidualBlock(in_C,
                                               out_C,
                                               cfg.model.shell_sizes,
                                               radius,
                                               sigma,
                                               attention_groups=cfg.model.inv_groups,
-                                              attention_act='softmax',
+                                              attention_act='sigmoid',
+                                              minimod=minimod,
                                               shared_kp_data=shared_kp_data,
                                               influence_mode=cfg.model.kp_influence,
                                               dimension=cfg.data.dim,
