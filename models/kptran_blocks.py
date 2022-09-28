@@ -55,12 +55,13 @@ class KPMiniMod(nn.Module):
                  sigma: float,
                  attention_groups: int = 8,
                  attention_act: str = 'sigmoid',
+                 mod_grp_norm: bool = False,
                  shared_kp_data = None,
                  dimension: int = 3,
                  influence_mode: str = 'linear',
                  fixed_kernel_points: str = 'center',
                  norm_type: str = 'batch',
-                 bn_momentum: float = 0.98,
+                 bn_momentum: float = 0.1,
                  activation: nn.Module = nn.LeakyReLU(0.1),
                  inf: float = 1e6):
         """
@@ -72,12 +73,13 @@ class KPMiniMod(nn.Module):
             sigma                      (float): The influence radius of each kernel point.
             attention_groups           (int=8): number of groups in attention (negative value for ch_per_grp).
             attention_act                (str): Activate the weight with 'none', 'sigmoid', 'softmax' or 'tanh'.
+            mod_grp_norm          (bool=False): Use group norm for modulations or not.
             shared_kp_data              (None): Optional data dict shared across the layer
             dimension                  (int=3): The dimension of the point space.
             influence_mode      (str='linear'): Influence function ('constant', 'linear', 'gaussian').
             fixed_kernel_points (str='center'): kernel points whose position is fixed ('none', 'center' or 'verticals').
             norm_type            (str='batch'): type of normalization used in layer ('group', 'batch', 'none')
-            bn_momentum           (float=0.98): Momentum for batch normalization
+            bn_momentum           (float=0.10): Momentum for batch normalization
             activation              (nn.Module: Activation function. Use None for no activation.
             inf (float=1e6): The value of infinity to generate the padding point.
         """
@@ -105,6 +107,7 @@ class KPMiniMod(nn.Module):
         self.ch_per_grp = ch_per_grp
         self.groups = attention_groups
         self.attention_act = attention_act
+        self.mod_grp_norm = mod_grp_norm
 
 
         # Depthwise conv parameters
@@ -140,17 +143,19 @@ class KPMiniMod(nn.Module):
 
         # Attention mlp
         Cout = self.K * self.ch_per_grp
-        alpha_list = [Cout]
-        # alpha_list = [channels, 'NA', Cout]
+        # alpha_list = [Cout]
+        alpha_list = [channels, 'NA', Cout]
         self.alpha_mlp = mlp_from_list(channels,
                                        alpha_list,
-                                       final_bias=True,
-                                       norm_type=norm_type,
-                                       bn_momentum=bn_momentum,
+                                       final_bias=False,
+                                       norm_type='none',
+                                       bn_momentum=-1,
                                        activation=activation)
                                        
-        # # Optional final group norm for each kernel weights    
+        # Optional final group norm for each kernel weights
         # self.grpnorm = nn.GroupNorm(self.K, self.K * self.ch_per_grp)
+        self.grpnorm = nn.BatchNorm1d(self.K * self.ch_per_grp, momentum=bn_momentum)
+        
 
         # Weight activation
         if attention_act == 'sigmoid':
@@ -273,14 +278,14 @@ class KPMiniMod(nn.Module):
         # MLP to get weights
         modulations = self.alpha_mlp(pooled_feats)  # (M, C) -> (M, C//r) -> (M, K*CpG)
 
-        # # Optional normalization per kernel
-        # modulations = modulations.transpose(0, 1).unsqueeze(0)  # (M, K*CpG) -> (B=1, K*CpG, M)
-        # modulations = self.grpnorm(modulations)
-        # modulations = modulations.squeeze(0).transpose(0, 1)  # (B=1, K*CpG, M) -> (M, K*CpG)
+        # Optional normalization per kernel
+        if self.mod_grp_norm:
+            modulations = modulations.transpose(0, 1).unsqueeze(0)  # (M, K*CpG) -> (B=1, K*CpG, M)
+            modulations = self.grpnorm(modulations)
+            modulations = modulations.squeeze(0).transpose(0, 1)  # (B=1, K*CpG, M) -> (M, K*CpG)
 
         # Activation
         modulations = self.attention_act(modulations)
-
 
         # Apply modulations
         # *****************
@@ -293,7 +298,7 @@ class KPMiniMod(nn.Module):
         conv_weights = conv_weights * modulations
 
         # Reshape
-        conv_weights = conv_weights.view(-1, self.K, self.channels)  # -> (M, K, C)
+        conv_weights = conv_weights.reshape(-1, self.K, self.channels)  # -> (M, K, C)
 
 
         # Depthwise convolution
@@ -347,7 +352,7 @@ class KPTransformer(nn.Module):
                  influence_mode: str = 'linear',
                  fixed_kernel_points: str = 'center',
                  norm_type: str = 'batch',
-                 bn_momentum: float = 0.98,
+                 bn_momentum: float = 0.1,
                  activation: nn.Module = nn.LeakyReLU(0.1),
                  inf: float = 1e6):
         """
@@ -365,7 +370,7 @@ class KPTransformer(nn.Module):
             influence_mode      (str='linear'): Influence function ('constant', 'linear', 'gaussian').
             fixed_kernel_points (str='center'): kernel points whose position is fixed ('none', 'center' or 'verticals').
             norm_type            (str='batch'): type of normalization used in layer ('group', 'batch', 'none')
-            bn_momentum           (float=0.98): Momentum for batch normalization
+            bn_momentum           (float=0.10): Momentum for batch normalization
             activation              (nn.Module: Activation function. Use None for no activation.
             inf (float=1e6): The value of infinity to generate the padding point.
         """
@@ -712,7 +717,7 @@ class KPTransformerBlock(nn.Module):
                  influence_mode: str = 'linear',
                  dimension: int = 3,
                  norm_type: str = 'batch',
-                 bn_momentum: float = 0.98,
+                 bn_momentum: float = 0.1,
                  activation: nn.Module = nn.LeakyReLU(0.1)):
         """
         KPConv block with normalization and activation.
@@ -728,7 +733,7 @@ class KPTransformerBlock(nn.Module):
             influence_mode (str='linear'): Influence function ('constant', 'linear', 'gaussian')
             dimension             (int=3): dimension of input
             norm_type       (str='batch'): type of normalization used in layer ('group', 'batch', 'none')
-            bn_momentum      (float=0.98): Momentum for batch normalization
+            bn_momentum      (float=0.10): Momentum for batch normalization
             activation (nn.Module|None=nn.LeakyReLU(0.1)): Activation function. Use None for no activation.
         """
         super(KPTransformerBlock, self).__init__()
@@ -789,13 +794,14 @@ class KPTransformerResidualBlock(nn.Module):
                  sigma: float,
                  attention_groups: int = 8,
                  attention_act: str = 'sigmoid',
+                 mod_grp_norm: bool = False,
                  minimod: bool = False,
                  shared_kp_data = None,
                  influence_mode: str = 'linear',
                  dimension: int = 3,
                  strided: bool = False,
                  norm_type: str = 'batch',
-                 bn_momentum: float = 0.98,
+                 bn_momentum: float = 0.1,
                  activation: nn.Module = nn.LeakyReLU(0.1)):
         """
         KPConv residual bottleneck block.
@@ -807,13 +813,14 @@ class KPTransformerResidualBlock(nn.Module):
             sigma                 (float): influence radius of each kernel point
             attention_groups      (int=8): number of groups in attention (negative value for ch_per_grp).
             attention_act           (str): Activate the weight with 'none', 'sigmoid', 'softmax' or 'tanh'.
+            mod_grp_norm     (bool=False): Use group norm for modulations or not.
             minimod          (bool=False): Use KPMiniMod instead of transformer
             shared_kp_data      (None): Optional data dict shared across the layer
             influence_mode (str='linear'): Influence function ('constant', 'linear', 'gaussian')
             dimension             (int=3): dimension of input
             strided          (bool=False): strided or not
             norm_type       (str='batch'): type of normalization used in layer ('group', 'batch', 'none')
-            bn_momentum      (float=0.98): Momentum for batch normalization
+            bn_momentum      (float=0.10): Momentum for batch normalization
             activation (nn.Module|None=nn.LeakyReLU(0.1)): Activation function. Use None for no activation.
         """
         super(KPTransformerResidualBlock, self).__init__()
@@ -841,6 +848,7 @@ class KPTransformerResidualBlock(nn.Module):
                                 sigma,
                                 attention_groups=attention_groups,
                                 attention_act=attention_act,
+                                mod_grp_norm=mod_grp_norm,
                                 shared_kp_data=shared_kp_data,
                                 dimension=dimension,
                                 influence_mode=influence_mode,
@@ -922,7 +930,7 @@ class KPTransformerInvertedBlock(nn.Module):
                  dimension: int = 3,
                  strided: bool = False,
                  norm_type: str = 'batch',
-                 bn_momentum: float = 0.98,
+                 bn_momentum: float = 0.1,
                  activation: nn.Module = nn.LeakyReLU(0.1)):
         """
         KPConv inverted block as in ConvNext (and PointNext).
@@ -942,7 +950,7 @@ class KPTransformerInvertedBlock(nn.Module):
             dimension             (int=3): dimension of input
             strided          (bool=False): strided or not
             norm_type       (str='batch'): type of normalization used in layer ('group', 'batch', 'none')
-            bn_momentum      (float=0.98): Momentum for batch normalization
+            bn_momentum      (float=0.10): Momentum for batch normalization
             activation (nn.Module|None=nn.LeakyReLU(0.1)): Activation function. Use None for no activation.
         """
         super(KPTransformerInvertedBlock, self).__init__()

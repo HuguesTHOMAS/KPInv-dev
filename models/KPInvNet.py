@@ -393,11 +393,6 @@ class KPInvFCNN(nn.Module):
                                                 strided=strided,
                                                 shared_kp_data=shared_kp_data)
 
-        # 'none', 'sigmoid', 'softmax', 'tanh' or 'tanh2'.
-        weight_act = 'tanh'
-
-        # Warning when testing be sure this is the same as when test
-
         if 'kptran' in self.kp_mode or 'kpminimod' in self.kp_mode:
 
             minimod = False
@@ -409,7 +404,8 @@ class KPInvFCNN(nn.Module):
                                               radius,
                                               sigma,
                                               attention_groups=cfg.model.inv_groups,
-                                              attention_act='sigmoid',
+                                              attention_act=cfg.model.inv_act,
+                                              mod_grp_norm=cfg.model.inv_grp_norm,
                                               minimod=minimod,
                                               shared_kp_data=shared_kp_data,
                                               influence_mode=cfg.model.kp_influence,
@@ -427,7 +423,7 @@ class KPInvFCNN(nn.Module):
                                          sigma,
                                          expansion=cfg.model.kpx_expansion,
                                          reduction_ratio=cfg.model.kpinv_reduc,
-                                         weight_act=weight_act,
+                                         weight_act=cfg.model.inv_act,
                                          shared_kp_data=shared_kp_data,
                                          influence_mode=cfg.model.kp_influence,
                                          dimension=cfg.data.dim,
@@ -444,7 +440,7 @@ class KPInvFCNN(nn.Module):
                                       sigma,
                                       groups=cfg.model.inv_groups,
                                       reduction_ratio=cfg.model.kpinv_reduc,
-                                      weight_act=weight_act,
+                                      weight_act=cfg.model.inv_act,
                                       shared_kp_data=shared_kp_data,
                                       influence_mode=cfg.model.kp_influence,
                                       dimension=cfg.data.dim,

@@ -82,12 +82,15 @@ def init_cfg():
     cfg.model.kp_aggregation = 'sum'    #   Str, Aggregation mode ('nearest', 'sum')
     cfg.model.kp_fixed = 'center'       #   Str, Fixed points in the kernel ('none', 'center', 'verticals')
     cfg.model.conv_groups = 1           #   Int, number of groups for groups in convolution (-1 for depthwise)
-    cfg.model.inv_groups = 1            #   Int, number of groups for groups in involution
-    cfg.model.share_kp = False         #  Bool, option to share the kenrel point (and thus neighbor influences and weights) 
+    cfg.model.share_kp = False          #  Bool, option to share the kenrel point (and thus neighbor influences and weights) 
                                         #        across the KPConv of the same layer
+                   
+    cfg.model.inv_groups = 1            #   Int, number of groups for groups in involution                     
+    cfg.model.inv_grp_norm = False      #  Bool, Choose to use group norm for involution weights or kpminimod modulations
+    cfg.model.inv_act = 'sigmoid'       #   Str, activation function for involution weights, kpminimod modulations etc.
 
     cfg.model.kpinv_reduc = 1           #   Int, reduction ration for kpinv gen mlp
-    cfg.model.kpx_expansion = 8      #   Int, expansion parameter for kpinvX
+    cfg.model.kpx_expansion = 8         #   Int, expansion parameter for kpinvX
 
     cfg.model.use_strided_conv = True   #  Bool, Use convolution op for strided layers instead of involution
     cfg.model.first_inv_layer = 0       #   Int, Use involution layers only from this layer index

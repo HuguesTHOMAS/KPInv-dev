@@ -19,9 +19,10 @@ training_script="experiments/S3DIS_simple/train_S3DIS_simple.py"
 # Declare an array variable
 # *************************
 
-declare -a arg_arr=("--kp_mode kptran"
-                    "--kp_mode kptran --inv_groups 8"
-                    "--kp_mode kptran --inv_groups 8 --first_inv_layer 0")
+declare -a arg_arr=("--kp_mode kpminimod --inv_grp_norm 0 --inv_groups 8 --inv_act tanh"
+                    "--kp_mode kpminimod --inv_grp_norm 1 --inv_groups 8 --inv_act sigmoid"
+                    "--kp_mode kpminimod --inv_grp_norm 1 --inv_groups 8 --inv_act softmax"
+                    "--kp_mode kpminimod --inv_grp_norm 1 --inv_groups 8 --inv_act tanh")
 
 
 echo ""

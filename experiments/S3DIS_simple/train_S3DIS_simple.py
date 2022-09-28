@@ -116,8 +116,10 @@ def my_config():
 
     # Specific parameters for involution and transformers
     cfg.model.use_strided_conv = True           # Use convolution op for strided layers instead of involution
-    cfg.model.first_inv_layer = 2               # Use involution layers only from this layer index
-    cfg.model.inv_groups = -1                   # neagtive values to specify CpG instead of G
+    cfg.model.first_inv_layer = 1               # Use involution layers only from this layer index
+    cfg.model.inv_groups = 8                   # negative values to specify CpG instead of G
+    cfg.model.inv_grp_norm = True
+    cfg.model.inv_act = 'sigmoid'               # 'none', 'sigmoid', 'softmax', 'tanh'
             
     # Specific parameters for kpinv 
     cfg.model.kpinv_reduc = 1
@@ -275,7 +277,8 @@ if __name__ == '__main__':
                 'train.data_sampler',
                 'model.kp_aggregation',
                 'model.kp_influence',
-                'model.norm']
+                'model.norm',
+                'model.inv_act']
 
     float_args = ['train.weight_decay',
                   'model.kp_radius',
@@ -289,6 +292,7 @@ if __name__ == '__main__':
                 'train.max_epoch']
 
     bool_args = ['model.use_strided_conv',
+                 'model.inv_grp_norm',
                  'data.use_cubes',
                  'data.cylindric_input',
                  'augment_train.chromatic_contrast',

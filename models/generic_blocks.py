@@ -170,7 +170,7 @@ def mlp_from_list(Cin,
                   layer_list,
                   final_bias=True,
                   norm_type: str = 'batch',
-                  bn_momentum: float = 0.98,
+                  bn_momentum: float = 0.1,
                   activation: nn.Module = nn.LeakyReLU(0.1)):
     """
     Function returning a mini mlp network defined by a list like:
@@ -185,7 +185,7 @@ def mlp_from_list(Cin,
         layer_list        (list): List of layer.
         final_bias        (bool): If last layer is linear, do we have biases.
         norm_type  (str='batch'): type of normalization used in layer ('group', 'batch', 'none')
-        bn_momentum (float=0.98): Momentum for batch normalization
+        bn_momentum (float=0.1): Momentum for batch normalization
         activation   (nn.Module): Activation function. Use None for no activation.
     """
 
@@ -216,7 +216,7 @@ def build_mlp(n_layers,
               Cout,
               bias=True,
               norm_type: str = 'batch',
-              bn_momentum: float = 0.98,
+              bn_momentum: float = 0.1,
               activation: nn.Module = nn.LeakyReLU(0.1)):
     """
     Function returning a mini mlp network. The output features are not activated.
@@ -227,7 +227,7 @@ def build_mlp(n_layers,
         Cout               (int): The number of output channels.
         final_activation  (bool): Activate output features or not
         norm_type  (str='batch'): type of normalization used in layer ('group', 'batch', 'none')
-        bn_momentum (float=0.98): Momentum for batch normalization
+        bn_momentum (float=0.1): Momentum for batch normalization
         activation   (nn.Module): Activation function. Use None for no activation.
     """
 
@@ -253,12 +253,12 @@ class BatchNormBlock(nn.Module):
 
     def __init__(self,
                  num_channels: int,
-                 bn_momentum: float = 0.98):
+                 bn_momentum: float = 0.1):
         """
         Initialize a batch normalization block. If network does not use batch normalization, replace with biases.
         Args:
             in_channels (int): dimension input features
-            bn_momentum (float=0.98): Momentum for batch normalization. < 0 to avoid using it.
+            bn_momentum (float=0.1): Momentum for batch normalization. < 0 to avoid using it.
         """
         super(BatchNormBlock, self).__init__()
 
@@ -315,7 +315,7 @@ class GroupNormBlock(nn.Module):
         Initialize a group normalization block. If network does not use batch normalization, replace with biases.
         Args:
             num_channels (int): dimension input features
-            num_groups (float=0.98): Momentum for batch normalization. < 0 to avoid using it.
+            num_groups (float=0.10): Momentum for batch normalization. < 0 to avoid using it.
             eps (float=1e-5): a value added to the denominator for numerical stability.
             affine (bool=True): Should the module have learnable per-channel affine parameters.
         """
@@ -392,13 +392,13 @@ class NormBlock(nn.Module):
     def __init__(self,
                  num_channels: int,
                  norm_type: str = 'batch',
-                 bn_momentum: float = 0.98):
+                 bn_momentum: float = 0.1):
         """
         Generic norm block able to choose between different types of normalization.
         Args:
             num_channels (int): dimension input features
             norm_type (str='batch'): type of normalization used in layer ('group', 'batch', 'none')
-            bn_momentum (float=0.98): Momentum for batch normalization. < 0 to avoid using it.
+            bn_momentum (float=0.1): Momentum for batch normalization. < 0 to avoid using it.
         """
         super(NormBlock, self).__init__()
 
@@ -436,7 +436,7 @@ class UnaryBlock(nn.Module):
                  in_channels: int,
                  out_channels: int,
                  norm_type: str = 'batch',
-                 bn_momentum: float = 0.98,
+                 bn_momentum: float = 0.1,
                  activation: nn.Module = nn.LeakyReLU(0.1)):
         """
         Unary block with normalization and activation in pack mode.
@@ -444,7 +444,7 @@ class UnaryBlock(nn.Module):
             in_channels (int): dimension input features
             out_channels (int): dimension input features
             norm_type (str='batch'): type of normalization used in layer ('group', 'batch', 'none')
-            bn_momentum (float=0.98): Momentum for batch normalization. < 0 to avoid using it.
+            bn_momentum (float=0.1): Momentum for batch normalization. < 0 to avoid using it.
             activation (nn.Module|None=nn.LeakyReLU(0.1)): Activation function. Use None for no activation.
         """
         super(UnaryBlock, self).__init__()

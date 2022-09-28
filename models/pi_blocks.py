@@ -59,7 +59,7 @@ class point_involution_v1(nn.Module):
                  stride_mode: str = 'nearest',
                  dimension: int = 3,
                  norm_type: str = 'batch',
-                 bn_momentum: float = 0.98,
+                 bn_momentum: float = 0.1,
                  activation: nn.Module = nn.LeakyReLU(0.1)):
         """
         v1 of point involution (naive and naiv+geom). It can includes geometric encodings
@@ -85,7 +85,7 @@ class point_involution_v1(nn.Module):
             stride_mode (str='nearest'): Mode for strided attention ('nearest', 'avg', 'max')
             dimension           (int=3): The dimension of the point space.
             norm_type     (str='batch'): type of normalization used in layer ('group', 'batch', 'none')
-            bn_momentum    (float=0.98): Momentum for batch normalization
+            bn_momentum    (float=0.10): Momentum for batch normalization
             activation (nn.Module|None=nn.LeakyReLU(0.1)): Activation function. Use None for no activation.
         """
         super(point_involution_v1, self).__init__()
@@ -298,7 +298,7 @@ class point_involution_v3(nn.Module):
                  stride_mode: str = 'nearest',
                  dimension: int = 3,
                  norm_type: str = 'batch',
-                 bn_momentum: float = 0.98,
+                 bn_momentum: float = 0.1,
                  activation: nn.Module = nn.LeakyReLU(0.1)):
         """
         v3 of point involution. It includes geometric encodings in both features and attention branches
@@ -321,7 +321,7 @@ class point_involution_v3(nn.Module):
             stride_mode (str='nearest'): Mode for strided attention ('nearest', 'avg', 'max')
             dimension           (int=3): The dimension of the point space.
             norm_type     (str='batch'): type of normalization used in layer ('group', 'batch', 'none')
-            bn_momentum    (float=0.98): Momentum for batch normalization
+            bn_momentum    (float=0.10): Momentum for batch normalization
             activation (nn.Module|None=nn.LeakyReLU(0.1)): Activation function. Use None for no activation.
         """
         super(point_involution_v3, self).__init__()
@@ -558,7 +558,7 @@ class point_transformer(nn.Module):
                  stride_mode: str = 'nearest',
                  dimension: int = 3,
                  norm_type: str = 'batch',
-                 bn_momentum: float = 0.98,
+                 bn_momentum: float = 0.1,
                  activation: nn.Module = nn.LeakyReLU(0.1)):
         """
         Reimplementation of point_transformer. Basically a point_involution_v3, with keys that introduce features in the attention process.
@@ -581,7 +581,7 @@ class point_transformer(nn.Module):
             stride_mode (str='nearest'): Mode for strided attention ('nearest', 'avg', 'max')
             dimension           (int=3): The dimension of the point space.
             norm_type     (str='batch'): type of normalization used in layer ('group', 'batch', 'none')
-            bn_momentum    (float=0.98): Momentum for batch normalization
+            bn_momentum    (float=0.10): Momentum for batch normalization
         """
         super(point_transformer, self).__init__()
 
@@ -832,7 +832,7 @@ class InvolutionBlock(nn.Module):
                  groups: int = 8,
                  dimension: int = 3,
                  norm_type: str = 'batch',
-                 bn_momentum: float = 0.98,
+                 bn_momentum: float = 0.1,
                  activation: nn.Module = nn.LeakyReLU(0.1)):
         """
         InvolutionBlock block with normalization and activation.  
@@ -845,7 +845,7 @@ class InvolutionBlock(nn.Module):
             groups              (int=8): number of groups in involution.
             dimension           (int=3): dimension of input
             norm_type     (str='batch'): type of normalization used in layer ('group', 'batch', 'none')
-            bn_momentum    (float=0.98): Momentum for batch normalization
+            bn_momentum    (float=0.10): Momentum for batch normalization
             activation (nn.Module|None=nn.LeakyReLU(0.1)): Activation function. Use None for no activation.
         """
         super(InvolutionBlock, self).__init__()
@@ -938,7 +938,7 @@ class InvolutionResidualBlock(nn.Module):
                  strided: bool = False,
                  dimension: int = 3,
                  norm_type: str = 'batch',
-                 bn_momentum: float = 0.98,
+                 bn_momentum: float = 0.1,
                  activation: nn.Module = nn.LeakyReLU(0.1)):
         """
         Involution residual bottleneck block.
@@ -952,7 +952,7 @@ class InvolutionResidualBlock(nn.Module):
             strided (bool=False): strided or not
             dimension           (int=3): dimension of input
             norm_type     (str='batch'): type of normalization used in layer ('group', 'batch', 'none')
-            bn_momentum    (float=0.98): Momentum for batch normalization
+            bn_momentum    (float=0.10): Momentum for batch normalization
             activation (nn.Module|None=nn.LeakyReLU(0.1)): Activation function. Use None for no activation.
         """
         super(InvolutionResidualBlock, self).__init__()

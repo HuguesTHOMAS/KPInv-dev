@@ -54,7 +54,7 @@ class KPInv(nn.Module):
                  influence_mode: str = 'linear',
                  fixed_kernel_points: str = 'center',
                  norm_type: str = 'batch',
-                 bn_momentum: float = 0.98,
+                 bn_momentum: float = 0.1,
                  activation: nn.Module = nn.LeakyReLU(0.1),
                  inf: float = 1e6):
         """
@@ -74,7 +74,7 @@ class KPInv(nn.Module):
             influence_mode      (str='linear'): Influence function ('constant', 'linear', 'gaussian').
             fixed_kernel_points (str='center'): kernel points whose position is fixed ('none', 'center' or 'verticals').
             norm_type            (str='batch'): type of normalization used in layer ('group', 'batch', 'none')
-            bn_momentum           (float=0.98): Momentum for batch normalization
+            bn_momentum           (float=0.10): Momentum for batch normalization
             activation (nn.Module|None=nn.LeakyReLU(0.1)): Activation function. Use None for no activation.
             inf (float=1e6): The value of infinity to generate the padding point.
         """
@@ -317,7 +317,7 @@ class KPInvX(nn.Module):
                  influence_mode: str = 'linear',
                  fixed_kernel_points: str = 'center',
                  norm_type: str = 'batch',
-                 bn_momentum: float = 0.98,
+                 bn_momentum: float = 0.1,
                  activation: nn.Module = nn.LeakyReLU(0.1),
                  inf: float = 1e6):
         """
@@ -337,7 +337,7 @@ class KPInvX(nn.Module):
             influence_mode      (str='linear'): Influence function ('constant', 'linear', 'gaussian').
             fixed_kernel_points (str='center'): kernel points whose position is fixed ('none', 'center' or 'verticals').
             norm_type            (str='batch'): type of normalization used in layer ('group', 'batch', 'none')
-            bn_momentum           (float=0.98): Momentum for batch normalization
+            bn_momentum           (float=0.10): Momentum for batch normalization
             activation (nn.Module|None=nn.LeakyReLU(0.1)): Activation function. Use None for no activation.
             inf (float=1e6): The value of infinity to generate the padding point.
         """
@@ -571,7 +571,7 @@ class KPInvBlock(nn.Module):
                  influence_mode: str = 'linear',
                  dimension: int = 3,
                  norm_type: str = 'batch',
-                 bn_momentum: float = 0.98,
+                 bn_momentum: float = 0.1,
                  activation: nn.Module = nn.LeakyReLU(0.1)):
         """
         KPInv block with normalization and activation.  
@@ -587,7 +587,7 @@ class KPInvBlock(nn.Module):
             influence_mode     (str): Influence function ('constant', 'linear', 'gaussian')
             dimension        (int=3): dimension of input
             norm_type          (str): type of normalization used in layer ('group', 'batch', 'none')
-            bn_momentum (float=0.98): Momentum for batch normalization
+            bn_momentum (float=0.1): Momentum for batch normalization
             activation   (nn.Module): Activation function. Use None for no activation.
         """
         super(KPInvBlock, self).__init__()
@@ -650,7 +650,7 @@ class KPInvResidualBlock(nn.Module):
                  dimension: int = 3,
                  strided: bool = False,
                  norm_type: str = 'batch',
-                 bn_momentum: float = 0.98,
+                 bn_momentum: float = 0.1,
                  activation: nn.Module = nn.LeakyReLU(0.1)):
         """
         KPInv residual bottleneck block.
@@ -667,7 +667,7 @@ class KPInvResidualBlock(nn.Module):
             influence_mode     (str): Influence function ('constant', 'linear', 'gaussian')
             dimension        (int=3): dimension of input
             norm_type          (str): type of normalization used in layer ('group', 'batch', 'none')
-            bn_momentum (float=0.98): Momentum for batch normalization
+            bn_momentum (float=0.1): Momentum for batch normalization
             activation   (nn.Module): Activation function. Use None for no activation.
         """
         super(KPInvResidualBlock, self).__init__()
@@ -756,7 +756,7 @@ class KPInvXBottleNeckBlock(nn.Module):
                  dimension: int = 3,
                  strided: bool = False,
                  norm_type: str = 'batch',
-                 bn_momentum: float = 0.98,
+                 bn_momentum: float = 0.1,
                  activation: nn.Module = nn.LeakyReLU(0.1)):
         """
         KPInv residual bottleneck block.
@@ -773,7 +773,7 @@ class KPInvXBottleNeckBlock(nn.Module):
             influence_mode     (str): Influence function ('constant', 'linear', 'gaussian')
             dimension        (int=3): dimension of input
             norm_type          (str): type of normalization used in layer ('group', 'batch', 'none')
-            bn_momentum (float=0.98): Momentum for batch normalization
+            bn_momentum (float=0.1): Momentum for batch normalization
             activation   (nn.Module): Activation function. Use None for no activation.
         """
         super(KPInvXBottleNeckBlock, self).__init__()
