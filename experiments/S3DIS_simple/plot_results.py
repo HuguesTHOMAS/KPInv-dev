@@ -952,16 +952,11 @@ def test_kpminimod():
                   'kpminimod2 (8) gpnorm-tanh',
                   '...',]
 
-    # TODO: list of exp during Cuba
-    #           > number of groups in minimod
-    #           > attention activation
-    #           > with grpnorm
-    #           > 2 layer alpha
-    #           > different radiuses with [1, 14]
-    #           > different radiuses with [1, 14, 28]
-
-    # TODO: train regular is buggy
-    # TODO: Handle kpnextarchitecture like ConvNext, operate DropPath
+    # list of exp during Cuba
+    #           > number of groups in minimod => 8 seems good
+    #           > attention activation => sigmoid seems to have best results
+    #           > with grpnorm => Yes with sigmoid
+    #           > 2 layer alpha => seems better
 
 
     # safe check log names
@@ -973,6 +968,7 @@ def test_kpminimod():
     # logs_names = logs_names[[0, 7, 9, 11, 12]]
 
     return logs, logs_names
+
 
 def test_kpminimod_2():
     """
@@ -1000,9 +996,64 @@ def test_kpminimod_2():
                   'kpminimod2 (-1) gpnorm-sigm',
                   'kpminimod2 (-1) BN-sigm',
                   'kpminimod2 (8) BN-sigm',
-                  '...',]
+                  'kpminimod2 (8) BN-sigm + alphaBN',
+                  'again kpminimod2 (8) gpnorm-sigm']
 
-    # TODO: list of exp during Cuba
+    # list of exp during Cuba
+    #           > number of groups in minimod => 8 seems good
+    #           > attention activation => sigmoid seems to have best results
+    #           > with grpnorm => Yes with sigmoid
+    #           > 2 layer alpha => seems better
+
+    # safe check log names
+    if len(logs) > len(logs_names):
+        logs = logs[:len(logs_names)]
+    logs_names = np.array(logs_names[:len(logs)])
+
+    # logs = logs[[0, 7, 9, 11, 12]]
+    # logs_names = logs_names[[0, 7, 9, 11, 12]]
+
+    return logs, logs_names
+
+
+def test_in_full_rot():
+    """
+    test of kp transformer
+    """
+
+    # Using the dates of the logs, you can easily gather consecutive ones. All logs should be of the same dataset.
+    start = 'Log_2022-09-28_07-21-15'
+    end = 'Log_2022-12-29_23-43-08'
+
+    # Name of the result path
+    res_path = 'results'
+
+    # Gather logs and sort by date
+    logs = np.sort([join(res_path, l) for l in listdir_str(res_path) if start <= l <= end])
+
+    # # Optionally add a specific log at a specific place in the log list
+    # logs = logs.astype('<U50')
+    # logs = np.insert(logs, 0, 'results/Log_2022-09-27_10-06-23')
+
+    # Give names to the logs (for plot legends)
+    logs_names = ['kpminimod2 G8  f64 fast',
+                  'kpminimod2 G8  f64',
+                  'kpminimod2 G16 f64',
+                  'kpminimod2 G32 f64',
+                  'kpminimod2 G4  f64',
+                  'kpminimod2 G-16  f64',
+                  'kpminimod2 G-8  f64',
+                  'kpminimod2 G-1  f64',
+                  'kpminimod2 G1  f64',
+                  'kpmini',
+                  'kpminimod2 G16 f64',
+                  'kpminimod2 G8  f64',
+                  'kpminimod2 G8  f64 tanh',
+                  'kpminimod2 G8  f96',
+                  'kpminimod2 G8  f64 bottleneck/2',
+                  'kpminimod1 G8  f64 bottleneck/2',]
+
+    # TODO: list of exp in full rot
     #           > number of groups in minimod
     #           > attention activation
     #           > with grpnorm
@@ -1024,6 +1075,60 @@ def test_kpminimod_2():
 
     return logs, logs_names
 
+
+def test_conv_r():
+    """
+    test of kp transformer
+    """
+
+    # Using the dates of the logs, you can easily gather consecutive ones. All logs should be of the same dataset.
+    start = 'Log_2022-10-02_04-31-37'
+    end = 'Log_2022-12-29_23-43-08'
+
+    # Name of the result path
+    res_path = 'results'
+
+    # Gather logs and sort by date
+    logs = np.sort([join(res_path, l) for l in listdir_str(res_path) if start <= l <= end])
+
+    # # Optionally add a specific log at a specific place in the log list
+    # logs = logs.astype('<U50')
+    # logs = np.insert(logs, 0, 'results/Log_2022-09-27_10-06-23')
+
+    # Give names to the logs (for plot legends)
+    logs_names = ['kpminimod2 r=1.0',
+                  'kpminimod2 r=1.2',
+                  'kpminimod2 r=1.4',
+                  'kpminimod2 r=1.6',
+                  'kpminimod2 r=1.8',
+                  'kpminimod2 r=2.0',
+                  'kpminimod2 r=2.2',
+                  'kpminimod2 r=2.4',
+                  'kpminimod2 r=2.6',
+                  'kpminimod2 r=2.8',
+                  '...',]
+
+    # TODO: list of exp in full rot
+    #           > number of groups in minimod
+    #           > attention activation
+    #           > with grpnorm
+    #           > 2 layer alpha
+    #           > different radiuses with [1, 14]
+    #           > different radiuses with [1, 14, 28]
+
+    # TODO: train regular is buggy
+    # TODO: Handle kpnextarchitecture like ConvNext, operate DropPath
+
+
+    # safe check log names
+    if len(logs) > len(logs_names):
+        logs = logs[:len(logs_names)]
+    logs_names = np.array(logs_names[:len(logs)])
+
+    # logs = logs[[0, 7, 9, 11, 12]]
+    # logs_names = logs_names[[0, 7, 9, 11, 12]]
+
+    return logs, logs_names
 
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -1052,7 +1157,7 @@ if __name__ == '__main__':
     ######################################################
 
     # My logs: choose the logs to show
-    logs, logs_names = test_kpminimod_2()
+    logs, logs_names = test_in_full_rot()
 
     frame_lines_1(["Plot S3DIS experiments"])
 

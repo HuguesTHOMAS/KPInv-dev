@@ -143,9 +143,9 @@ def my_config():
     cfg.train.in_radius = 1.5  # If negative, =number of points per input
 
     # Batch related_parames
-    cfg.train.batch_size = 8                 # Target batch size. If you don't want calibration, you can directly set train.batch_limit
-    cfg.train.accum_batch = 3                 # Accumulate batches for an effective batch size of batch_size * accum_batch.
-    cfg.train.steps_per_epoch = 200
+    cfg.train.batch_size = 6                 # Target batch size. If you don't want calibration, you can directly set train.batch_limit
+    cfg.train.accum_batch = 4                 # Accumulate batches for an effective batch size of batch_size * accum_batch.
+    cfg.train.steps_per_epoch = 300
     
     # Training length
     cfg.train.max_epoch = 240
@@ -185,10 +185,10 @@ def my_config():
     # a = 1/0
 
     # Train Augmentations
-    cfg.augment_train.anisotropic = False
+    cfg.augment_train.anisotropic = True
     cfg.augment_train.scale = [0.9, 1.1]
     cfg.augment_train.flips = [0.5, 0, 0]
-    cfg.augment_train.rotations = 'vertical'
+    cfg.augment_train.rotations = 'all'
     cfg.augment_train.jitter = 0.005
     cfg.augment_train.color_drop = 0.2
     cfg.augment_train.chromatic_contrast = True

@@ -153,8 +153,8 @@ class KPMiniMod(nn.Module):
                                        activation=activation)
                                        
         # Optional final group norm for each kernel weights
-        # self.grpnorm = nn.GroupNorm(self.K, self.K * self.ch_per_grp)
-        self.grpnorm = nn.BatchNorm1d(self.K * self.ch_per_grp, momentum=bn_momentum)
+        self.grpnorm = nn.GroupNorm(self.K, self.K * self.ch_per_grp)
+        # self.grpnorm = nn.BatchNorm1d(self.K * self.ch_per_grp, momentum=bn_momentum)
         
 
         # Weight activation
