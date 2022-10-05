@@ -38,7 +38,7 @@ from utils.config import init_cfg, save_cfg, get_directories
 from utils.printing import frame_lines_1, underline
 from utils.gpu_init import init_gpu
 
-from models.KPConvNet import KPNeXt
+from models.KPNext import KPNeXt, KPCNN_old
 from models.KPConvNet import KPFCNN as KPConvFCNN
 from models.KPInvNet import KPInvFCNN
 from models.InvolutionNet import InvolutionFCNN
@@ -85,22 +85,23 @@ def my_config():
     cfg.model.norm = 'batch' # batch, layer
     cfg.model.init_channels = 64  # 48, 64, 80, 96
 
-    cfg.model.kp_mode = 'kpminimod'         # Choose ['kpconv', 'kpdef', 'kpinv', 'kpinvx']. 
-                                            # Choose ['inv_v1', 'inv_v2', 'inv_v3', 'inv_v4', 'transformer']
-                                            # Choose ['kpconv-mod', 'kpdef-mod', 'kpconv-geom'] for modulations
-                                            # Choose ['kpconv-depth'] for depthwise conv (groups = input channels = output chanels)
-                                            # Choose ['kpnext'] for better kpconv
-                                            # Choose ['kpmini' 'kpminix'] for depthwise kpconv
-                                            # Choose ['kptran', 'kpminimod'] for kp transformer: depthwise kpconv with attention
+    cfg.model.kp_mode = 'kpconvx'       # Choose ['kpconv', 'kpdef', 'kpinv', 'kpinvx'].
+                                        # Choose ['inv_v1', 'inv_v2', 'inv_v3', 'inv_v4', 'transformer']
+                                        # Choose ['kpconv-mod', 'kpdef-mod', 'kpconv-geom'] for modulations
+                                        # Choose ['kpconv-depth'] for depthwise conv (groups = input channels = output chanels)
+                                        # Choose ['kpnext'] for better kpconv
+                                        # Choose ['kpmini' 'kpminix'] for depthwise kpconv
+                                        # Choose ['kptran', 'kpminimod'] for kp transformer: depthwise kpconv with attention
+                                        # Choose ['kpconvd', 'kpconvx'] fornew block CVPR submission
     cfg.model.shell_sizes = [1, 14]
-    cfg.model.kp_radius = 2.0
+    cfg.model.kp_radius = 1.6
     cfg.model.kp_influence = 'linear'
     cfg.model.kp_aggregation = 'nearest'  # 'sum', 'nearest'
     cfg.model.conv_groups = -1   # -1 for depthwise convolution       
     
     cfg.model.share_kp = True       #  share kernels within layers                
 
-    cfg.data.init_sub_size = 0.02          # -1.0 so that dataset point clouds are not initially subsampled
+    cfg.data.init_sub_size = 0.04          # -1.0 so that dataset point clouds are not initially subsampled
     cfg.data.init_sub_mode = 'grid'        # Mode for initial subsampling of data
     cfg.model.in_sub_size = 0.04           # Adapt this with train.in_radius. Try to keep a ratio of ~50 (*0.67 if fps). If negative, and fps, it is stride
     cfg.model.in_sub_mode = 'grid'         # Mode for input subsampling
@@ -109,7 +110,7 @@ def my_config():
 
     cfg.model.input_channels = 5    # This value has to be compatible with one of the dataset input features definition
 
-    cfg.model.neighbor_limits = []                      # Use empty list to let calibration get the values
+    cfg.model.neighbor_limits = [16, 17, 18, 18, 18]      # Use empty list to let calibration get the values
     # cfg.model.neighbor_limits = [35, 40, 50, 50, 50]    # Use empty list to let calibration get the values
     # cfg.model.neighbor_limits = [16, 16, 16, 16, 16]    # List for point_transformer
 
@@ -117,7 +118,7 @@ def my_config():
     # Specific parameters for involution and transformers
     cfg.model.use_strided_conv = True           # Use convolution op for strided layers instead of involution
     cfg.model.first_inv_layer = 1               # Use involution layers only from this layer index
-    cfg.model.inv_groups = 8                   # negative values to specify CpG instead of G
+    cfg.model.inv_groups = 8                    # negative values to specify CpG instead of G
     cfg.model.inv_grp_norm = True
     cfg.model.inv_act = 'sigmoid'               # 'none', 'sigmoid', 'softmax', 'tanh'
             
@@ -137,10 +138,9 @@ def my_config():
 
     # How do we sample the input elements (spheres or cubes)
     cfg.train.data_sampler = 'random'   # 'c-random' for class balanced random sampling
-    cfg.train.max_points = -1           # positive value will reduce the input size to have exactly the asked number of points
 
     # Input spheres radius. Adapt this with model.in_sub_size. Try to keep a ratio of ~50
-    cfg.train.in_radius = 1.5  # If negative, =number of points per input
+    cfg.train.in_radius = 1.7  # If negative, =number of points per input
 
     # Batch related_parames
     cfg.train.batch_size = 6                 # Target batch size. If you don't want calibration, you can directly set train.batch_limit
@@ -188,7 +188,7 @@ def my_config():
     cfg.augment_train.anisotropic = True
     cfg.augment_train.scale = [0.9, 1.1]
     cfg.augment_train.flips = [0.5, 0, 0]
-    cfg.augment_train.rotations = 'all'
+    cfg.augment_train.rotations = 'vertical'
     cfg.augment_train.jitter = 0.005
     cfg.augment_train.color_drop = 0.2
     cfg.augment_train.chromatic_contrast = True
@@ -201,8 +201,8 @@ def my_config():
     # ---------------
 
     # How do we sample the input elements (spheres or cubes)
+    cfg.test.in_radius = 4.0                # For S3DIS 4 meters is very large, cover a whole part of the test set with full rooms
     cfg.test.data_sampler = 'regular'       # 'regular' to pick spheres regularly accross the data.
-    cfg.test.max_points = -1                # positive value will reduce the input size to have exactly the asked number of points
 
     cfg.test.max_steps_per_epoch = 100       # Size of one validation epoch (should be small)
     cfg.test.batch_limit = 1
@@ -231,12 +231,28 @@ def adjust_config(cfg):
     else:
         cfg.model.kp_sigma = 0.7 * cfg.model.kp_radius
 
-    # Train
-    if cfg.data.use_cubes:
-        if cfg.data.cylindric_input:
-            cfg.train.in_radius *= np.pi**(1/2) / 2  # ratio between square and circle area
-        else:
-            cfg.train.in_radius *= (4 / 3 * np.pi)**(1/3) / 2  # ratio between cube and sphere volume   
+
+    # Input radius
+    if cfg.train.in_radius > 0:
+
+        # In case we use cubes adjust the size
+        if cfg.data.use_cubes:
+            if cfg.data.cylindric_input:
+                cfg.train.in_radius *= np.pi**(1/2) / 2  # ratio between square and circle area
+            else:
+                cfg.train.in_radius *= (4 / 3 * np.pi)**(1/3) / 2  # ratio between cube and sphere volume
+
+    else:
+
+        # In case we sample a fixed number od points, some options cannot be used
+        if cfg.train.data_sampler == 'regular':
+            raise ValueError('Unable to use regular sampling with fixed number of input points. We need fixed radius.')
+
+        # We have to used input already subsampled at the right size
+        if cfg.model.in_sub_size > 0:
+            cfg.data.init_sub_size = cfg.model.in_sub_size
+
+    # Checkpoint gap
     cfg.train.checkpoint_gap = cfg.train.max_epoch // 5
 
     # Learning rate
@@ -248,11 +264,9 @@ def adjust_config(cfg):
         cfg.train.lr_decays[str(i)] = decrease_rate
 
     # Test
-    cfg.test.in_radius = cfg.train.in_radius * 2
     cfg.augment_test.chromatic_norm = cfg.augment_train.chromatic_norm
     cfg.augment_test.height_norm = cfg.augment_train.height_norm
     cfg.test.num_workers = cfg.train.num_workers
-
 
     return cfg
 
@@ -281,6 +295,7 @@ if __name__ == '__main__':
                 'model.inv_act']
 
     float_args = ['train.weight_decay',
+                  'train.in_radius',
                   'model.kp_radius',
                   'model.kp_sigma']
 
@@ -422,7 +437,10 @@ if __name__ == '__main__':
     if 'mod' in cfg.model.kp_mode:
         modulated = True
 
-    if cfg.model.kp_mode.startswith('kpconv') or cfg.model.kp_mode in ['kpmini', 'kpminix']:
+    if cfg.model.kp_mode in ['kpconvx', 'kpconvd']:
+        net = KPCNN_old(cfg)
+
+    elif cfg.model.kp_mode.startswith('kpconv') or cfg.model.kp_mode in ['kpmini', 'kpminix']:
         net = KPConvFCNN(cfg, modulated=modulated, deformable=False)
     elif cfg.model.kp_mode.startswith('kpdef'):
         net = KPConvFCNN(cfg, modulated=modulated, deformable=True)
@@ -456,6 +474,46 @@ if __name__ == '__main__':
     ################
 
     # TODO:
+    #
+    #       1. New architecture 
+    #           > Test heads
+    #           > Test stems
+    #           > Convnext, DropPath etc
+    #           > Number of parameters.
+    #           > See optimization here:
+    #               TODO - https://spell.ml/blog/pytorch-training-tricks-YAnJqBEAACkARhgD
+    #               TODO - https://efficientdl.com/faster-deep-learning-in-pytorch-a-guide/#2-use-multiple-workers-and-pinned-memory-in-dataloader
+    #               TODO - https://www.fast.ai/2018/07/02/adam-weight-decay/
+    #               TODO - https://arxiv.org/pdf/2206.04670v1.pdf
+    #               TODO - https://arxiv.org/pdf/2205.05740v2.pdf
+    #               TODO - https://arxiv.org/pdf/2201.03545.pdf  MODERN RESNET
+    #               TODO - https://arxiv.org/pdf/2109.11610.pdf  SPNet shows that Poisson Disc sampling  better (so FPS also) and Trilinear interp for upsampling as well
+    #
+    #       2. Poisson disk sampling
+    #
+    #       3. (Border repulsive loss) + (Mix3D) + (model ensemble) and submit to Scannetv2
+    #
+    #       4. Go implement other datasets (NPM3D, Semantic3D, Scannetv2)
+    #          Also other task: ModelNet40, ShapeNetPart, SemanticKitti
+    #          Add code for completely different tasks??? Invariance??
+    #           New classif dataset: ScanObjectNN
+    #           Revisiting point cloud classification: A new benchmark dataset 
+    #           and classification model on real-world data
+    #
+    #       5. Parameters to play with at the end
+    #           > color drop
+    #           > init_feature_dim
+    #           > layers
+    #           > radius (sphere or cylinder)
+    #           > knn
+    #           > kp radius (for kp)
+    #           > trainer
+    #
+    #
+    #
+    #
+    #
+    #   -------------------------------------------------------- OLD --------------------------------------------------------
     #
     #       00. KPDef List of experiments to do:
     #           > Test with param that allow kpdef-mod v2 to run. Compare v1 v2, def, conv mod, nomod
@@ -533,18 +591,6 @@ if __name__ == '__main__':
     #           > New task instance seg: look at mask group and soft group
     #
     #           > Study stronger downsampling at first layer like stems in RedNet101
-    #
-    #           > Study the batch size accumulationv
-    #
-    #
-    #       6. Parameters to play with at the end
-    #           > color drop
-    #           > init_feature_dim
-    #           > layers
-    #           > radius (sphere or cylinder)
-    #           > knn
-    #           > kp radius (for kp)
-    #           > trainer
     #
 
     print('\n')

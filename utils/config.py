@@ -133,7 +133,7 @@ def init_cfg():
     cfg.train.batch_limit = -1          #   Int, maximum number of points in total in a batch
 
     cfg.train.data_sampler = 'c-random' #   Str, Data sampling mode to choose input spheres ('regular', 'random', 'c-random')
-    cfg.train.max_points = -1           #   Int, maximum number of points per element
+    cfg.train.max_points = -1           #   Int, maximum number of points per element (obsolete)
     
     cfg.train.optimizer = 'SGD'         #   Str, optimizer ('SGD', 'Adam' or 'AdamW')
     cfg.train.lr = 1e-2                 # Float, initial learning rate
@@ -175,7 +175,7 @@ def init_cfg():
     cfg.test.batch_limit = -1           #   Int, maximum number of points in total in a batch
 
     cfg.test.data_sampler = 'regular'   #   Str, Data sampling mode to choose input spheres ('regular', 'random', 'c-random')
-    cfg.test.max_points = -1            #   Int, maximum number of points per element
+    cfg.test.max_points = -1            #   Int, maximum number of points per element (obsolete)
 
     cfg.test.val_momentum = 0.95        # Float, momentum for averaging predictions during validation.
     cfg.test.test_momentum = 0.95       # Float, momentum for averaging predictions during test.

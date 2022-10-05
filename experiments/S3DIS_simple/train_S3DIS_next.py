@@ -125,7 +125,6 @@ def my_config():
 
     # How do we sample the input elements (spheres or cubes)
     cfg.train.data_sampler = 'c-random' # 'c-random' for class balanced random sampling
-    cfg.train.max_points = -1           # positive value will reduce the input size to have exactly the asked number of points
 
     # Input spheres radius. Adapt this with model.in_sub_size. Try to keep a ratio of ~50
     cfg.train.in_radius = 1.5
@@ -190,7 +189,6 @@ def my_config():
 
     # How do we sample the input elements (spheres or cubes)
     cfg.test.data_sampler = 'regular'       # 'regular' to pick spheres regularly accross the data.
-    cfg.test.max_points = -1                # positive value will reduce the input size to have exactly the asked number of points
 
     cfg.test.max_steps_per_epoch = 50       # Size of one validation epoch (should be small)
     cfg.test.batch_limit = 1

@@ -90,7 +90,6 @@ class SceneSegDataset(Dataset):
         self.in_radius = b_cfg.in_radius
         self.b_n = b_cfg.batch_size
         self.b_lim = b_cfg.batch_limit
-        self.max_p = b_cfg.max_points
         self.data_sampler = b_cfg.data_sampler
 
         # Cube sampling or sphere sampling
@@ -138,27 +137,30 @@ class SceneSegDataset(Dataset):
             a_cfg = cfg.augment_train
         else:
             a_cfg = cfg.augment_test
-        augment_list = []
-        augment_list.append(RandomScaleFlip(scale=a_cfg.scale,
+
+        self.base_augments = []
+        self.base_augments.append(RandomScaleFlip(scale=a_cfg.scale,
                                             anisotropic=a_cfg.anisotropic,
                                             flip_p=a_cfg.flips))
-        augment_list.append(RandomJitter(sigma=a_cfg.jitter,
+        self.base_augments.append(RandomJitter(sigma=a_cfg.jitter,
                                          clip=a_cfg.jitter * 5))
-        augment_list.append(FloorCentering())
-        augment_list.append(RandomRotate(mode=a_cfg.rotations))
+        self.base_augments.append(FloorCentering())
+        self.base_augments.append(RandomRotate(mode=a_cfg.rotations))
+
+        self.full_augments = [a for a in self.base_augments]
         if a_cfg.chromatic_contrast:
-            augment_list += [ChromaticAutoContrast()]
+            self.full_augments += [ChromaticAutoContrast()]
         if a_cfg.chromatic_all:
-            augment_list += [ChromaticTranslation(),
+            self.full_augments += [ChromaticTranslation(),
                              ChromaticJitter(),
                              HueSaturationTranslation()]
-        # augment_list.append(RandomDropColor(p=a_cfg.color_drop))
+        # self.full_augments.append(RandomDropColor(p=a_cfg.color_drop))
         if a_cfg.chromatic_norm:
-            augment_list += [ChromaticNormalize()]
-        augment_list.append(RandomFullColor(p=a_cfg.color_drop))
+            self.full_augments += [ChromaticNormalize()]
+        self.full_augments.append(RandomFullColor(p=a_cfg.color_drop))
             
         if 'height_norm' in a_cfg and a_cfg.height_norm:
-            augment_list += [HeightNormalize()]
+            self.full_augments += [HeightNormalize()]
 
         # TRAIN AUGMENT
         # Transformer: no drop color and chromatic contrast/transl/jitter/HSV
@@ -169,7 +171,7 @@ class SceneSegDataset(Dataset):
         # Transformer: no augment at all
         #   PointNext: floor centering and chromatic_norm (drop color if vote)
 
-        self.augmentation_transform = ComposeAugment(augment_list)
+        self.augmentation_transform = ComposeAugment(self.full_augments)
 
         return
 
@@ -395,6 +397,9 @@ class SceneSegDataset(Dataset):
 
     def new_reg_sampling_pts(self, overlap_ratio=1.1):
 
+        if self.in_radius < 0:
+            raise ValueError('regular sampling can only be used with positive input radius')
+
         # Subsampling size so that the overlap is reduced to the minimum
         reg_dl = self.in_radius * 2
         if not self.use_cubes:
@@ -460,7 +465,7 @@ class SceneSegDataset(Dataset):
                 v += float(self.reg_sampling_i.item()) / reg_sampling_N
         return v
     
-    def sample_input_center(self, center_noise=0.1):
+    def sample_input_center(self, center_noise=1.0):
 
         if self.data_sampler == 'regular':
             
@@ -508,7 +513,9 @@ class SceneSegDataset(Dataset):
                 center_point = np.hstack((center_point, self.input_z[cloud_ind][point_ind].reshape(1, 1)))
 
             # Add a small noise to center point
-            center_point += np.random.normal(scale=center_noise * self.in_radius, size=center_point.shape)
+            center_point += np.random.normal(scale=center_noise * self.cfg.data.init_sub_size, size=center_point.shape)
+
+            
 
         else:
             raise ValueError('Unknown data_sampler type: {:s}. Must be in ("regular", "random", "c-random")'.format(self.data_sampler))
@@ -530,16 +537,15 @@ class SceneSegDataset(Dataset):
             q_point = q_point[:, :2]
 
         # In case we have a maxpoint, we query the right number of points directly (except for cubes)
-        if self.max_p > 0:
+        if self.in_radius < 0:
             
             # Use a larger number of points for a cube
-            k = self.max_p
+            k = -self.in_radius
             if self.use_cubes:
                 k*=2
 
             # Query points
-            input_inds = self.input_trees[cloud_ind].query(X, k, return_distance=False)
-            print(input_inds.shape)
+            input_inds = self.input_trees[cloud_ind].query(q_point, k, return_distance=False)
             input_inds = np.squeeze(input_inds)
 
             # Get points from tree structure
@@ -548,9 +554,9 @@ class SceneSegDataset(Dataset):
 
             # Crop the cube if wanted
             if self.use_cubes:
-                cube_dists = np.max(np.abs(input_points - center_point.astype(np.float32)), axis=1)
-                # pick_indices = np.argsort(cube_dists)[:self.max_p]
-                pick_indices = np.argpartition(cube_dists, self.max_p)[:self.max_p]
+                cube_dists = np.max(np.abs(input_points - q_point.astype(np.float32)), axis=1)
+                # pick_indices = np.argsort(cube_dists)[:-self.in_radius]
+                pick_indices = np.argpartition(cube_dists, -self.in_radius)[:-self.in_radius]
                 input_points = input_points[pick_indices, :]
                 input_inds = input_inds[pick_indices]
 
@@ -587,7 +593,7 @@ class SceneSegDataset(Dataset):
             input_points = np.hstack((input_points, self.input_z[cloud_ind][input_inds]))
 
         # # Center neighbors actually useless here
-        # input_points = (query_points - center_point).astype(np.float32)
+        # input_points = (input_points - center_point).astype(np.float32)
 
         # Collect labels and colors
         input_features = self.input_features[cloud_ind][input_inds]
@@ -636,16 +642,16 @@ class SceneSegDataset(Dataset):
 
             # Get the input area
             in_inds, in_points, in_features, in_labels = self.get_input_area(cloud_ind, c_point)
-            
+
             if in_points.shape[0] < 1:
                 continue
             
-            # Add original height as additional feature
-            in_features = np.hstack((in_features, in_points[:, 2:] + c_point[:, 2:])).astype(np.float32)
+            # Add original height as additional feature (note: in_points is not centered here)
+            in_features = np.hstack((in_features, np.copy(in_points[:, 2:]))).astype(np.float32)
 
             # Data augmentation
             in_points2, in_features, in_labels = self.augmentation_transform(in_points, in_features, in_labels)
-
+            
             # Select features for the network
             in_features = self.select_features(in_features)
 
@@ -785,7 +791,7 @@ class SceneSegDataset(Dataset):
         device = init_gpu()
 
         # Get augmentation transform
-        calib_augment = ComposeAugment(self.augmentation_transform.transforms[:4])
+        calib_augment = ComposeAugment(self.base_augments)
         
         all_batch_n = []
         all_batch_n_pts = []
@@ -852,7 +858,7 @@ class SceneSegDataset(Dataset):
         device = init_gpu()
 
         # Get augmentation transform
-        calib_augment = ComposeAugment(self.augmentation_transform.transforms[:4])
+        calib_augment = ComposeAugment(self.base_augments)
 
         # Advanced display
         pi = 0
@@ -900,7 +906,7 @@ class SceneSegDataset(Dataset):
 
         # Initial batch limit thanks to average points per batch
         mean_cloud_n = np.mean(all_cloud_n)
-        new_b_lim = mean_cloud_n * batch_size
+        new_b_lim = mean_cloud_n * batch_size - 1
 
         # Verify the batch size 
         all_batch_n = []
@@ -981,7 +987,7 @@ class SceneSegDataset(Dataset):
         device = init_gpu()
 
         # Get augmentation transform
-        calib_augment = ComposeAugment(self.augmentation_transform.transforms[:4])
+        calib_augment = ComposeAugment(self.base_augments)
         
         # Advanced display
         pi = 0

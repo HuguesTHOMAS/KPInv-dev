@@ -19,21 +19,8 @@ training_script="experiments/S3DIS_simple/train_S3DIS_simple.py"
 # Declare an array variable
 # *************************
 
-declare -a arg_arr=("--kp_mode kpminimod --kp_radius 1.0"
-                    "--kp_mode kpminimod --kp_radius 1.2"
-                    "--kp_mode kpminimod --kp_radius 1.4"
-                    "--kp_mode kpminimod --kp_radius 1.6"
-                    "--kp_mode kpminimod --kp_radius 1.8"
-                    "--kp_mode kpminimod --kp_radius 2.0"
-                    "--kp_mode kpminimod --kp_radius 2.2"
-                    "--kp_mode kpminimod --kp_radius 2.4"
-                    "--kp_mode kpminimod --kp_radius 2.6"
-                    "--kp_mode kpminimod --kp_radius 2.8"
-                    "--kp_mode kpminimod --kp_radius 3.0"
-                    "--kp_mode kpminimod --kp_radius 3.2"
-                    "--kp_mode kpminimod --kp_radius 3.4"
-                    "--kp_mode kpminimod --kp_radius 3.6"
-                    "--kp_mode kpminimod --kp_radius 3.8")
+declare -a arg_arr=("--kp_mode kpminimod --in_radius 1.8"
+                    "--kp_mode kpminimod --in_radius 1.6")
 
 
 echo ""

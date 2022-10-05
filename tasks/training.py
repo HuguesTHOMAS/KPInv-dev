@@ -218,6 +218,35 @@ def training_epoch(epoch, t0, net, optimizer, training_loader, cfg, PID_file, de
                 if (t[-1] - last_display) > 1.0:
                     last_display = t[-1]
 
+
+                    # for l, neighbors in enumerate(batch.in_dict.neighbors):
+                    #     i0 = 0
+                    #     lengths = batch.in_dict.lengths[l]
+                    #     pts = batch.in_dict.points[l]
+                    #     if l > 0:
+                    #         pools = batch.in_dict.pools[l-1]
+                    #     for b_i, length in enumerate(lengths):
+                    #         if l > 0:
+                    #             inpools = pools[i0:i0 + batch.in_dict.lengths[l][b_i]]
+                    #             print(' '*4*l, inpools.shape)
+                    #         inpts = pts[i0:i0 + length]
+                    #         neighbs = neighbors[i0:i0 + length]
+                    #         print(' '*4*l, inpts.shape, neighbs.shape)
+                    #         i0 += length
+                            
+                    # i0 = 0
+                    # lengths = batch.in_dict.lengths[0]
+                    # pts = batch.in_dict.points[0]
+                    # radiuses = []
+                    # for b_i, length in enumerate(lengths):
+                    #     inpts = pts[i0:i0 + length]
+                    #     d2 = torch.sum(torch.pow(inpts, 2), axis=1)
+                    #     radiuses.append(torch.sqrt(torch.max(d2)).item())
+                    #     i0 += length
+                    # for l, r in zip(lengths, radiuses):
+                    #     print(int(l), '{:.3f} m'.format(r))
+
+
                     message = '{:5d} {:4d} | {:8.3f} | {:7.1f} % | {:7.1f} ins/sec | {:6.1f} {:5.1f} {:5.1f} {:5.1f} {:5.1f}'
                     print(message.format(epoch, step,
                                             accum_loss,
