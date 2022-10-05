@@ -6,7 +6,7 @@ import numpy as np
 
 from models.generic_blocks import LinearUpsampleBlock, UnaryBlock, local_nearest_pool
 from models.kpconv_blocks import KPConvBlock, KPConvResidualBlock, KPConvInvertedBlock
-from models.kpnext_blocks import KPNextResidualBlock, KPNextInvertedBlock
+from models.kpnext_blocks import KPNextResidualBlock, KPNextInvertedBlock, KPNextMultiShortcutBlock, KPNextBlock
 
 from utils.torch_pyramid import fill_pyramid
 
@@ -424,6 +424,8 @@ class KPNeXt(nn.Module):
         self.layer_blocks = cfg.model.layer_blocks
         self.num_layers = len(self.layer_blocks)
         self.upsample_n = cfg.model.upsample_n
+        self.share_kp = cfg.model.share_kp
+        self.kp_mode = cfg.model.kp_mode
         
         # List of valid labels (those not ignored in loss)
         self.valid_labels = np.sort([c for c in cfg.data.label_values if c not in cfg.data.ignored_labels])
@@ -445,62 +447,75 @@ class KPNeXt(nn.Module):
         #####################
         # List Encoder blocks
         #####################
-        
-        # ------ Layers 1 ------
 
-        # Initial convolution 
-        self.encoder_1 = nn.ModuleList()
-        self.encoder_1.append(self.get_conv_block(in_C, C, conv_r, conv_sig, cfg))
+        # ------ Layers 1 ------
+        if cfg.model.share_kp:
+            self.shared_kp = [{} for _ in range(self.num_layers)]
+        else:
+            self.shared_kp = [None for _ in range(self.num_layers)]
+
+        # Initial convolution or MLP
+        # self.stem = self.get_conv_block(in_C, C, conv_r, conv_sig, cfg)
+        self.stem = self.get_unary_block(in_C, C, cfg)
 
         # Next blocks
-        for _ in range(self.layer_blocks[0] - 1):
-            self.encoder_1.append(self.get_residual_block(C, C, conv_r, conv_sig, cfg))
+        self.encoder_1 = nn.ModuleList()
+        use_conv = cfg.model.first_inv_layer >= 1
+        for _ in range(self.layer_blocks[0]):
+            self.encoder_1.append(self.get_residual_block(C, C, conv_r, conv_sig, cfg,
+                                                          shared_kp_data=self.shared_kp[0],
+                                                          conv_layer=use_conv))
 
         # Pooling block
-        self.pooling_1 = self.get_residual_block(C, C * 2, conv_r, conv_sig, cfg, strided=True)
-
+        self.pooling_1 = self.get_pooling_block(C, C * 2, conv_r, conv_sig, cfg,
+                                                use_mod=(not use_conv))
 
         # ------ Layers [2, 3, 4, 5] ------
         for layer in range(2, self.num_layers + 1):
 
             # Update features, radius, sigma for this layer
-            C *= 2; conv_r *= 2; conv_sig *= 2
+            C *= 2
+            conv_r *= 2
+            conv_sig *= 2
 
-            # First block takes features to new dimension.
+            # Layer blocks
+            use_conv = cfg.model.first_inv_layer >= layer
             encoder_i = nn.ModuleList()
-
-            # Next blocks
-            for _ in range(self.layer_blocks[layer - 1] - 1):
-                encoder_i.append(self.get_residual_block(C, C, conv_r, conv_sig, cfg, deformable=self.deformable))
+            for _ in range(self.layer_blocks[layer - 1]):
+                encoder_i.append(self.get_residual_block(C, C, conv_r, conv_sig, cfg,
+                                                         shared_kp_data=self.shared_kp[layer - 1],
+                                                         conv_layer=use_conv))
             setattr(self, 'encoder_{:d}'.format(layer), encoder_i)
 
             # Pooling block (not for the last layer)
             if layer < self.num_layers:
-                pooling_i = self.get_residual_block(C, C * 2, conv_r, conv_sig, cfg, deformable=self.deformable, strided=True)
-                setattr(self, 'pooling_{:d}'.format(layer), pooling_i)
+                pooling_i = self.get_pooling_block(C, C * 2, conv_r, conv_sig, cfg,
+                                                   use_mod=(not use_conv))
 
+                setattr(self, 'pooling_{:d}'.format(layer), pooling_i)
 
         #####################
         # List Decoder blocks
         #####################
-        
+
         # ------ Layers [4, 3, 2, 1] ------
         for layer in range(self.num_layers - 1, 0, -1):
-            
+
             C = C // 2
-            
+
             decoder_i = self.get_unary_block(C * 3, C, cfg)
             upsampling_i = LinearUpsampleBlock(self.upsample_n)
-            
+
             setattr(self, 'decoder_{:d}'.format(layer), decoder_i)
             setattr(self, 'upsampling_{:d}'.format(layer), upsampling_i)
+
 
 
         #  ------ Head ------
         
         # New head
-        self.head = nn.Sequential(self.get_unary_block(first_C, first_C // 2, cfg),
-                                  nn.Linear(first_C // 2, self.num_logits))
+        self.head = nn.Sequential(self.get_unary_block(first_C, first_C, cfg),
+                                  nn.Linear(first_C, self.num_logits))
         # Easy KPConv Head
         # self.head = nn.Sequential(nn.Linear(first_C * 2, first_C),
         #                           nn.GroupNorm(8, first_C),
@@ -543,11 +558,11 @@ class KPNeXt(nn.Module):
             norm_type = cfg.model.norm
 
         return UnaryBlock(in_C,
-                           out_C,
-                           norm_type=norm_type,
-                           bn_momentum=cfg.model.bn_momentum)
+                          out_C,
+                          norm_type=norm_type,
+                          bn_momentum=cfg.model.bn_momentum)
 
-    def get_conv_block(self, in_C, out_C, radius, sigma, cfg, deformable=False):
+    def get_conv_block(self, in_C, out_C, radius, sigma, cfg):
 
         # First layer is the most simple convolution possible
         return KPConvBlock(in_C,
@@ -555,34 +570,68 @@ class KPNeXt(nn.Module):
                            cfg.model.shell_sizes,
                            radius,
                            sigma,
-                           modulated=False,
-                           deformable=False,
-                           use_geom=False,
                            influence_mode=cfg.model.kp_influence,
                            aggregation_mode=cfg.model.kp_aggregation,
                            dimension=cfg.data.dim,
                            norm_type=cfg.model.norm,
                            bn_momentum=cfg.model.bn_momentum)
 
-    def get_residual_block(self, in_C, out_C, radius, sigma, cfg, deformable=False, strided=False):
+    def get_pooling_block(self, in_C, out_C, radius, sigma, cfg, use_mod=False):
 
-        use_geom = 'geom' in cfg.model.kp_mode
+        # Depthwise conv 
+        if cfg.model.use_strided_conv:
+            return KPConvBlock(in_C,
+                            out_C,
+                            cfg.model.shell_sizes,
+                            radius,
+                            sigma,
+                            influence_mode=cfg.model.kp_influence,
+                            aggregation_mode=cfg.model.kp_aggregation,
+                            dimension=cfg.data.dim,
+                            norm_type=cfg.model.norm,
+                            bn_momentum=cfg.model.bn_momentum)
 
-        return KPConvInvertedBlock(in_C,
-                                   out_C,
-                                   cfg.model.shell_sizes,
-                                   radius,
-                                   sigma,
-                                   drop_path=0.,
-                                   modulated=self.modulated,
-                                   deformable=deformable,
-                                   use_geom=use_geom,
-                                   influence_mode=cfg.model.kp_influence,
-                                   aggregation_mode=cfg.model.kp_aggregation,
-                                   dimension=cfg.data.dim,
-                                   strided=strided,
-                                   norm_type=cfg.model.norm,
-                                   bn_momentum=cfg.model.bn_momentum)
+        else:
+            attention_groups = cfg.model.inv_groups
+            if 'kpconvd' in self.kp_mode or not use_mod:
+                attention_groups = 0
+            return KPNextBlock(in_C,
+                            out_C,
+                            cfg.model.shell_sizes,
+                            radius,
+                            sigma,
+                            attention_groups=attention_groups,
+                            attention_act=cfg.model.inv_act,
+                            mod_grp_norm=cfg.model.inv_grp_norm,
+                            influence_mode=cfg.model.kp_influence,
+                            dimension=cfg.data.dim,
+                            norm_type=cfg.model.norm,
+                            bn_momentum=cfg.model.bn_momentum)
+                           
+
+    def get_residual_block(self, in_C, out_C, radius, sigma, cfg, shared_kp_data=None, conv_layer=False):
+
+        attention_groups = cfg.model.inv_groups
+        if conv_layer or 'kpconvd' in self.kp_mode:
+            attention_groups = 0
+
+        return KPNextMultiShortcutBlock(in_C,
+                                        out_C,
+                                        cfg.model.shell_sizes,
+                                        radius,
+                                        sigma,
+                                        attention_groups=attention_groups,
+                                        attention_act=cfg.model.inv_act,
+                                        mod_grp_norm=cfg.model.inv_grp_norm,
+                                        expansion=4,
+                                        drop_path_p=-1.,
+                                        layer_scale_init_v=-1.,
+                                        use_upcut=False,
+                                        shared_kp_data=shared_kp_data,
+                                        influence_mode=cfg.model.kp_influence,
+                                        dimension=cfg.data.dim,
+                                        norm_type=cfg.model.norm,
+                                        bn_momentum=cfg.model.bn_momentum)
 
     def forward(self, batch, verbose=False):
 
@@ -613,6 +662,11 @@ class KPNeXt(nn.Module):
             torch.cuda.synchronize(batch.device())                        
             t += [time.time()]
 
+        
+        #  ------ Stem ------
+        # feats = self.stem(batch.in_dict.points[0], batch.in_dict.points[0], feats, batch.in_dict.neighbors[0])
+        feats = self.stem(feats)
+
 
         #  ------ Encoder ------
 
@@ -624,8 +678,9 @@ class KPNeXt(nn.Module):
             block_list = getattr(self, 'encoder_{:d}'.format(layer))
 
             # Layer blocks
+            upcut = None
             for block in block_list:
-                feats = block(batch.in_dict.points[l], batch.in_dict.points[l], feats, batch.in_dict.neighbors[l])
+                feats, upcut = block(batch.in_dict.points[l], batch.in_dict.points[l], feats, batch.in_dict.neighbors[l], upcut=upcut)
             
             if layer < self.num_layers:
 

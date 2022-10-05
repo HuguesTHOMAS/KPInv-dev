@@ -83,9 +83,9 @@ def my_config():
 
     cfg.model.layer_blocks = (3,  4,  5,  12,  4)
     cfg.model.norm = 'batch' # batch, layer
-    cfg.model.init_channels = 64  # 48, 64, 80, 96
+    cfg.model.init_channels = 16  # 48, 64, 80, 96
 
-    cfg.model.kp_mode = 'kpminimod'       # Choose ['kpconv', 'kpdef', 'kpinv', 'kpinvx'].
+    cfg.model.kp_mode = 'kpconvx'       # Choose ['kpconv', 'kpdef', 'kpinv', 'kpinvx'].
                                         # Choose ['inv_v1', 'inv_v2', 'inv_v3', 'inv_v4', 'transformer']
                                         # Choose ['kpconv-mod', 'kpdef-mod', 'kpconv-geom'] for modulations
                                         # Choose ['kpconv-depth'] for depthwise conv (groups = input channels = output chanels)
@@ -116,8 +116,8 @@ def my_config():
 
 
     # Specific parameters for involution and transformers
-    cfg.model.use_strided_conv = True           # Use convolution op for strided layers instead of involution
-    cfg.model.first_inv_layer = 1               # Use involution layers only from this layer index
+    cfg.model.use_strided_conv = False          # Use convolution op for strided layers instead of involution
+    cfg.model.first_inv_layer = 1               # Use involution layers only from this layer index (from 0 to n_layer - 1)
     cfg.model.inv_groups = 8                    # negative values to specify CpG instead of G
     cfg.model.inv_grp_norm = True
     cfg.model.inv_act = 'sigmoid'               # 'none', 'sigmoid', 'softmax', 'tanh'
@@ -438,7 +438,8 @@ if __name__ == '__main__':
         modulated = True
 
     if cfg.model.kp_mode in ['kpconvx', 'kpconvd']:
-        net = KPCNN_old(cfg)
+        net = KPNeXt(cfg)
+
 
     elif cfg.model.kp_mode.startswith('kpconv') or cfg.model.kp_mode in ['kpmini', 'kpminix']:
         net = KPConvFCNN(cfg, modulated=modulated, deformable=False)

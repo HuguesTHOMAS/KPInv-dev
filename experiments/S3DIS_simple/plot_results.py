@@ -1263,19 +1263,19 @@ if __name__ == '__main__':
             
     # Print differences in a nice table
     print_cfg_diffs(logs_names,
-                    all_cfgs,
+                    all_cfgs,)
                     # show_params=['model.in_sub_size',
                     #              'train.in_radius'],
-                    hide_params=['test.batch_limit',
-                                 'train.batch_limit',
-                                 'test.batch_size',
-                                 'augment_test.height_norm',
-                                 'augment_test.chromatic_norm',
-                                 'augment_test.chromatic_all',
-                                 'augment_test.chromatic_contrast',
-                                 'train.max_epoch',
-                                 'train.checkpoint_gap',
-                                 'train.lr_decays'])
+                    # hide_params=['test.batch_limit',
+                    #              'train.batch_limit',
+                    #              'test.batch_size',
+                    #              'augment_test.height_norm',
+                    #              'augment_test.chromatic_norm',
+                    #              'augment_test.chromatic_all',
+                    #              'augment_test.chromatic_contrast',
+                    #              'train.max_epoch',
+                    #              'train.checkpoint_gap',
+                    #              'train.lr_decays'])
 
 
     ################

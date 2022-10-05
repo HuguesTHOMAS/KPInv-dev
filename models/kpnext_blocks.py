@@ -16,6 +16,7 @@
 
 
 import math
+from symbol import return_stmt
 import torch
 import torch.nn as nn
 import numpy as np
@@ -587,6 +588,123 @@ class KPConvX(nn.Module):
 #
 
 
+class KPNextBlock(nn.Module):
+
+    def __init__(self,
+                 in_channels: int,
+                 out_channels: int,
+                 shell_sizes: list,
+                 radius: float,
+                 sigma: float,
+                 attention_groups: int = 8,
+                 attention_act: str = 'sigmoid',
+                 mod_grp_norm: bool = False,
+                 mlp_first: bool= True,
+                 shared_kp_data = None,
+                 influence_mode: str = 'linear',
+                 dimension: int = 3,
+                 norm_type: str = 'batch',
+                 bn_momentum: float = 0.1,
+                 activation: nn.Module = nn.LeakyReLU(0.1)):
+        """
+        KPNext block where we can choose KPConvX or KPConvD. 
+        If features dimension is changed, we combine with a linear layer.
+        Args:
+            in_channels             (int): dimension input features
+            out_channels            (int): dimension input features
+            shell_sizes            (list): The number of kernel points per shell.
+            radius                (float): convolution radius
+            sigma                 (float): influence radius of each kernel point
+            attention_groups      (int=8): number of groups in attention (negative value for ch_per_grp).
+            attention_act           (str): Activate the weight with 'none', 'sigmoid', 'softmax' or 'tanh'.
+            mod_grp_norm     (bool=False): Use group norm for modulations or not.
+            mlp_first        (bool=False): If we need mlp, use it first or last.
+            shared_kp_data      (None): Optional data dict shared across the layer
+            influence_mode (str='linear'): Influence function ('constant', 'linear', 'gaussian')
+            dimension             (int=3): dimension of input
+            norm_type       (str='batch'): type of normalization used in layer ('group', 'batch', 'none')
+            bn_momentum      (float=0.10): Momentum for batch normalization
+            activation (nn.Module|None=nn.LeakyReLU(0.1)): Activation function. Use None for no activation.
+        """
+        super(KPNextBlock, self).__init__()
+
+        # Define parameters
+        self.in_channels = in_channels
+        self.out_channels = out_channels
+        self.influence_mode = influence_mode
+        self.radius = radius
+        self.bn_momentum = bn_momentum
+        self.norm_type = norm_type
+
+        # Define modules
+        self.activation = activation
+        self.conv_norm = NormBlock(out_channels, norm_type, bn_momentum)
+        
+        # KPConvX or KPConvD
+        if attention_groups == 0:
+            self.conv = KPConvD(in_channels,
+                                shell_sizes,
+                                radius,
+                                sigma,
+                                Cmid=0,
+                                shared_kp_data=shared_kp_data,
+                                dimension=dimension,
+                                influence_mode=influence_mode,
+                                norm_type=norm_type,
+                                bn_momentum=bn_momentum,
+                                activation=activation)
+        else:
+            self.conv = KPConvX(in_channels,
+                                shell_sizes,
+                                radius,
+                                sigma,
+                                attention_groups=attention_groups,
+                                attention_act=attention_act,
+                                mod_grp_norm=mod_grp_norm,
+                                shared_kp_data=shared_kp_data,
+                                dimension=dimension,
+                                influence_mode=influence_mode,
+                                norm_type=norm_type,
+                                bn_momentum=bn_momentum,
+                                activation=activation)
+
+        # Optional mlp to up feature
+        self.mlp_first = mlp_first
+        if in_channels != out_channels:         
+            self.up_mlp = nn.Sequential(nn.Linear(in_channels, out_channels, bias=False),
+                                        NormBlock(out_channels, norm_type, bn_momentum),
+                                        activation)
+
+        return
+
+
+    def forward(self, q_pts, s_pts, x, neighbor_indices):
+
+        # Option 1: Upscale features first
+        if self.mlp_first:
+            if self.in_channels != self.out_channels:    
+                x = self.up_mlp(x)
+            x = self.conv(q_pts, s_pts, x, neighbor_indices)
+            x = self.conv_norm(x)
+            x = self.activation(x)
+
+        #  Option 2: Upscale features last
+        else:
+            x = self.conv(q_pts, s_pts, x, neighbor_indices)
+            x = self.conv_norm(x)
+            x = self.activation(x)
+            if self.in_channels != self.out_channels:    
+                x = self.up_mlp(x)
+
+        return x
+
+    def __repr__(self):
+        return 'KPNextBlock(in_C: {:d}, out_C: {:d}, r: {:.2f}, mode: {:s})'.format(self.in_channels,
+                                                                                          self.out_channels,
+                                                                                          self.radius,
+                                                                                          self.influence_mode)
+
+
 class KPNextResidualBlock(nn.Module):
 
     def __init__(self,
@@ -851,4 +969,183 @@ class KPNextInvertedBlock(nn.Module):
         q_feats = shortcut + self.drop_path(x)
 
         return q_feats
+
+
+class KPNextMultiShortcutBlock(nn.Module):
+
+    def __init__(self,
+                 in_channels: int,
+                 out_channels: int,
+                 shell_sizes: list,
+                 radius: float,
+                 sigma: float,
+                 attention_groups: int = 8,
+                 attention_act: str = 'sigmoid',
+                 mod_grp_norm: bool = False,
+                 expansion: int = 4,
+                 drop_path_p: float = -1.,
+                 layer_scale_init_v: float = -1.,
+                 use_upcut: bool = False,
+                 shared_kp_data = None,
+                 influence_mode: str = 'linear',
+                 dimension: int = 3,
+                 norm_type: str = 'batch',
+                 bn_momentum: float = 0.1,
+                 activation: nn.Module = nn.LeakyReLU(0.1)):
+        """
+        KPNext block to define layers with multiple interconnected shortcuts. 
+        
+        Traditionally we define:
+            > Resnet:   --- downMLP --- Conv --- upMLP --- + --- downMLP --- Conv --- upMLP --- + --- 
+                         ┕---------------->----------------┙  ┕---------------->----------------┙
+
+            > Inverted:             --- Conv --- upMLP --- downMLP --- + --- Conv --- upMLP --- downMLP --- + ---
+                                     ┕---------------->----------------┙  ┕---------------->----------------┙
+
+        The only difference is where the shortcut is placed. Here we wonder, what if we place both shortcut types:
+
+                                            ┍------------------>--------------------┑  ┍----------->-------
+            > KPNext:   --- Conv --- upMLP --- downMLP --- + --- Conv --- upMLP --- + --- downMLP --- + ---   ...
+                         ┕---------------->----------------┙  ┕------------------>--------------------┙
+        
+        We call the shortcut after upMLP: "upcut" and the shortcut after downmlp the "downcut"
+        Because of the multiple shortcuts we cannot define this layer block by block.
+        Args:
+            in_channels             (int): dimension input features
+            out_channels            (int): dimension input features
+            shell_sizes            (list): The number of kernel points per shell.
+            radius                (float): convolution radius
+            sigma                 (float): influence radius of each kernel point
+            attention_groups      (int=8): number of groups in attention (negative value for ch_per_grp).
+            attention_act           (str): Activate the weight with 'none', 'sigmoid', 'softmax' or 'tanh'.
+            mod_grp_norm     (bool=False): Use group norm for modulations or not.
+            expansion               (int): Factor for linear layer expansion
+            drop_path             (float): Proba to drop convolution paths (for stochastic network depth)
+            layer_scale_init_v    (float): Value for initialization of layer scales
+            shared_kp_data      (None): Optional data dict shared across the layer
+            influence_mode (str='linear'): Influence function ('constant', 'linear', 'gaussian')
+            dimension             (int=3): dimension of input
+            norm_type       (str='batch'): type of normalization used in layer ('group', 'batch', 'none')
+            bn_momentum      (float=0.10): Momentum for batch normalization
+            activation (nn.Module|None=nn.LeakyReLU(0.1)): Activation function. Use None for no activation.
+        """
+        super(KPNextMultiShortcutBlock, self).__init__()
+
+        # Define parameters
+        self.in_channels = in_channels
+        self.out_channels = out_channels
+        self.expansion = expansion
+        self.bn_momentum = bn_momentum
+        self.norm_type = norm_type
+        self.use_upcut = use_upcut
+        mid_channels = out_channels * expansion
+
+
+        # KPConvX or KPConvD
+        if attention_groups == 0:
+            self.conv = KPConvD(in_channels,
+                                shell_sizes,
+                                radius,
+                                sigma,
+                                Cmid=0,
+                                shared_kp_data=shared_kp_data,
+                                dimension=dimension,
+                                influence_mode=influence_mode,
+                                norm_type=norm_type,
+                                bn_momentum=bn_momentum,
+                                activation=activation)
+        else:
+            self.conv = KPConvX(in_channels,
+                                shell_sizes,
+                                radius,
+                                sigma,
+                                attention_groups=attention_groups,
+                                attention_act=attention_act,
+                                mod_grp_norm=mod_grp_norm,
+                                shared_kp_data=shared_kp_data,
+                                dimension=dimension,
+                                influence_mode=influence_mode,
+                                norm_type=norm_type,
+                                bn_momentum=bn_momentum,
+                                activation=activation)
+
+        # Convolution normalization
+        self.conv_norm = NormBlock(in_channels, norm_type, bn_momentum)
+
+        # learnable parameters
+        self.activation = activation
+        self.up_mlp = nn.Sequential(nn.Linear(in_channels, mid_channels, bias=False),
+                                    NormBlock(mid_channels, norm_type, bn_momentum))
+        self.down_mlp = nn.Sequential(nn.Linear(mid_channels, out_channels, bias=False),
+                                    NormBlock(out_channels, norm_type, bn_momentum))
+
+        if in_channels != out_channels:
+            self.mlp_downcut = nn.Sequential(nn.Linear(in_channels, out_channels, bias=False),
+                                             NormBlock(out_channels, norm_type, bn_momentum))
+        else:
+            self.mlp_downcut = nn.Identity()
+
+
+
+        # Optimizations
+        if layer_scale_init_v > 0:
+            self.gamma = nn.Parameter(layer_scale_init_v * torch.ones((out_channels)), requires_grad=True)
+        else:
+            self.gamma = None
+        self.drop_path_p = drop_path_p
+        if self.drop_path_p > 0:
+            self.drop_path = DropPathPack(drop_path_p)
+
+        return
+
+    def forward(self, q_pts, s_pts, s_feats, neighbor_indices, upcut=None):
+
+        # Get downcut here
+        downcut = s_feats
+
+        # First depthwise convolution
+        x = self.conv(q_pts, s_pts, s_feats, neighbor_indices)
+        x = self.conv_norm(x)
+        x = self.activation(x)
+
+        # Upscale features
+        x = self.up_mlp(x)
+
+        # Optional drop path
+        if self.drop_path_p > 0:
+            x, drop_mask = self.drop_path(x, return_mask=True)
+
+        # Apply incoming upcut (we never need linear on this shortcut)
+        if upcut is not None:
+            x = upcut + x
+            
+        # Post-shortcut activation
+        x = self.activation(x)
+
+        # Get upcut here, we need to return it to be used in the next block
+        if self.use_upcut:
+            upcut = x
+        else:
+            upcut = None
+
+        # Downscale features
+        x = self.down_mlp(x)
+
+        # LayerScale
+        if self.gamma is not None:
+            x = self.gamma * x
+
+        # Same drop path should be applied here
+        if self.drop_path_p > 0:
+            x = drop_mask * x
+
+        # Apply downcut
+        if self.in_channels != self.out_channels:
+            downcut = self.mlp_downcut(downcut)
+        x = downcut + x
+
+        # Final activation
+        q_feats = self.activation(x)
+
+        return q_feats, upcut
 

@@ -553,31 +553,46 @@ class DropPathPack(nn.Module):
     """
 
     def __init__(self,
-                 drop_prob: float = 0.,
+                 drop_prob: float = -1,
                  scale_by_keep: bool = True):
-        super(DropPath, self).__init__()
+        super(DropPathPack, self).__init__()
         self.drop_prob = drop_prob
         self.scale_by_keep = scale_by_keep
 
-    def forward(self, x, lenghts):
+    def forward(self, x, lenghts, return_mask=False):
 
-        # Get keep prob
-        if self.drop_prob == 0. or not self.training:
-            return x
-        keep_prob = 1 - self.drop_prob
+        # No drop path applied during inference
+        if self.drop_prob <= 0 or not self.training:
+            if return_mask:
+                shape = (x.shape[0],) + (1,) * (x.ndim - 1)
+                mask = torch.ones(shape)
+                return x, mask
+            else:
+                return x
 
-        # Get random 0 or 1 for each batch (B,)
-        bernouilli = x.new_empty((len(lenghts),)).bernoulli_(keep_prob)
+        # Drop path applied at training
+        else:
 
-        # Normalize
-        if keep_prob > 0.0 and self.scale_by_keep:
-            bernouilli.div_(keep_prob)
+            # Get keep prob
+            keep_prob = 1 - self.drop_prob
 
-        # Convert to pack shape -> (N,)
-        bernouilli_full = torch.cat([x.new_full((l,), b) for l, b in zip(lenghts, bernouilli)], 0)
+            # Get random 0 or 1 for each batch (B,)
+            bernouilli = x.new_empty((len(lenghts),)).bernoulli_(keep_prob)
 
-        shape = (x.shape[0],) + (1,) * (x.ndim - 1)
-        return x * bernouilli_full.view(shape)
+            # Normalize
+            if keep_prob > 0.0 and self.scale_by_keep:
+                bernouilli.div_(keep_prob)
+
+            # Convert to pack shape -> (N,)
+            bernouilli_full = torch.cat([x.new_full((l,), b) for l, b in zip(lenghts, bernouilli)], 0)
+
+            shape = (x.shape[0],) + (1,) * (x.ndim - 1)
+            mask = bernouilli_full.view(shape)
+
+            if return_mask:
+                return x * mask, mask
+            else:
+                return x * mask
 
     def extra_repr(self):
         return f'drop_prob={round(self.drop_prob,3):0.3f}'
