@@ -201,7 +201,7 @@ class KPCNN_old(nn.Module):
         if conv_layer or 'kpconvd' in self.kp_mode:
             attention_groups = 0
 
-        inverted_block = True
+        inverted_block = False
         if inverted_block:
             return KPNextInvertedBlock(in_C,
                                        out_C,

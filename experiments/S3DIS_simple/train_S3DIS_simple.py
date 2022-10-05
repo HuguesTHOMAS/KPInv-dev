@@ -85,7 +85,7 @@ def my_config():
     cfg.model.norm = 'batch' # batch, layer
     cfg.model.init_channels = 64  # 48, 64, 80, 96
 
-    cfg.model.kp_mode = 'kpconvx'       # Choose ['kpconv', 'kpdef', 'kpinv', 'kpinvx'].
+    cfg.model.kp_mode = 'kpminimod'       # Choose ['kpconv', 'kpdef', 'kpinv', 'kpinvx'].
                                         # Choose ['inv_v1', 'inv_v2', 'inv_v3', 'inv_v4', 'transformer']
                                         # Choose ['kpconv-mod', 'kpdef-mod', 'kpconv-geom'] for modulations
                                         # Choose ['kpconv-depth'] for depthwise conv (groups = input channels = output chanels)
