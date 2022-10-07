@@ -1248,6 +1248,8 @@ def test_kpnext():
                   'KPNext64 kpconvd + upcut',
                   'KPNext48 strided-conv G16',
                   'KPNext48 strided-conv G4',
+                  'KPNext48 fps-4 G1',
+                  'KPNext48 fps-4 G16',
                   '...']
 
     # Write KPNExt architecture. Note: it is very similar to resnet, just the shortcuts 
@@ -1336,8 +1338,11 @@ if __name__ == '__main__':
     cleaning = False
     res_path = 'results'
     if cleaning:
-        cleanup(res_path, 'Log_2022-09-16_17-04-21', keep_val_ply=False, keep_last_ckpt=False)
-        cleanup(res_path, 'Log_2022-09-16_17-04-53')
+        
+        cleanup(res_path, 'Log_2022-09-16_17-04-53', keep_val_ply=False, keep_last_ckpt=False)
+        cleanup(res_path, 'Log_2022-10-03_17-16-09')
+
+        
 
 
     ######################################################

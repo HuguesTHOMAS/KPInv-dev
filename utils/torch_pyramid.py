@@ -50,6 +50,7 @@ def fill_pyramid(pyramid: EasyDict,
                  num_layers: int,
                  sub_size: float,
                  search_radius: float,
+                 radius_scaling: float,
                  neighbor_limits: List[int],
                  upsample_n: int = 1,
                  sub_mode: str = 'grid'):
@@ -98,7 +99,7 @@ def fill_pyramid(pyramid: EasyDict,
                 points0 = sub_points
                 lengths0 = sub_lengths
         if sub_size > 0:
-            sub_size *= 2.0
+            sub_size *= radius_scaling
 
 
     # Find all neighbors
@@ -121,13 +122,14 @@ def fill_pyramid(pyramid: EasyDict,
             subsampling_inds = neighb_func(sub_points, cur_points, sub_lengths, cur_lengths, search_radius, neighbor_limits[i])
             pyramid.pools.append(subsampling_inds)
 
-            upsampling_inds, up_dists = neighb_func(cur_points, sub_points, cur_lengths, sub_lengths, search_radius * 2, upsample_n, return_dist=True)
-            pyramid.upsamples.append(upsampling_inds)
-            pyramid.up_distances.append(up_dists)
+            if upsample_n > 0:
+                upsampling_inds, up_dists = neighb_func(cur_points, sub_points, cur_lengths, sub_lengths, search_radius * 2, upsample_n, return_dist=True)
+                pyramid.upsamples.append(upsampling_inds)
+                pyramid.up_distances.append(up_dists)
 
 
         # Increase radius for next layer
-        search_radius *= 2
+        search_radius *= radius_scaling
 
     # mean_dt = 1000 * (np.array(t[1:]) - np.array(t[:-1]))
     # message = ' ' * 2
@@ -140,13 +142,14 @@ def fill_pyramid(pyramid: EasyDict,
 
 @torch.no_grad()
 def build_full_pyramid(points: Tensor,
-                        lengths: Tensor,
-                        num_layers: int,
-                        sub_size: float,
-                        search_radius: float,
-                        neighbor_limits: List[int],
-                        upsample_n: int = 1,
-                        sub_mode: str = 'grid'):
+                       lengths: Tensor,
+                       num_layers: int,
+                       sub_size: float,
+                       search_radius: float,
+                       radius_scaling: float,
+                       neighbor_limits: List[int],
+                       upsample_n: int = 1,
+                       sub_mode: str = 'grid'):
     """
     Build the graph pyramid, consisting of:
         > The subampled points for each layer, in pack mode.
@@ -162,6 +165,7 @@ def build_full_pyramid(points: Tensor,
                  num_layers,
                  sub_size,
                  search_radius,
+                 radius_scaling,
                  neighbor_limits,
                  upsample_n,
                  sub_mode)
@@ -174,6 +178,7 @@ def pyramid_neighbor_stats(points: Tensor,
                            num_layers: int,
                            sub_size: float,
                            search_radius: float,
+                           radius_scaling: float,
                            sub_mode: str = 'grid'):
     """
     Function used for neighbors calibration. Return the average number of neigbors at each layer.
@@ -195,6 +200,6 @@ def pyramid_neighbor_stats(points: Tensor,
         counts = keops_radius_count(points, points, search_radius)
         counts_list.append(counts)
         if sub_size > 0:
-            sub_size *= 2
-        search_radius *= 2
+            sub_size *= radius_scaling
+        search_radius *= radius_scaling
     return counts_list

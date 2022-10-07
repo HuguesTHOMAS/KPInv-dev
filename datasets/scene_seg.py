@@ -660,15 +660,15 @@ class SceneSegDataset(Dataset):
             torch_features = torch.from_numpy(in_features)
             torch_labels = torch.from_numpy(in_labels).type(torch.long)
 
-
             # Input subsampling only if in_sub_size > init_sub_size
-            if self.cfg.model.in_sub_size > self.cfg.data.init_sub_size * 1.01:
+            in_dl = self.cfg.model.in_sub_size
+            if in_dl > 0 and in_dl > self.cfg.data.init_sub_size * 1.01:
                 in_points, in_features, in_labels, inv_inds = subsample_cloud(torch_points,
-                                                                            self.cfg.model.in_sub_size,
-                                                                            features=torch_features,
-                                                                            labels=torch_labels,
-                                                                            method=self.cfg.model.in_sub_mode,
-                                                                            return_inverse=True)
+                                                                              in_dl,
+                                                                              features=torch_features,
+                                                                              labels=torch_labels,
+                                                                              method=self.cfg.model.in_sub_mode,
+                                                                              return_inverse=True)
 
                 # Compute inverse reprojection indices if not provided by the method
                 if inv_inds is None:
@@ -764,6 +764,7 @@ class SceneSegDataset(Dataset):
                                             len(self.cfg.model.layer_blocks),
                                             self.cfg.model.in_sub_size,
                                             radius0,
+                                            self.cfg.model.radius_scaling,
                                             self.cfg.model.neighbor_limits,
                                             self.cfg.model.upsample_n,
                                             sub_mode=self.cfg.model.in_sub_mode)

@@ -5,7 +5,7 @@
 #       \******************/
 #
 #
-#   Use this script to train a network on S3DIS using the simple input pipeline 
+#   Use this script to train a network on ScanObjectNN using the simple input pipeline 
 #   (no neighbors computation in the dataloader)
 #
 #
@@ -45,7 +45,7 @@ from models.InvolutionNet import InvolutionFCNN
 
 from datasets.scene_seg import SceneSegSampler, SceneSegCollate
 
-from experiments.S3DIS_simple.S3DIS import S3DIS_cfg, S3DISDataset
+from experiments.ScanObjectNN.ScanObjectNN import ScanObjectNN_cfg, ScanObjectNNDataset
 
 from tasks.trainval import train_and_validate
 
@@ -79,7 +79,7 @@ def my_config():
     # cfg.model.layer_blocks = (4,  6,  8,  8,  6)
     # cfg.model.layer_blocks = (4,  6,  8, 12,  6)  # Strong architecture
 
-    # cfg.model.layer_blocks = (3,  5,  7,  9,  9,  3)  # For large block inputs
+    # cfg.model.layer_blocks = (3,  5,  7,  9,  9,  3)  # For large block inputs experiments/ScanObjectNN/train.py
 
     cfg.model.layer_blocks = (3,  4,  5,  12,  4)
     cfg.model.norm = 'batch' # batch, layer
@@ -101,11 +101,11 @@ def my_config():
     
     cfg.model.share_kp = True       #  share kernels within layers                
 
-    cfg.data.init_sub_size = 0.04       # -1.0 so that dataset point clouds are not initially subsampled
+    cfg.data.init_sub_size = 0.02       # In object classification, we do not subsample initially but still have to define this to define the size of convolutions 
     cfg.data.init_sub_mode = 'grid'     # Mode for initial subsampling of data
-    cfg.model.in_sub_size = -4          # Adapt this with train.in_radius. Try to keep a ratio of ~50 (*0.67 if fps). If negative, and fps, it is stride
+    cfg.model.in_sub_size = -2          # Adapt this with train.in_radius. Try to keep a ratio of ~50 (*0.67 if fps). If negative, and fps, it is stride
     cfg.model.in_sub_mode = 'fps'       # Mode for input subsampling
-    cfg.model.radius_scaling = 2.0       # We increase the convolution radius more slowly here.
+    cfg.model.radius_scaling = 1.5      # We increase the convolution radius more slowly here.
 
     cfg.model.upsample_n = 3          # Number of neighbors used for nearest neighbor linear interpolation
 
@@ -202,7 +202,7 @@ def my_config():
     # ---------------
 
     # How do we sample the input elements (spheres or cubes)
-    cfg.test.in_radius = 2.0                # For S3DIS 4 meters is very large, cover a whole part of the test set with full rooms
+    cfg.test.in_radius = 2.0                # For ScanObjectNN 4 meters is very large, cover a whole part of the test set with full rooms
     cfg.test.data_sampler = 'regular'       # 'regular' to pick spheres regularly accross the data.
 
     cfg.test.max_steps_per_epoch = 100       # Size of one validation epoch (should be small)
@@ -349,7 +349,7 @@ if __name__ == '__main__':
     cfg = my_config()
 
     # Load data parameters
-    cfg.data.update(S3DIS_cfg(cfg).data)
+    cfg.data.update(ScanObjectNN_cfg(cfg).data)
 
     # Load experiment parameters
     if args.log_path is not None:
@@ -385,13 +385,16 @@ if __name__ == '__main__':
 
     # Load dataset
     underline('Loading training dataset')
-    training_dataset = S3DISDataset(cfg,
+    training_dataset = ScanObjectNNDataset(cfg,
                                     chosen_set='training',
                                     precompute_pyramid=True)
+
     underline('Loading validation dataset')
-    test_dataset = S3DISDataset(cfg,
+    test_dataset = ScanObjectNNDataset(cfg,
                                 chosen_set='validation',
                                 precompute_pyramid=True)
+
+    a = 1/0
     
     # Calib from training data
     training_dataset.calib_batch(cfg, update_test=False)

@@ -52,7 +52,7 @@ class KPCNN_old(nn.Module):
         self.valid_labels = np.sort([c for c in cfg.data.label_values if c not in cfg.data.ignored_labels])
         self.num_logits = len(self.valid_labels)
 
-        # Varaibles
+        # Variables
         in_C = cfg.model.input_channels
         first_C = cfg.model.init_channels
         C = first_C
@@ -247,6 +247,7 @@ class KPCNN_old(nn.Module):
                          self.num_layers,
                          self.subsample_size,
                          self.first_radius,
+                         self.radius_scaling,
                          self.neighbor_limits,
                          self.upsample_n,
                          sub_mode=self.in_sub_mode)
@@ -391,13 +392,6 @@ class KPNeXt(nn.Module):
         Standard layer_scale_init_value: 1e-6
         Standard head_init_scale: 1
 
-        depth/features: 
-        ConvNeXt-T  [3, 3,  9, 3] / [ 96, 192,  384,  768]
-        ConvNeXt-S  [3, 3, 27, 3] / [ 96, 192,  384,  768]
-        ConvNeXt-B  [3, 3, 27, 3] / [128, 256,  512, 1024]
-        ConvNeXt-L  [3, 3, 27, 3] / [192, 384,  768, 1536]
-        ConvNeXt-XL [3, 3, 27, 3] / [256, 512, 1024, 2048]
-
         Args:
             cfg (EasyDict): configuration dictionary
         """
@@ -419,6 +413,7 @@ class KPNeXt(nn.Module):
             radius0 = cfg.model.in_sub_size * cfg.model.kp_radius
         else:
             radius0 = cfg.data.init_sub_size * cfg.model.kp_radius
+        self.radius_scaling = cfg.model.radius_scaling
         self.first_radius = radius0 * self.kp_radius
         self.first_sigma = radius0 * self.kp_sigma
         self.layer_blocks = cfg.model.layer_blocks
@@ -431,12 +426,18 @@ class KPNeXt(nn.Module):
         self.valid_labels = np.sort([c for c in cfg.data.label_values if c not in cfg.data.ignored_labels])
         self.num_logits = len(self.valid_labels)
 
-        # Varaibles
+        # Variables
         in_C = cfg.model.input_channels
         first_C = cfg.model.init_channels
-        C = first_C
         conv_r = self.first_radius
         conv_sig = self.first_sigma
+
+        # Get channels at each layer
+        layer_C = []
+        for l in range(self.num_layers):
+            target_C = first_C * cfg.model.channel_scaling ** l     # Scale channels
+            layer_C.append(np.ceil(target_C / 16) * 16)             # Ensure it is divisible by 16 (even the first one)
+
 
         # Verify the architecture validity
         if self.layer_blocks[0] < 2:
@@ -455,6 +456,7 @@ class KPNeXt(nn.Module):
             self.shared_kp = [None for _ in range(self.num_layers)]
 
         # Initial convolution or MLP
+        C = layer_C[0]
         self.stem = self.get_conv_block(in_C, C, conv_r, conv_sig, cfg)
         # self.stem = self.get_unary_block(in_C, C, cfg)
 
@@ -467,29 +469,30 @@ class KPNeXt(nn.Module):
                                                           conv_layer=use_conv))
 
         # Pooling block
-        self.pooling_1 = self.get_pooling_block(C, C * 2, conv_r, conv_sig, cfg,
+        self.pooling_1 = self.get_pooling_block(C, layer_C[1], conv_r, conv_sig, cfg,
                                                 use_mod=(not use_conv))
 
         # ------ Layers [2, 3, 4, 5] ------
         for layer in range(2, self.num_layers + 1):
+            l = layer - 1
 
             # Update features, radius, sigma for this layer
-            C *= 2
-            conv_r *= 2
-            conv_sig *= 2
+            C = layer_C[l]
+            conv_r *= self.radius_scaling
+            conv_sig *= self.radius_scaling
 
             # Layer blocks
             use_conv = cfg.model.first_inv_layer >= layer
             encoder_i = nn.ModuleList()
-            for _ in range(self.layer_blocks[layer - 1]):
+            for _ in range(self.layer_blocks[l]):
                 encoder_i.append(self.get_residual_block(C, C, conv_r, conv_sig, cfg,
-                                                         shared_kp_data=self.shared_kp[layer - 1],
+                                                         shared_kp_data=self.shared_kp[l],
                                                          conv_layer=use_conv))
             setattr(self, 'encoder_{:d}'.format(layer), encoder_i)
 
             # Pooling block (not for the last layer)
             if layer < self.num_layers:
-                pooling_i = self.get_pooling_block(C, C * 2, conv_r, conv_sig, cfg,
+                pooling_i = self.get_pooling_block(C, layer_C[l+1], conv_r, conv_sig, cfg,
                                                    use_mod=(not use_conv))
 
                 setattr(self, 'pooling_{:d}'.format(layer), pooling_i)
@@ -501,8 +504,7 @@ class KPNeXt(nn.Module):
         # ------ Layers [4, 3, 2, 1] ------
         for layer in range(self.num_layers - 1, 0, -1):
 
-            C = C // 2
-
+            C = layer_C[layer - 1]
             decoder_i = self.get_unary_block(C * 3, C, cfg)
             upsampling_i = LinearUpsampleBlock(self.upsample_n)
 
@@ -514,17 +516,17 @@ class KPNeXt(nn.Module):
         #  ------ Head ------
         
         # New head
-        self.head = nn.Sequential(self.get_unary_block(first_C, first_C, cfg),
-                                  nn.Linear(first_C, self.num_logits))
+        self.head = nn.Sequential(self.get_unary_block(layer_C[0], layer_C[0], cfg),
+                                  nn.Linear(layer_C[0], self.num_logits))
         # Easy KPConv Head
-        # self.head = nn.Sequential(nn.Linear(first_C * 2, first_C),
-        #                           nn.GroupNorm(8, first_C),
+        # self.head = nn.Sequential(nn.Linear(layer_C[0] * 2, layer_C[0]),
+        #                           nn.GroupNorm(8, layer_C[0]),
         #                           nn.ReLU(),
-        #                           nn.Linear(first_C, self.num_logits))
+        #                           nn.Linear(layer_C[0], self.num_logits))
 
         # My old head
-        # self.head = nn.Sequential(self.get_unary_block(first_C * 2, first_C, cfg, norm_type='none'),
-        #                           nn.Linear(first_C, self.num_logits))
+        # self.head = nn.Sequential(self.get_unary_block(layer_C[0] * 2, layer_C[0], cfg, norm_type='none'),
+        #                           nn.Linear(layer_C[0], self.num_logits))
 
 
 
@@ -647,6 +649,7 @@ class KPNeXt(nn.Module):
                          self.num_layers,
                          self.subsample_size,
                          self.first_radius,
+                         self.radius_scaling,
                          self.neighbor_limits,
                          self.upsample_n,
                          sub_mode=self.in_sub_mode)

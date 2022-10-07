@@ -101,6 +101,7 @@ def init_cfg():
     
     cfg.model.in_sub_size = 0.04        # Float, initial subampling size, (voxel size, lattice size of fps minimum distance)
     cfg.model.in_sub_mode = 'grid'      #   Str, subsampling mode ('grid', 'ph', 'fps')
+    cfg.model.radius_scaling = 2.0      # Float, scaling of the radius at each layer.
     
     cfg.model.upsample_n = 1            #   Int, Number of neighbors used for nearest neighbor linear interpolation
 

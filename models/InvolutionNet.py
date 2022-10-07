@@ -47,7 +47,7 @@ class InvolutionFCNN(nn.Module):
         self.valid_labels = np.sort([c for c in cfg.data.label_values if c not in cfg.data.ignored_labels])
         self.num_logits = len(self.valid_labels)
 
-        # Varaibles
+        # Variables
         in_C = cfg.model.input_channels
         first_C = cfg.model.init_channels
         C = first_C
@@ -229,6 +229,7 @@ class InvolutionFCNN(nn.Module):
                          self.num_layers,
                          self.subsample_size,
                          self.first_radius,
+                         self.radius_scaling,
                          self.neighbor_limits,
                          self.upsample_n,
                          sub_mode=self.in_sub_mode)
