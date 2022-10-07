@@ -19,8 +19,8 @@ training_script="experiments/S3DIS_simple/train_S3DIS_simple.py"
 # Declare an array variable
 # *************************
 
-declare -a arg_arr=("--kp_mode kpminimod --in_radius 1.8"
-                    "--kp_mode kpminimod --in_radius 1.6")
+declare -a arg_arr=("--inv_groups 16"
+                    "--inv_groups 4")
 
 
 echo ""

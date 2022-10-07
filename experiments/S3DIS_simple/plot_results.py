@@ -1145,6 +1145,10 @@ def test_input_fixed():
                   'r=1.7 naive-inverted24',
                   'r=1.7 test kpconnx',
                   'r=1.7 test kpminimod',
+                  'KPNext32 new here',
+                  'KPNext48 strided-conv',
+                  'KPNext48 strided-x',
+                  'KPNext48 kpconvd',
                   '...']
 
     # Write KPNExt architecture. Note: it is very similar to resnet, just the shortcuts 
@@ -1156,12 +1160,12 @@ def test_input_fixed():
     # how you want to place your downsampling because between to shortcuts the dim will be x4.
     # 
     # For KPNext, we need 
-    #   - a better stem, convolution that output direcly the right number of features. 
+    #   OK - a better stem, convolution that output direcly the right number of features. 
     #                    Also directly downsample to next layer to avoid having inverted block on large layers
-    #   - better strided blocks. Use pure KPConv?
-    #   - new stuff for optimization, DropPath etc
-    #   - test heads
-    #   - test number of channels vs number of layer (depth vs width)
+    #   OK - better strided blocks. Use pure KPConv?
+    #   ?  - new stuff for optimization, DropPath etc
+    #   ?  - test heads
+    #   ?  - test number of channels vs number of layer (depth vs width)
 
 
     # TODO:
@@ -1216,6 +1220,105 @@ def test_input_fixed():
     return logs, logs_names
 
 
+def test_kpnext():
+    """
+    FROM HERE WE CORRECTED AN ISSUE WITH Z COORDINATE FEATURE.
+    """
+
+    # Using the dates of the logs, you can easily gather consecutive ones. All logs should be of the same dataset.
+    start = 'Log_2022-10-05_13-37-05'
+    end = 'Log_2022-12-29_23-43-08'
+
+    # Name of the result path
+    res_path = 'results'
+
+    # Gather logs and sort by date
+    logs = np.sort([join(res_path, l) for l in listdir_str(res_path) if start <= l <= end])
+
+    # # Optionally add a specific log at a specific place in the log list
+    # logs = logs.astype('<U50')
+    # logs = np.insert(logs, 0, 'results/Log_2022-09-27_10-06-23')
+
+    # Give names to the logs (for plot legends)
+    logs_names = ['KPNext32',
+                  'KPNext48 strided-conv',
+                  'KPNext48 strided-x',
+                  'KPNext48 kpconvd',
+                  'KPNext48 strided-conv + upcut',
+                  'KPNext64 kpconvd + upcut',
+                  'KPNext48 strided-conv G16',
+                  'KPNext48 strided-conv G4',
+                  '...']
+
+    # Write KPNExt architecture. Note: it is very similar to resnet, just the shortcuts 
+    # are not in the same place otherwise everythong is similar. SO write KPNext and then 
+    # rewrite KPFCNN with equivalent nubmer of params. KPFCNN should be biggger because of 
+    # shortcut mlp being bigger.
+    # In the end if we do not use shortcut during downsampling, I think resnet should be 
+    # better than Inverted because the shortcut is on the bigger features. Just think about 
+    # how you want to place your downsampling because between to shortcuts the dim will be x4.
+    # 
+    # For KPNext, we need 
+    #   OK - a better stem, convolution that output direcly the right number of features. 
+    #                    Also directly downsample to next layer to avoid having inverted block on large layers
+    #   OK - better strided blocks. Use pure KPConv?
+    #   ?  - new stuff for optimization, DropPath etc
+    #   ?  - test heads
+    #   ?  - test number of channels vs number of layer (depth vs width)
+
+
+    # TODO:
+    #
+    #       1. New architecture 
+    #           > Test heads
+    #           > Test stems
+    #           > Convnext, DropPath etc
+    #           > Number of parameters.
+    #           > See optimization here:
+    #               TODO - https://spell.ml/blog/pytorch-training-tricks-YAnJqBEAACkARhgD
+    #               TODO - https://efficientdl.com/faster-deep-learning-in-pytorch-a-guide/#2-use-multiple-workers-and-pinned-memory-in-dataloader
+    #               TODO - https://www.fast.ai/2018/07/02/adam-weight-decay/
+    #               TODO - https://arxiv.org/pdf/2206.04670v1.pdf
+    #               TODO - https://arxiv.org/pdf/2205.05740v2.pdf
+    #               TODO - https://arxiv.org/pdf/2201.03545.pdf  MODERN RESNET
+    #               TODO - https://arxiv.org/pdf/2109.11610.pdf  SPNet shows that Poisson Disc sampling  better (so FPS also) and Trilinear interp for upsampling as well
+    #
+    #       2. Poisson disk sampling
+    #
+    #       3. (Border repulsive loss) + (Mix3D) + (model ensemble) and submit to Scannetv2
+    #
+    #       4. Go implement other datasets (NPM3D, Semantic3D, Scannetv2)
+    #          Also other task: ModelNet40, ShapeNetPart, SemanticKitti
+    #          Add code for completely different tasks??? Invariance??
+    #           New classif dataset: ScanObjectNN
+    #           Revisiting point cloud classification: A new benchmark dataset 
+    #           and classification model on real-world data
+    #
+    #       5. Parameters to play with at the end
+    #           > color drop
+    #           > init_feature_dim
+    #           > layers
+    #           > radius (sphere or cylinder)
+    #           > knn
+    #           > kp radius (for kp) and K and shells
+    #           > trainer
+    #           > KPConvX vs KPConvD vs KPInv
+    #           > groups in KPConvX
+    #           > n_layers in KPConvX
+    #
+
+
+    # safe check log names
+    if len(logs) > len(logs_names):
+        logs = logs[:len(logs_names)]
+    logs_names = np.array(logs_names[:len(logs)])
+
+    # logs = logs[[1, 3]]
+    # logs_names = logs_names[[1, 3]]
+
+    return logs, logs_names
+
+
 # ----------------------------------------------------------------------------------------------------------------------
 #
 #           Main Call
@@ -1242,7 +1345,7 @@ if __name__ == '__main__':
     ######################################################
 
     # My logs: choose the logs to show
-    logs, logs_names = test_input_fixed()
+    logs, logs_names = test_kpnext()
 
     frame_lines_1(["Plot S3DIS experiments"])
 
@@ -1263,19 +1366,19 @@ if __name__ == '__main__':
             
     # Print differences in a nice table
     print_cfg_diffs(logs_names,
-                    all_cfgs,)
+                    all_cfgs,
                     # show_params=['model.in_sub_size',
                     #              'train.in_radius'],
-                    # hide_params=['test.batch_limit',
-                    #              'train.batch_limit',
-                    #              'test.batch_size',
-                    #              'augment_test.height_norm',
-                    #              'augment_test.chromatic_norm',
-                    #              'augment_test.chromatic_all',
-                    #              'augment_test.chromatic_contrast',
-                    #              'train.max_epoch',
-                    #              'train.checkpoint_gap',
-                    #              'train.lr_decays'])
+                    hide_params=['test.batch_limit',
+                                 'train.batch_limit',
+                                 'test.batch_size',
+                                 'augment_test.height_norm',
+                                 'augment_test.chromatic_norm',
+                                 'augment_test.chromatic_all',
+                                 'augment_test.chromatic_contrast',
+                                 'train.max_epoch',
+                                 'train.checkpoint_gap',
+                                 'train.lr_decays'])
 
 
     ################

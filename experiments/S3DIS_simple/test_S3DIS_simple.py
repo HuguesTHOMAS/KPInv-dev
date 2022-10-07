@@ -36,9 +36,10 @@ sys.path.append(parent)
 from utils.config import load_cfg, save_cfg, get_directories
 from utils.printing import frame_lines_1, underline
 
-from models.KPConvNet import KPNeXt, KPFCNN as KPConvFCNN
+from models.KPConvNet import KPFCNN as KPConvFCNN
 from models.KPInvNet import KPInvFCNN
 from models.InvolutionNet import InvolutionFCNN
+from models.KPNext import KPNeXt, KPCNN_old
 
 from datasets.scene_seg import SceneSegSampler, SceneSegCollate
 
@@ -96,7 +97,10 @@ def test_log(chosen_log, new_cfg, save_visu=False):
     if 'mod' in new_cfg.model.kp_mode:
         modulated = True
 
-    if new_cfg.model.kp_mode.startswith('kpconv') or new_cfg.model.kp_mode.startswith('kpmini'):
+    if new_cfg.model.kp_mode in ['kpconvx', 'kpconvd']:
+        net = KPNeXt(new_cfg)
+
+    elif new_cfg.model.kp_mode.startswith('kpconv') or new_cfg.model.kp_mode.startswith('kpmini'):
         net = KPConvFCNN(new_cfg, modulated=modulated, deformable=False)
     elif new_cfg.model.kp_mode.startswith('kpdef'):
         net = KPConvFCNN(new_cfg, modulated=modulated, deformable=True)

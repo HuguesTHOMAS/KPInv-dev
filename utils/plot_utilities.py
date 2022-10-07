@@ -36,6 +36,7 @@ from matplotlib.animation import FuncAnimation
 import matplotlib.patches as patches
 from matplotlib.widgets import Slider, Button, RadioButtons
 import imageio
+from scipy.ndimage.filters import gaussian_filter1d
 
 # My libs
 from utils.printing import frame_lines_1, underline, print_color, table_to_str
@@ -544,8 +545,8 @@ def compare_trainings(list_of_cfg, list_of_paths, list_of_labels=None):
     # Parameters
     # **********
 
-    plot_lr = True
-    smooth_epochs = 1.2
+    plot_lr = False
+    smooth_epochs = 0.8
 
     if list_of_labels is None:
         list_of_labels = [str(i) for i in range(len(list_of_paths))]
@@ -606,7 +607,8 @@ def compare_trainings(list_of_cfg, list_of_paths, list_of_labels=None):
                 epoch_n.append(e_n)
         mean_epoch_n = np.mean(epoch_n)
         smooth_n = int(mean_epoch_n * smooth_epochs)
-        smooth_loss = running_mean(L_out, smooth_n)
+        # smooth_loss = running_mean(L_out, smooth_n)
+        smooth_loss = gaussian_filter1d(L_out, sigma=smooth_n)
         all_loss += [smooth_loss]
         all_epochs += [epochs_d]
         all_times += [t]
@@ -818,8 +820,7 @@ def compare_convergences_segment(list_of_cfg, list_of_paths, list_of_names=None)
 
     print('\nCollecting validation logs')
     t0 = time.time()
-
-    smooth_n = 10
+    smooth_n = 5
 
     if list_of_names is None:
         list_of_names = [str(i) for i in range(len(list_of_paths))]
@@ -947,19 +948,21 @@ def compare_convergences_segment(list_of_cfg, list_of_paths, list_of_names=None)
     fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=[12.4, 4.8], sharey=True)
     max_v = 0
     for i, name in enumerate(list_of_names):
-        vote_mIoUs = np.mean(all_snap_vote_IoUs[i], axis=1)
-        ax1.plot(all_snap_epochs[i], vote_mIoUs, linewidth=1, label=name)
-        max_v = max(max_v, np.max(vote_mIoUs))
+        ysmoothed = gaussian_filter1d(np.mean(all_snap_vote_IoUs[i], axis=1), sigma=2)
+        ax1.plot(all_snap_epochs[i], ysmoothed, linewidth=1, label=name)
+        max_v = max(max_v, np.max(ysmoothed))
     ax1.set_xlabel('epochs')
     ax1.set_ylabel('IoU')
     ax1.set_ylim(max(0.0, max_v - 0.18), min(max_v + 0.04, 1.01))
 
     for i, name in enumerate(list_of_names):
-        ax2.plot(all_snap_epochs[i], np.mean(all_snap_IoUs[i], axis=1), linewidth=1, label=name)
+        ysmoothed = gaussian_filter1d(np.mean(all_snap_IoUs[i], axis=1), sigma=2)
+        ax2.plot(all_snap_epochs[i], ysmoothed, linewidth=1, label=name)
     ax2.set_xlabel('epochs')
 
     for i, name in enumerate(list_of_names):
-        ax3.plot(all_pred_epochs[i], all_mIoUs[i], '--', linewidth=1, label=name)
+        ysmoothed = gaussian_filter1d(all_mIoUs[i], sigma=2)
+        ax3.plot(all_pred_epochs[i], ysmoothed, '--', linewidth=1, label=name)
     ax3.set_xlabel('epochs')
 
     # Display legends and title
@@ -1257,13 +1260,12 @@ def compare_on_test_set(list_of_cfg,
         # *****************
 
         # Change some parameters
-        # cfg.test.in_radius = 4.0
+        cfg.data.cylindric_input = True
+        cfg.test.in_radius = 6.0
         cfg.test.batch_limit = 1
         cfg.test.max_steps_per_epoch = 9999999
-        cfg.test.max_votes = 3
-        cfg.test.chkp_idx = None
-
-
+        cfg.test.max_votes = 5
+        cfg.test.chkp_idx = -11
 
         # Augmentations
         cfg.augment_test.anisotropic = False
@@ -1326,7 +1328,6 @@ def compare_on_test_set(list_of_cfg,
 
         all_confs.append(np.stack(log_confs,  axis=0))
 
-        break
 
 
 

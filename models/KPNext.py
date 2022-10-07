@@ -455,8 +455,8 @@ class KPNeXt(nn.Module):
             self.shared_kp = [None for _ in range(self.num_layers)]
 
         # Initial convolution or MLP
-        # self.stem = self.get_conv_block(in_C, C, conv_r, conv_sig, cfg)
-        self.stem = self.get_unary_block(in_C, C, cfg)
+        self.stem = self.get_conv_block(in_C, C, conv_r, conv_sig, cfg)
+        # self.stem = self.get_unary_block(in_C, C, cfg)
 
         # Next blocks
         self.encoder_1 = nn.ModuleList()
@@ -664,8 +664,8 @@ class KPNeXt(nn.Module):
 
         
         #  ------ Stem ------
-        # feats = self.stem(batch.in_dict.points[0], batch.in_dict.points[0], feats, batch.in_dict.neighbors[0])
-        feats = self.stem(feats)
+        feats = self.stem(batch.in_dict.points[0], batch.in_dict.points[0], feats, batch.in_dict.neighbors[0])
+        # feats = self.stem(feats)
 
 
         #  ------ Encoder ------
@@ -752,12 +752,8 @@ class KPNeXt(nn.Module):
         # Cross entropy loss
         self.output_loss = self.criterion(outputs, target)
 
-        # Regularization of deformable offsets (=0 if no deformable conv in network)
-        fitting_loss, repulsive_loss = p2p_fit_rep_loss(self)
-        self.deform_loss = self.deform_loss_factor * (self.fit_rep_ratio * fitting_loss + repulsive_loss)
-
         # Combined loss
-        return self.output_loss + self.deform_loss
+        return self.output_loss
 
     def accuracy(self, outputs, labels):
         """

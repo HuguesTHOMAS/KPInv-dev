@@ -83,7 +83,7 @@ def my_config():
 
     cfg.model.layer_blocks = (3,  4,  5,  12,  4)
     cfg.model.norm = 'batch' # batch, layer
-    cfg.model.init_channels = 16  # 48, 64, 80, 96
+    cfg.model.init_channels = 48  # 48, 64, 80, 96
 
     cfg.model.kp_mode = 'kpconvx'       # Choose ['kpconv', 'kpdef', 'kpinv', 'kpinvx'].
                                         # Choose ['inv_v1', 'inv_v2', 'inv_v3', 'inv_v4', 'transformer']
@@ -116,7 +116,7 @@ def my_config():
 
 
     # Specific parameters for involution and transformers
-    cfg.model.use_strided_conv = False          # Use convolution op for strided layers instead of involution
+    cfg.model.use_strided_conv = True          # Use convolution op for strided layers instead of involution
     cfg.model.first_inv_layer = 1               # Use involution layers only from this layer index (from 0 to n_layer - 1)
     cfg.model.inv_groups = 8                    # negative values to specify CpG instead of G
     cfg.model.inv_grp_norm = True
@@ -140,7 +140,7 @@ def my_config():
     cfg.train.data_sampler = 'random'   # 'c-random' for class balanced random sampling
 
     # Input spheres radius. Adapt this with model.in_sub_size. Try to keep a ratio of ~50
-    cfg.train.in_radius = 1.7  # If negative, =number of points per input
+    cfg.train.in_radius = -15000  # If negative, =number of points per input. Use negative to compare models
 
     # Batch related_parames
     cfg.train.batch_size = 6                 # Target batch size. If you don't want calibration, you can directly set train.batch_limit
@@ -148,7 +148,7 @@ def my_config():
     cfg.train.steps_per_epoch = 300
     
     # Training length
-    cfg.train.max_epoch = 240
+    cfg.train.max_epoch = 180
     
     # Deformations
     cfg.train.deform_loss_factor = 0.1      # Reduce to reduce influence for deformation on overall features

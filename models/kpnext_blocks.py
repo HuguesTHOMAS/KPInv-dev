@@ -635,14 +635,20 @@ class KPNextBlock(nn.Module):
         self.radius = radius
         self.bn_momentum = bn_momentum
         self.norm_type = norm_type
+        self.mlp_first = mlp_first
+        
+        if mlp_first:
+            conv_channels = out_channels
+        else:
+            conv_channels = in_channels
 
         # Define modules
         self.activation = activation
-        self.conv_norm = NormBlock(out_channels, norm_type, bn_momentum)
+        self.conv_norm = NormBlock(conv_channels, norm_type, bn_momentum)
         
         # KPConvX or KPConvD
         if attention_groups == 0:
-            self.conv = KPConvD(in_channels,
+            self.conv = KPConvD(conv_channels,
                                 shell_sizes,
                                 radius,
                                 sigma,
@@ -654,7 +660,7 @@ class KPNextBlock(nn.Module):
                                 bn_momentum=bn_momentum,
                                 activation=activation)
         else:
-            self.conv = KPConvX(in_channels,
+            self.conv = KPConvX(conv_channels,
                                 shell_sizes,
                                 radius,
                                 sigma,
@@ -669,7 +675,6 @@ class KPNextBlock(nn.Module):
                                 activation=activation)
 
         # Optional mlp to up feature
-        self.mlp_first = mlp_first
         if in_channels != out_channels:         
             self.up_mlp = nn.Sequential(nn.Linear(in_channels, out_channels, bias=False),
                                         NormBlock(out_channels, norm_type, bn_momentum),
