@@ -146,6 +146,7 @@ def init_cfg():
     cfg.train.warmup = True             #  Bool, should the first epoch be a warmup
     cfg.train.grad_clip = 100.0         #   Int, gradient clipping value (negative means no clipping)
     cfg.train.class_w = []              #  List, weight for each class in the segmentation loss
+    cfg.train.smooth_labels = False     #  Bool, should smooth labels for cross entropy loss?
 
     cfg.train.segloss_balance = 'none'      #   Str, Respectively each point, class, or cloud in the batch has
                                             #        the same loss contribution ('none', 'class', 'batch'). 

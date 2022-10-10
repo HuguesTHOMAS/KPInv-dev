@@ -141,7 +141,7 @@ def training_epoch(epoch, t0, net, optimizer, training_loader, cfg, PID_file, de
             # Update effective batch size
             mean_f = max(0.02, 1.0 / (step + 1))
             run_batch_size *= 1 - mean_f
-            run_batch_size += mean_f * len(batch.in_dict.lengths0)
+            run_batch_size += mean_f * len(batch.in_dict.lengths[0])
 
 
             if 'cuda' in device.type:

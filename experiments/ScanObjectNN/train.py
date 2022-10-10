@@ -43,7 +43,7 @@ from models.KPConvNet import KPFCNN as KPConvFCNN
 from models.KPInvNet import KPInvFCNN
 from models.InvolutionNet import InvolutionFCNN
 
-from datasets.scene_seg import SceneSegSampler, SceneSegCollate
+from datasets.object_classification import ObjClassifSampler, ObjClassifCollate
 
 from experiments.ScanObjectNN.ScanObjectNN import ScanObjectNN_cfg, ScanObjectNNDataset
 
@@ -81,9 +81,10 @@ def my_config():
 
     # cfg.model.layer_blocks = (3,  5,  7,  9,  9,  3)  # For large block inputs experiments/ScanObjectNN/train.py
 
-    cfg.model.layer_blocks = (3,  4,  5,  12,  4)
+    cfg.model.layer_blocks = (1,  2,  2,  2,  2,  2,  1)
     cfg.model.norm = 'batch' # batch, layer
     cfg.model.init_channels = 48  # 48, 64, 80, 96
+    cfg.model.channel_scaling = 1.5  # 48, 64, 80, 96
 
     cfg.model.kp_mode = 'kpconvx'       # Choose ['kpconv', 'kpdef', 'kpinv', 'kpinvx'].
                                         # Choose ['inv_v1', 'inv_v2', 'inv_v3', 'inv_v4', 'transformer']
@@ -101,17 +102,23 @@ def my_config():
     
     cfg.model.share_kp = True       #  share kernels within layers                
 
-    cfg.data.init_sub_size = 0.02       # In object classification, we do not subsample initially but still have to define this to define the size of convolutions 
-    cfg.data.init_sub_mode = 'grid'     # Mode for initial subsampling of data
+    cfg.data.init_sub_size = 0.04       # In object classification, we do not subsample initially but still have to define this to define the size of convolutions 
+    cfg.data.init_sub_mode = 'none'     # Mode for initial subsampling of data
     cfg.model.in_sub_size = -2          # Adapt this with train.in_radius. Try to keep a ratio of ~50 (*0.67 if fps). If negative, and fps, it is stride
     cfg.model.in_sub_mode = 'fps'       # Mode for input subsampling
     cfg.model.radius_scaling = 1.5      # We increase the convolution radius more slowly here.
 
+
+    # TODO:
+    # Point resampling like in PointNeXt
+
+
+
     cfg.model.upsample_n = 3          # Number of neighbors used for nearest neighbor linear interpolation
 
-    cfg.model.input_channels = 5    # This value has to be compatible with one of the dataset input features definition
+    cfg.model.input_channels = 2    # This value has to be compatible with one of the dataset input features definition
 
-    cfg.model.neighbor_limits = [16, 17, 18, 18, 18]      # Use empty list to let calibration get the values
+    # cfg.model.neighbor_limits = [16, 17, 18, 18, 18]      # Use empty list to let calibration get the values
     # cfg.model.neighbor_limits = [35, 40, 50, 50, 50]    # Use empty list to let calibration get the values
     # cfg.model.neighbor_limits = [16, 16, 16, 16, 16]    # List for point_transformer
 
@@ -138,15 +145,15 @@ def my_config():
     cfg.data.cylindric_input = False
 
     # How do we sample the input elements (spheres or cubes)
-    cfg.train.data_sampler = 'random'   # 'c-random' for class balanced random sampling
+    cfg.train.data_sampler = 'c-regular'   # 'random', 'c-random', 'regular' or 'c-regular'
 
     # Input spheres radius. Adapt this with model.in_sub_size. Try to keep a ratio of ~50
     cfg.train.in_radius = -15000  # If negative, =number of points per input. Use negative to compare models
 
     # Batch related_parames
-    cfg.train.batch_size = 6                 # Target batch size. If you don't want calibration, you can directly set train.batch_limit
-    cfg.train.accum_batch = 4                 # Accumulate batches for an effective batch size of batch_size * accum_batch.
-    cfg.train.steps_per_epoch = 300
+    cfg.train.batch_size = 16                 # Target batch size. If you don't want calibration, you can directly set train.batch_limit
+    cfg.train.accum_batch = 2                 # Accumulate batches for an effective batch size of batch_size * accum_batch.
+    cfg.train.steps_per_epoch = None
     
     # Training length
     cfg.train.max_epoch = 180
@@ -161,6 +168,7 @@ def my_config():
     cfg.train.adam_eps = 1e-08
     cfg.train.weight_decay = 0.01     # for KPConv
     # cfg.train.weight_decay = 0.0001     # for transformer
+    cfg.train.smooth_labels = True
 
     # Cyclic lr 
     cfg.train.cyc_lr0 = 5e-4                # Float, Start (minimum) learning rate of 1cycle decay
@@ -206,8 +214,8 @@ def my_config():
     cfg.test.data_sampler = 'regular'       # 'regular' to pick spheres regularly accross the data.
 
     cfg.test.max_steps_per_epoch = 100       # Size of one validation epoch (should be small)
-    cfg.test.batch_limit = 1
-    cfg.test.batch_size = 1
+    cfg.test.batch_limit = -1
+    cfg.test.batch_size = -1
 
     cfg.test.val_momentum = 0.95
 
@@ -375,7 +383,6 @@ if __name__ == '__main__':
     # Adjust config after parameters have been changed
     cfg = adjust_config(cfg)
 
-    
     ##############
     # Prepare Data
     ##############
@@ -386,18 +393,16 @@ if __name__ == '__main__':
     # Load dataset
     underline('Loading training dataset')
     training_dataset = ScanObjectNNDataset(cfg,
-                                    chosen_set='training',
-                                    precompute_pyramid=True)
+                                           chosen_set='training',
+                                           precompute_pyramid=True)
 
     underline('Loading validation dataset')
     test_dataset = ScanObjectNNDataset(cfg,
-                                chosen_set='validation',
-                                precompute_pyramid=True)
+                                       chosen_set='validation',
+                                       precompute_pyramid=True)
 
-    a = 1/0
-    
     # Calib from training data
-    training_dataset.calib_batch(cfg, update_test=False)
+    training_dataset.calib_batch(cfg, update_test=True)
     training_dataset.calib_neighbors(cfg)
     test_dataset.b_n = cfg.test.batch_size
     test_dataset.b_lim = cfg.test.batch_limit
@@ -406,20 +411,20 @@ if __name__ == '__main__':
     save_cfg(cfg)
     
     # Initialize samplers
-    training_sampler = SceneSegSampler(training_dataset)
-    test_sampler = SceneSegSampler(test_dataset)
+    training_sampler = ObjClassifSampler(training_dataset)
+    test_sampler = ObjClassifSampler(test_dataset)
 
     # Initialize the dataloader
     training_loader = DataLoader(training_dataset,
                                  batch_size=1,
                                  sampler=training_sampler,
-                                 collate_fn=SceneSegCollate,
+                                 collate_fn=ObjClassifCollate,
                                  num_workers=cfg.train.num_workers,
                                  pin_memory=True)
     test_loader = DataLoader(test_dataset,
                              batch_size=1,
                              sampler=test_sampler,
-                             collate_fn=SceneSegCollate,
+                             collate_fn=ObjClassifCollate,
                              num_workers=cfg.test.num_workers,
                              pin_memory=True)
 

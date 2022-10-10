@@ -1250,6 +1250,12 @@ def test_kpnext():
                   'KPNext48 strided-conv G4',
                   'KPNext48 fps-4 G1',
                   'KPNext48 fps-4 G16',
+                  'KPMegaNext32 C=1.41',
+                  'KPMegaNext32 C=1.6',
+                  'KPMegaNext32 C=1.2',
+                  'KPMegaNext32 C=1.3',
+                  'KPMegaNext32 C=1.35',
+                  'KPBisNext48 C=1.35',
                   '...']
 
     # Write KPNExt architecture. Note: it is very similar to resnet, just the shortcuts 
@@ -1315,8 +1321,8 @@ def test_kpnext():
         logs = logs[:len(logs_names)]
     logs_names = np.array(logs_names[:len(logs)])
 
-    # logs = logs[[1, 3]]
-    # logs_names = logs_names[[1, 3]]
+    # logs = logs[[-1, 3]]
+    # logs_names = logs_names[[-1, 3]]
 
     return logs, logs_names
 

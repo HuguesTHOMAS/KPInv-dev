@@ -123,7 +123,7 @@ def fill_pyramid(pyramid: EasyDict,
             pyramid.pools.append(subsampling_inds)
 
             if upsample_n > 0:
-                upsampling_inds, up_dists = neighb_func(cur_points, sub_points, cur_lengths, sub_lengths, search_radius * 2, upsample_n, return_dist=True)
+                upsampling_inds, up_dists = neighb_func(cur_points, sub_points, cur_lengths, sub_lengths, search_radius * radius_scaling, upsample_n, return_dist=True)
                 pyramid.upsamples.append(upsampling_inds)
                 pyramid.up_distances.append(up_dists)
 

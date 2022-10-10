@@ -57,7 +57,7 @@ from utils.cpp_funcs import batch_knn_neighbors
 
 from utils.transform import ComposeAugment, RandomRotate, RandomScaleFlip, RandomJitter, FloorCentering, \
     ChromaticAutoContrast, ChromaticTranslation, ChromaticJitter, HueSaturationTranslation, RandomDropColor, \
-    ChromaticNormalize, HeightNormalize, RandomFullColor
+    ChromaticNormalize, HeightNormalize, RandomFullColor, UnitScaleCentering
 
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -108,10 +108,12 @@ class ObjClassifDataset(Dataset):
 
         
         # Variables that will be automatically populated
-        self.object_n = None
+        self.n_objects = None
         self.input_points = []
         self.input_features = []
         self.input_labels = []
+        self.n_votes = torch.from_numpy(np.zeros((1,), dtype=np.float32))
+        self.n_votes.share_memory_()
         
 
         # Get augmentation transform
@@ -124,22 +126,24 @@ class ObjClassifDataset(Dataset):
         self.base_augments.append(RandomScaleFlip(scale=a_cfg.scale,
                                             anisotropic=a_cfg.anisotropic,
                                             flip_p=a_cfg.flips))
-        self.base_augments.append(RandomJitter(sigma=a_cfg.jitter,
-                                         clip=a_cfg.jitter * 5))
+
+        self.base_augments.append(UnitScaleCentering())
         self.base_augments.append(RandomRotate(mode=a_cfg.rotations))
 
-        # The color augment are applied to coordz feature
         self.full_augments = [a for a in self.base_augments]
-        if a_cfg.chromatic_contrast:
-            self.full_augments += [ChromaticAutoContrast()]
-        if a_cfg.chromatic_all:
-            self.full_augments += [ChromaticTranslation(),
-                             ChromaticJitter(),
-                             HueSaturationTranslation()]
-        # self.full_augments.append(RandomDropColor(p=a_cfg.color_drop))
-        if a_cfg.chromatic_norm:
-            self.full_augments += [ChromaticNormalize()]
-        self.full_augments.append(RandomFullColor(p=a_cfg.color_drop))
+
+        # # The color augment are applied to coordz feature
+        # self.full_augments = [a for a in self.base_augments]
+        # if a_cfg.chromatic_contrast:
+        #     self.full_augments += [ChromaticAutoContrast()]
+        # if a_cfg.chromatic_all:
+        #     self.full_augments += [ChromaticTranslation(),
+        #                      ChromaticJitter(),
+        #                      HueSaturationTranslation()]
+        # # self.full_augments.append(RandomDropColor(p=a_cfg.color_drop))
+        # if a_cfg.chromatic_norm:
+        #     self.full_augments += [ChromaticNormalize()]
+        # self.full_augments.append(RandomFullColor(p=a_cfg.color_drop))
             
 
         # TRAIN AUGMENT
@@ -161,7 +165,7 @@ class ObjClassifDataset(Dataset):
         """
 
         # Total number of objects
-        self.n_objects = self.input_points.shape[0]
+        self.n_objects = len(self.input_points)
 
         # Number of step per epoch
         if self.set == 'training':
@@ -186,11 +190,14 @@ class ObjClassifDataset(Dataset):
         print('ERROR: This function select_features needs to be redifined in the child dataset class. It depends on the dataset')
         return 
 
+    def get_votes(self):
+        return float(self.n_votes.item())
+
     def __len__(self):
         """
         Return the length of data here
         """
-        return len(self.object_n)
+        return len(self.n_objects)
 
     def __getitem__(self, idx_list):
         """
@@ -217,7 +224,7 @@ class ObjClassifDataset(Dataset):
             label = self.label_to_idx[self.input_labels[p_i]]
 
             # Data augmentation
-            in_points, in_features, _ = self.augmentation_transform(in_points, in_features, _)
+            in_points, in_features, _ = self.augmentation_transform(in_points, in_features, None)
             
             # Select features for the network
             in_features = self.select_features(in_features)
@@ -304,6 +311,26 @@ class ObjClassifDataset(Dataset):
 
     def calib_batch_size(self, samples=20, verbose=True):
 
+        #############################
+        # If all clouds are the same
+        #############################
+
+        # No need for calibration of all the clouds are the same length
+        cloud_lengths = [in_p.shape[0] for in_p in self.input_points]
+        maxp = np.max(cloud_lengths)
+        minp = np.min(cloud_lengths)
+        if maxp - minp < 1:
+            cloud_lengths = int(maxp)
+            self.b_n = cloud_lengths / self.b_lim
+            return
+
+        
+        ###############################
+        # Otherwise perform quick calib
+        ###############################
+
+        a = 1/0 # Need to modify this
+
         t0 = time.time()
 
         # Get gpu for faster calibration
@@ -321,9 +348,10 @@ class ObjClassifDataset(Dataset):
             while True:
                 cloud_ind, center_p = self.sample_input_center()
                 _, in_points, _, _ = self.get_input_area(cloud_ind, center_p)
-                in_points, _, _ = calib_augment(in_points, None, None)
+                in_points, _, _ = calib_augment(in_points, np.copy(in_points), None)
                 if in_points.shape[0] > 0:
-                    if self.cfg.model.in_sub_size > self.cfg.data.init_sub_size * 1.01:
+                    in_dl = self.cfg.model.in_sub_size
+                    if in_dl > 0 and in_dl > self.cfg.data.init_sub_size * 1.01:
                         gpu_points = torch.from_numpy(in_points).to(device)
                         sub_points, _ = subsample_pack_batch(gpu_points,
                                                             [gpu_points.shape[0]],
@@ -371,6 +399,26 @@ class ObjClassifDataset(Dataset):
         an approximate batch limit.
         """
 
+        #############################
+        # If all clouds are the same
+        #############################
+
+        # No need for calibration of all the clouds are the same length
+        cloud_lengths = [in_p.shape[0] for in_p in self.input_points]
+        maxp = np.max(cloud_lengths)
+        minp = np.min(cloud_lengths)
+        if maxp - minp < 1:
+            cloud_lengths = int(minp)
+            new_b_lim = cloud_lengths * batch_size - 1
+            return new_b_lim
+
+        
+        ###############################
+        # Otherwise perform quick calib
+        ###############################
+
+        a = 1/0 # Need to modify this
+
         t0 = time.time()
 
         # Get gpu for faster calibration
@@ -405,7 +453,8 @@ class ObjClassifDataset(Dataset):
                 # pl.set_background('white')
                 # pl.enable_eye_dome_lighting()
                 # pl.show()
-                if self.cfg.model.in_sub_size > self.cfg.data.init_sub_size * 1.01:
+                in_dl = self.cfg.model.in_sub_size
+                if in_dl > 0 and in_dl > self.cfg.data.init_sub_size * 1.01:
                     gpu_points = torch.from_numpy(in_points).to(device)
                     sub_points, _ = subsample_pack_batch(gpu_points,
                                                         [gpu_points.shape[0]],
@@ -527,13 +576,16 @@ class ObjClassifDataset(Dataset):
         truncated_n = [0 for _ in range(num_layers)]
         all_n = [0 for _ in range(num_layers)]
         while len(all_neighbor_counts[0]) < samples:
-            cloud_ind, center_p = self.sample_input_center()
-            _, in_points, _, _ = self.get_input_area(cloud_ind, center_p)
+
+            # Get points, features and labels
+            p_i = np.random.choice(self.n_objects)
+            in_points = self.input_points[p_i]
             
             if in_points.shape[0] > 0:
-                in_points, _, _ = calib_augment(in_points, None, None)
+                in_points, _, _ = calib_augment(in_points, np.copy(in_points), None)
                 gpu_points = torch.from_numpy(in_points).to(device)
-                if self.cfg.model.in_sub_size > self.cfg.data.init_sub_size * 1.01:
+                in_dl = self.cfg.model.in_sub_size
+                if in_dl > 0 and in_dl > self.cfg.data.init_sub_size * 1.01:
                     radius0 = self.cfg.model.in_sub_size * self.cfg.model.kp_radius
                     sub_points, _ = subsample_pack_batch(gpu_points,
                                                         [gpu_points.shape[0]],
@@ -544,10 +596,11 @@ class ObjClassifDataset(Dataset):
                     radius0 = self.cfg.data.init_sub_size * self.cfg.model.kp_radius
 
                 neighb_counts = pyramid_neighbor_stats(sub_points,
-                                                    num_layers,
-                                                    cfg.model.in_sub_size,
-                                                    radius0,
-                                                    sub_mode=cfg.model.in_sub_mode)
+                                                       num_layers,
+                                                       cfg.model.in_sub_size,
+                                                       radius0,
+                                                       cfg.model.radius_scaling,
+                                                       sub_mode=cfg.model.in_sub_mode)
 
                 # Update number of trucated_neighbors
                 for j, neighb_c in enumerate(neighb_counts):
@@ -623,14 +676,14 @@ class ObjClassifDataset(Dataset):
 class ObjClassifSampler(Sampler):
     """Sampler for ObjClassifDataset"""
 
-    def __init__(self, dataset: ObjClassifDataset, use_potential=True, balance_labels=False):
+    def __init__(self, dataset: ObjClassifDataset):
         Sampler.__init__(self, dataset)
 
         # Does the sampler use potential for regular sampling
-        self.use_potential = use_potential
+        self.use_potential = 'regular' in dataset.data_sampler
 
         # Should be balance the classes when sampling
-        self.balance_labels = balance_labels
+        self.balance_labels = 'c-' in dataset.data_sampler
 
         # Dataset used by the sampler (no copy is made in memory)
         self.dataset = dataset
@@ -686,6 +739,10 @@ class ObjClassifSampler(Sampler):
             # Update potentials (Change the order for the next epoch)
             self.potentials[gen_indices] = np.ceil(self.potentials[gen_indices])
             self.potentials[gen_indices] += np.random.rand(gen_indices.shape[0]) * 0.1 + 0.1
+
+            votes = np.floor(self.potentials)
+            self.dataset.n_votes *= 0
+            self.dataset.n_votes += float(np.mean(votes))
 
         else:
             if self.balance_labels:

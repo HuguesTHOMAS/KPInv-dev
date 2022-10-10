@@ -135,7 +135,7 @@ class ScanObjectNNDataset(ObjClassifDataset):
                 self.input_points = pickle.load(f)
 
         # Height is in y coordinates so permute
-        self.input_points = self.input_points[:, :, [2, 0, 1]]
+        self.input_points = np.ascontiguousarray(self.input_points[:, :, [2, 0, 1]])
         
         # This dataset does not have features use point coordinates
         self.input_features = np.copy(self.input_points)

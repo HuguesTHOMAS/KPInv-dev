@@ -364,6 +364,175 @@ def cloud_segmentation_validation(epoch, net, val_loader, cfg, val_data, device,
 
 
 def object_classification_validation(epoch, net, val_loader, cfg, val_data, device, debug=False):
+    """
+    Validation method for classification models
+    """
+    
+    ############
+    # Initialize
+    ############
+    
+    underline('Validation epoch {:d}'.format(epoch))
+    message =  '\n                                                          Timings        '
+    message += '\n Steps |   Votes   | GPU usage |      Speed      |   In   Batch  Forw  End '
+    message += '\n-------|-----------|-----------|-----------------|-------------------------'
+    print(message)
+
+    t0 = time.time()
+
+    # Choose validation smoothing parameter (0 for no smothing, 0.99 for big smoothing)
+    val_smooth = cfg.test.val_momentum
+    softmax = torch.nn.Softmax(1)
+
+    # Number of classes including ignored labels
+    nc_tot = cfg.data.num_classes
+
+    # Number of classes predicted by the model
+    nc_model = net.num_logits
+
+    # Initiate global prediction over validation clouds
+    if 'probs' not in val_data:
+        val_data.probs = np.zeros((val_loader.dataset.n_objects, nc_model))
+
+    #####################
+    # Network predictions
+    #####################
+
+    run_batch_size = 0
+    probs = []
+    targets = []
+    obj_inds = []
+
+    t = [time.time()]
+    last_display = time.time()
+    mean_dt = np.zeros(1)
+
+
+    t1 = time.time()
+
+    # Start validation loop
+    for step, batch in enumerate(val_loader):
+
+        # New time
+        t = t[-1:]
+        if 'cuda' in device.type:
+            torch.cuda.synchronize(device)
+        t += [time.time()]
+
+        if 'cuda' in device.type:
+            batch.to(device)
+
+        # Update effective batch size
+        mean_f = max(0.02, 1.0 / (step + 1))
+        run_batch_size *= 1 - mean_f
+        run_batch_size += mean_f * len(batch.in_dict.lengths[0])
+
+        if 'cuda' in device.type:
+            torch.cuda.synchronize(device)
+        t += [time.time()]
+
+        # Forward pass
+        outputs = net(batch)
+        
+        if 'cuda' in device.type:
+            torch.cuda.synchronize(device)
+        t += [time.time()]
+
+
+        # Get probs and labels
+        probs += [softmax(outputs).cpu().detach().numpy()]
+        targets += [batch.in_dict.labels.cpu().numpy()]
+        obj_inds += [batch.in_dict.obj_inds.cpu().numpy()]
+
+        if 'cuda' in device.type:
+            # Get CUDA memory stat to see what space is used on GPU
+            cuda_stats = torch.cuda.memory_stats(device)
+            used_GPU_MB = cuda_stats["allocated_bytes.all.peak"]
+            _, tot_GPU_MB = torch.cuda.mem_get_info(device)
+            gpu_usage = 100 * used_GPU_MB / tot_GPU_MB
+            torch.cuda.reset_peak_memory_stats(device)
+        else:
+            gpu_usage = 0
+
+        # # Empty GPU cache (helps avoiding OOM errors)
+        # # Loses ~10% of speed but allows batch 2 x bigger.
+        # torch.cuda.empty_cache()
+
+        if 'cuda' in device.type:
+            torch.cuda.synchronize(device)
+        t += [time.time()]
+
+        # Average timing
+        if step < 5:
+            mean_dt = np.array(t[1:]) - np.array(t[:-1])
+        else:
+            mean_dt = 0.9 * mean_dt + 0.1 * (np.array(t[1:]) - np.array(t[:-1]))
+
+        # Display
+        if (t[-1] - last_display) > 1.0:
+            last_display = t[-1]
+            message = ' {:5d} | {:9.2f} | {:7.1f} % | {:7.1f} ins/sec | {:6.1f} {:5.1f} {:5.1f} {:5.1f}'
+            print(message.format(step,
+                                 val_loader.dataset.get_votes(),
+                                 gpu_usage,
+                                 run_batch_size / np.sum(mean_dt),
+                                 1000 * mean_dt[0],
+                                 1000 * mean_dt[1],
+                                 1000 * mean_dt[2],
+                                 1000 * mean_dt[3]))
+
+    t2 = time.time()
+
+    # Stack all validation predictions
+    probs = np.vstack(probs)
+    targets = np.hstack(targets)
+    obj_inds = np.hstack(obj_inds)
+
+    ###################
+    # Voting validation
+    ###################
+
+    val_data.probs[obj_inds] = val_smooth * val_data.probs[obj_inds] + (1-val_smooth) * probs
+
+    ############
+    # Confusions
+    ############
+
+    # Compute classification results
+    C1 = fast_confusion(targets,
+                        val_loader.dataset.probs_to_preds(probs),
+                        val_loader.dataset.pred_values)
+
+    # Compute votes confusion
+    C2 = fast_confusion(val_loader.dataset.input_labels,
+                        val_loader.dataset.probs_to_preds(val_data.probs),
+                        val_loader.dataset.pred_values)
+
+
+    # Saving (optionnal)
+    if cfg.exp.saving:
+        print("Save confusions")
+        conf_list = [C1, C2]
+        file_list = ['val_confs.txt', 'vote_confs.txt']
+        for conf, conf_file in zip(conf_list, file_list):
+            test_file = join(cfg.exp.log_dir, conf_file)
+            if exists(test_file):
+                with open(test_file, "a") as text_file:
+                    for line in conf:
+                        for value in line:
+                            text_file.write('%d ' % value)
+                    text_file.write('\n')
+            else:
+                with open(test_file, "w") as text_file:
+                    for line in conf:
+                        for value in line:
+                            text_file.write('%d ' % value)
+                    text_file.write('\n')
+
+    val_ACC = 100 * np.sum(np.diag(C1)) / (np.sum(C1) + 1e-6)
+    vote_ACC = 100 * np.sum(np.diag(C2)) / (np.sum(C2) + 1e-6)
+    print('Accuracies : val = {:.1f}% / vote = {:.1f}%'.format(val_ACC, vote_ACC))
+
     return
 
 

@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 import numpy as np
 
-from models.generic_blocks import LinearUpsampleBlock, UnaryBlock, local_nearest_pool
+from models.generic_blocks import LinearUpsampleBlock, UnaryBlock, local_nearest_pool, GlobalAverageBlock, SmoothCrossEntropyLoss
 from models.kpconv_blocks import KPConvBlock, KPConvResidualBlock, KPConvInvertedBlock
 from models.kpnext_blocks import KPNextResidualBlock, KPNextInvertedBlock, KPNextMultiShortcutBlock, KPNextBlock
 
@@ -421,6 +421,7 @@ class KPNeXt(nn.Module):
         self.upsample_n = cfg.model.upsample_n
         self.share_kp = cfg.model.share_kp
         self.kp_mode = cfg.model.kp_mode
+        self.task = cfg.data.task
         
         # List of valid labels (those not ignored in loss)
         self.valid_labels = np.sort([c for c in cfg.data.label_values if c not in cfg.data.ignored_labels])
@@ -431,17 +432,19 @@ class KPNeXt(nn.Module):
         first_C = cfg.model.init_channels
         conv_r = self.first_radius
         conv_sig = self.first_sigma
+        channel_scaling = 2
+        if 'channel_scaling' in cfg.model:
+            channel_scaling = cfg.model.channel_scaling
 
         # Get channels at each layer
         layer_C = []
         for l in range(self.num_layers):
-            target_C = first_C * cfg.model.channel_scaling ** l     # Scale channels
-            layer_C.append(np.ceil(target_C / 16) * 16)             # Ensure it is divisible by 16 (even the first one)
-
+            target_C = first_C * channel_scaling ** l     # Scale channels
+            layer_C.append(int(np.ceil(target_C / 16)) * 16)             # Ensure it is divisible by 16 (even the first one)
 
         # Verify the architecture validity
-        if self.layer_blocks[0] < 2:
-            raise ValueError('First layer must contain at least 2 convolutional layers')
+        if self.layer_blocks[0] < 1:
+            raise ValueError('First layer must contain at least 1 convolutional layers')
         if np.min(self.layer_blocks) < 1:
             raise ValueError('Each layer must contain at least 1 convolutional layers')
         
@@ -501,32 +504,49 @@ class KPNeXt(nn.Module):
         # List Decoder blocks
         #####################
 
-        # ------ Layers [4, 3, 2, 1] ------
-        for layer in range(self.num_layers - 1, 0, -1):
+        if cfg.data.task == 'classification':
 
-            C = layer_C[layer - 1]
-            decoder_i = self.get_unary_block(C * 3, C, cfg)
-            upsampling_i = LinearUpsampleBlock(self.upsample_n)
+            #  ------ Head ------
 
-            setattr(self, 'decoder_{:d}'.format(layer), decoder_i)
-            setattr(self, 'upsampling_{:d}'.format(layer), upsampling_i)
+            # Global pooling
+            self.global_pooling = GlobalAverageBlock()
 
+            # New head
+            self.head = nn.Sequential(self.get_unary_block(layer_C[-1], 256, cfg, norm_type='none'),
+                                      nn.Dropout(0.5),
+                                      nn.Linear(256, self.num_logits))
 
+            # # Old head
+            # self.head = nn.Sequential(self.get_unary_block(layer_C[-1], layer_C[-1], cfg),
+            #                           nn.Linear(layer_C[-1], self.num_logits))
 
-        #  ------ Head ------
-        
-        # New head
-        self.head = nn.Sequential(self.get_unary_block(layer_C[0], layer_C[0], cfg),
-                                  nn.Linear(layer_C[0], self.num_logits))
-        # Easy KPConv Head
-        # self.head = nn.Sequential(nn.Linear(layer_C[0] * 2, layer_C[0]),
-        #                           nn.GroupNorm(8, layer_C[0]),
-        #                           nn.ReLU(),
-        #                           nn.Linear(layer_C[0], self.num_logits))
+        elif cfg.data.task == 'cloud_segmentation':
 
-        # My old head
-        # self.head = nn.Sequential(self.get_unary_block(layer_C[0] * 2, layer_C[0], cfg, norm_type='none'),
-        #                           nn.Linear(layer_C[0], self.num_logits))
+            # ------ Layers [4, 3, 2, 1] ------
+            for layer in range(self.num_layers - 1, 0, -1):
+
+                C = layer_C[layer - 1]
+                C1 = layer_C[layer]
+                decoder_i = self.get_unary_block(C + C1, C, cfg)
+                upsampling_i = LinearUpsampleBlock(self.upsample_n)
+
+                setattr(self, 'decoder_{:d}'.format(layer), decoder_i)
+                setattr(self, 'upsampling_{:d}'.format(layer), upsampling_i)
+
+            #  ------ Head ------
+            
+            # New head
+            self.head = nn.Sequential(self.get_unary_block(layer_C[0], layer_C[0], cfg),
+                                    nn.Linear(layer_C[0], self.num_logits))
+            # Easy KPConv Head
+            # self.head = nn.Sequential(nn.Linear(layer_C[0] * 2, layer_C[0]),
+            #                           nn.GroupNorm(8, layer_C[0]),
+            #                           nn.ReLU(),
+            #                           nn.Linear(layer_C[0], self.num_logits))
+
+            # My old head
+            # self.head = nn.Sequential(self.get_unary_block(layer_C[0] * 2, layer_C[0], cfg, norm_type='none'),
+            #                           nn.Linear(layer_C[0], self.num_logits))
 
 
 
@@ -534,12 +554,21 @@ class KPNeXt(nn.Module):
         # Network Losses
         ################
 
-        # Choose segmentation loss
-        if len(cfg.train.class_w) > 0:
-            class_w = torch.from_numpy(np.array(cfg.train.class_w, dtype=np.float32))
-            self.criterion = torch.nn.CrossEntropyLoss(weight=class_w, ignore_index=-1)
+        # Choose between normal cross entropy and smoothed labels
+        if cfg.train.smooth_labels:
+            CrossEntropy = SmoothCrossEntropyLoss
         else:
-            self.criterion = torch.nn.CrossEntropyLoss(ignore_index=-1)
+            CrossEntropy = torch.nn.CrossEntropyLoss
+
+        if cfg.data.task == 'classification':
+            self.criterion = CrossEntropy()
+            
+        elif cfg.data.task == 'cloud_segmentation':
+            if len(cfg.train.class_w) > 0:
+                class_w = torch.from_numpy(np.array(cfg.train.class_w, dtype=np.float32))
+                self.criterion = CrossEntropy(weight=class_w, ignore_index=-1)
+            else:
+                self.criterion = CrossEntropy(ignore_index=-1)
 
         # self.deform_fitting_mode = config.deform_fitting_mode
         # self.deform_fitting_power = config.deform_fitting_power
@@ -610,7 +639,6 @@ class KPNeXt(nn.Module):
                             norm_type=cfg.model.norm,
                             bn_momentum=cfg.model.bn_momentum)
                            
-
     def get_residual_block(self, in_C, out_C, radius, sigma, cfg, shared_kp_data=None, conv_layer=False):
 
         attention_groups = cfg.model.inv_groups
@@ -699,23 +727,31 @@ class KPNeXt(nn.Module):
             torch.cuda.synchronize(batch.device())                         
             t += [time.time()]
 
-        #  ------ Decoder ------
+        if self.task == 'classification':
+            
+            # Global pooling
+            feats = self.global_pooling(feats, batch.in_dict.lengths[-1])
 
-        for layer in range(self.num_layers - 1, 0, -1):
+            
+        elif self.task == 'cloud_segmentation':
 
-            # Get layer blocks
-            l = layer -1    # 3, 2, 1, 0
-            unary = getattr(self, 'decoder_{:d}'.format(layer))
-            upsample = getattr(self, 'upsampling_{:d}'.format(layer))
+            #  ------ Decoder ------
 
-            # Upsample
-            feats = upsample(feats, batch.in_dict.upsamples[l], batch.in_dict.up_distances[l])
+            for layer in range(self.num_layers - 1, 0, -1):
 
-            # Concat with skip features
-            feats = torch.cat([feats, skip_feats[l]], dim=1)
+                # Get layer blocks
+                l = layer -1    # 3, 2, 1, 0
+                unary = getattr(self, 'decoder_{:d}'.format(layer))
+                upsample = getattr(self, 'upsampling_{:d}'.format(layer))
 
-            # MLP
-            feats = unary(feats)
+                # Upsample
+                feats = upsample(feats, batch.in_dict.upsamples[l], batch.in_dict.up_distances[l])
+
+                # Concat with skip features
+                feats = torch.cat([feats, skip_feats[l]], dim=1)
+
+                # MLP
+                feats = unary(feats)
 
 
         #  ------ Head ------
@@ -747,7 +783,7 @@ class KPNeXt(nn.Module):
         for i, c in enumerate(self.valid_labels):
             target[labels == c] = i
 
-        # Reshape to have a minibatch size of 1
+        # Reshape to have size [1, C, N]
         outputs = torch.transpose(outputs, 0, 1)
         outputs = outputs.unsqueeze(0)
         target = target.squeeze().unsqueeze(0)

@@ -805,7 +805,8 @@ class SceneSegDataset(Dataset):
                 _, in_points, _, _ = self.get_input_area(cloud_ind, center_p)
                 in_points, _, _ = calib_augment(in_points, None, None)
                 if in_points.shape[0] > 0:
-                    if self.cfg.model.in_sub_size > self.cfg.data.init_sub_size * 1.01:
+                    in_dl = self.cfg.model.in_sub_size
+                    if in_dl > 0 and in_dl > self.cfg.data.init_sub_size * 1.01:
                         gpu_points = torch.from_numpy(in_points).to(device)
                         sub_points, _ = subsample_pack_batch(gpu_points,
                                                             [gpu_points.shape[0]],
@@ -887,7 +888,8 @@ class SceneSegDataset(Dataset):
                 # pl.set_background('white')
                 # pl.enable_eye_dome_lighting()
                 # pl.show()
-                if self.cfg.model.in_sub_size > self.cfg.data.init_sub_size * 1.01:
+                in_dl = self.cfg.model.in_sub_size
+                if in_dl > 0 and in_dl > self.cfg.data.init_sub_size * 1.01:
                     gpu_points = torch.from_numpy(in_points).to(device)
                     sub_points, _ = subsample_pack_batch(gpu_points,
                                                         [gpu_points.shape[0]],
@@ -1015,7 +1017,8 @@ class SceneSegDataset(Dataset):
             if in_points.shape[0] > 0:
                 in_points, _, _ = calib_augment(in_points, None, None)
                 gpu_points = torch.from_numpy(in_points).to(device)
-                if self.cfg.model.in_sub_size > self.cfg.data.init_sub_size * 1.01:
+                in_dl = self.cfg.model.in_sub_size
+                if in_dl > 0 and in_dl > self.cfg.data.init_sub_size * 1.01:
                     radius0 = self.cfg.model.in_sub_size * self.cfg.model.kp_radius
                     sub_points, _ = subsample_pack_batch(gpu_points,
                                                         [gpu_points.shape[0]],
@@ -1029,6 +1032,7 @@ class SceneSegDataset(Dataset):
                                                     num_layers,
                                                     cfg.model.in_sub_size,
                                                     radius0,
+                                                    cfg.model.radius_scaling,
                                                     sub_mode=cfg.model.in_sub_mode)
 
                 # Update number of trucated_neighbors

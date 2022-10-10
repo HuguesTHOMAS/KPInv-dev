@@ -75,6 +75,30 @@ class FloorCentering(object):
         return coord, feat, label
 
 
+class UnitScaleCentering(object):
+    """
+    Centering the point cloud in the xy plane
+    """
+    def __init__(self, gravity_dim=2, height_feat_i=2):
+        self.gravity_dim = gravity_dim
+        self.height_feat_i = height_feat_i
+
+    def __call__(self, coord, feat, label):
+
+        # Get height before normalization
+        height = coord[:, self.gravity_dim]
+        feat[:, self.height_feat_i] = height - np.min(height)
+
+        # Center
+        coord -= np.mean(coord, axis=0, keepdims=True)
+
+        # Normalize
+        m = np.max(np.sqrt(np.sum(coord ** 2, axis=-1, keepdims=True)), axis=0, keepdims=True)[0]
+        coord = coord / m
+
+        return coord, feat, label
+
+
 class RandomJitter(object):
     def __init__(self, sigma=0.01, clip=0.05):
         self.sigma = sigma
