@@ -19,27 +19,11 @@ training_script="experiments/S3DIS_simple/train_S3DIS_simple.py"
 # Declare an array variable
 # *************************
 
-declare -a arg_arr=("--kp_radius 0.6"
-                    "--kp_radius 0.8"
-                    "--kp_radius 1.0"
-                    "--kp_radius 1.2"
-                    "--kp_radius 1.4"
-                    "--kp_radius 1.6"
-                    "--kp_radius 1.8"
-                    "--kp_radius 2.0"
-                    "--kp_radius 2.2"
-                    "--kp_radius 0.6 --shell_sizes 1 14 28"
-                    "--kp_radius 0.8 --shell_sizes 1 14 28"
-                    "--kp_radius 1.0 --shell_sizes 1 14 28"
+declare -a arg_arr=("--kp_radius 1.1 --shell_sizes 1 14 28"
+                    "--kp_radius 1.15 --shell_sizes 1 14 28"
                     "--kp_radius 1.2 --shell_sizes 1 14 28"
-                    "--kp_radius 1.4 --shell_sizes 1 14 28"
-                    "--kp_radius 1.6 --shell_sizes 1 14 28"
-                    "--kp_radius 1.8 --shell_sizes 1 14 28"
-                    "--kp_radius 2.0 --shell_sizes 1 14 28"
-                    "--kp_radius 2.2 --shell_sizes 1 14 28"
-                    "--kp_radius 2.4 --shell_sizes 1 14 28"
-                    "--kp_radius 2.6 --shell_sizes 1 14 28"
-                    "--kp_radius 2.8 --shell_sizes 1 14 28")
+                    "--kp_radius 1.25 --shell_sizes 1 14 28"
+                    "--kp_radius 1.3 --shell_sizes 1 14 28")
 
 
 echo ""

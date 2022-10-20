@@ -72,9 +72,9 @@ def my_config():
 
     cfg.model.norm = 'batch' # batch, layer
     cfg.model.init_channels = 48  # 48, 64, 80, 96
-    cfg.model.channel_scaling = 1.6  # 2 or sqrt(2) or in between?
+    cfg.model.channel_scaling = 1.41  # 2 or sqrt(2) or in between?
 
-    cfg.model.kp_mode = 'kpconvx'       # Choose ['kpconv', 'kpdef', 'kpinv', 'kpinvx'].
+    cfg.model.kp_mode = 'kpconvd'       # Choose ['kpconv', 'kpdef', 'kpinv', 'kpinvx'].
                                         # Choose ['inv_v1', 'inv_v2', 'inv_v3', 'inv_v4', 'transformer']
                                         # Choose ['kpconv-mod', 'kpdef-mod', 'kpconv-geom'] for modulations
                                         # Choose ['kpconv-depth'] for depthwise conv (groups = input channels = output chanels)
@@ -82,8 +82,8 @@ def my_config():
                                         # Choose ['kpmini' 'kpminix'] for depthwise kpconv
                                         # Choose ['kptran', 'kpminimod'] for kp transformer: depthwise kpconv with attention
                                         # Choose ['kpconvd', 'kpconvx'] fornew block CVPR submission
-    cfg.model.shell_sizes = [1, 21]
-    cfg.model.kp_radius = 1.6
+    cfg.model.shell_sizes = [1, 14, 28]
+    cfg.model.kp_radius = 1.2
     cfg.model.kp_influence = 'linear'
     cfg.model.kp_aggregation = 'nearest'  # 'sum', 'nearest'
     cfg.model.conv_groups = -1   # -1 for depthwise convolution       
@@ -99,7 +99,7 @@ def my_config():
     cfg.model.upsample_n = 3          # Number of neighbors used for nearest neighbor linear interpolation
 
     cfg.model.input_channels = 5    # This value has to be compatible with one of the dataset input features definition
-    cfg.model.neighbor_limits = []      # Use empty list to let calibration get the values
+    cfg.model.neighbor_limits = [10, 11, 13, 14, 14]      # Use empty list to let calibration get the values
     # cfg.model.neighbor_limits = [16, 17, 18, 18, 18]      # Use empty list to let calibration get the values
     # cfg.model.neighbor_limits = [35, 40, 50, 50, 50]    # Use empty list to let calibration get the values
     # cfg.model.neighbor_limits = [16, 16, 16, 16, 16]    # List for point_transformer
@@ -107,8 +107,8 @@ def my_config():
 
     # Specific parameters for involution and transformers
     cfg.model.use_strided_conv = True           # Use convolution op for strided layers instead of involution
-    cfg.model.first_inv_layer = 0               # Use involution layers only from this layer index (from 0 to n_layer - 1)
-    cfg.model.inv_groups = 1                   # negative values to specify CpG instead of G
+    cfg.model.first_inv_layer = 1               # Use involution layers only from this layer index (from 0 to n_layer - 1)
+    cfg.model.inv_groups = 16                   # negative values to specify CpG instead of G
     cfg.model.inv_grp_norm = True
     cfg.model.inv_act = 'sigmoid'               # 'none', 'sigmoid', 'softmax', 'tanh'
             
