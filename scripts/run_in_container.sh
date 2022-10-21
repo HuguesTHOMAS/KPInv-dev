@@ -92,7 +92,7 @@ else
 
     # Adding detached folder as command argument if needed
     if [ "$detach" = true ] ; then
-        if [[ $command == *"python3"*"train_"* ]]; then
+        if [[ $command == *"python3"*"train"* ]]; then
             command="$command --log_path Log_$now"
         fi
     fi

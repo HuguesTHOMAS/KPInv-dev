@@ -70,7 +70,7 @@ def my_config():
     # cfg.model.layer_blocks = (3,  3,  5,  9,  3)
     cfg.model.layer_blocks = (3,  4,  9, 12,  3)
     # cfg.model.layer_blocks = (4,  5, 12, 21,  5)
-    # cfg.model.layer_blocks = (1, 2, 2, 2, 2, 4, 4, 4, 2)
+    # cfg.model.layer_blocks = (1, 2, 2, 2, 2, 4, 4, 4, 2) this with channelscaling = 1.2
     
     cfg.model.norm = 'batch' # batch, layer
     cfg.model.init_channels = 48  # 48, 64, 80, 96
@@ -92,17 +92,26 @@ def my_config():
     
     cfg.model.share_kp = True       #  share kernels within layers                
 
-    cfg.data.init_sub_size = 0.04       # In object classification, we do not subsample initially but still have to define this to define the size of convolutions 
+    # cfg.data.init_sub_size = 0.025      # In object classification, we do not subsample initially but still have to define this to define the size of convolutions 
+    # cfg.data.init_sub_mode = 'none'     # Mode for initial subsampling of data
+    # cfg.model.in_sub_size = -3          # Adapt this with train.in_radius. Try to keep a ratio of ~50 (*0.67 if fps). If negative, and fps, it is stride
+    # cfg.model.in_sub_mode = 'fps'       # Mode for input subsampling
+    # cfg.model.radius_scaling = 2.0      # We increase the convolution radius more slowly here.
+    # cfg.train.in_radius = -1024         # If negative, =number of points per input
+
+    cfg.data.init_sub_size = 0.02       # Even if we do not subsample initially, we still have to define this to define the size of convolutions 
     cfg.data.init_sub_mode = 'none'     # Mode for initial subsampling of data
-    cfg.model.in_sub_size = -2          # Adapt this with train.in_radius. Try to keep a ratio of ~50 (*0.67 if fps). If negative, and fps, it is stride
-    cfg.model.in_sub_mode = 'fps'       # Mode for input subsampling
+    cfg.model.in_sub_size = 0.02        # First layer subsampling sizeo optional. Try to keep a ratio of ~50 (*0.67 if fps). If negative, and fps, it is stride
+    cfg.model.in_sub_mode = 'grid'      # Mode for input subsampling
     cfg.model.radius_scaling = 2.0      # We increase the convolution radius more slowly here.
+    cfg.train.in_radius = 1.0           # If negative, =number of points per input
 
+    # TODO: When using fps, init_sub_size controls the radius of convolution, 
+    # TODO: When using grid subsampling, init_sub_size should be -1 otherwise we do not subsample the first layer, but is it bad?
+    # TODO: Rework the init subsampling strategy and parameters and add the point resampling strategy: 
+    #       https://github.com/guochengqian/PointNeXt/blob/9d5179281169a4d52fe3892986b9ccce156e2805/examples/classification/train.py#L244-L250
 
-    # TODO:
-    # Point resampling like in PointNeXt
-
-
+    # TODO: Then experiment with different conv radius
 
     cfg.model.upsample_n = 3          # Number of neighbors used for nearest neighbor linear interpolation
 
@@ -138,9 +147,6 @@ def my_config():
 
     # How do we sample the input elements (spheres or cubes)
     cfg.train.data_sampler = 'c-regular'   # 'random', 'c-random', 'regular' or 'c-regular'
-
-    # Input spheres radius. Adapt this with model.in_sub_size. Try to keep a ratio of ~50
-    cfg.train.in_radius = -15000  # If negative, =number of points per input. Use negative to compare models
 
     # Batch related_parames
     cfg.train.batch_size = 16                 # Target batch size. If you don't want calibration, you can directly set train.batch_limit

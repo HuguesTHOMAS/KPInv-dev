@@ -124,8 +124,8 @@ class ObjClassifDataset(Dataset):
 
         self.base_augments = []
         self.base_augments.append(RandomScaleFlip(scale=a_cfg.scale,
-                                            anisotropic=a_cfg.anisotropic,
-                                            flip_p=a_cfg.flips))
+                                                  anisotropic=a_cfg.anisotropic,
+                                                  flip_p=a_cfg.flips))
 
         self.base_augments.append(UnitScaleCentering())
         self.base_augments.append(RandomRotate(mode=a_cfg.rotations))
@@ -242,21 +242,17 @@ class ObjClassifDataset(Dataset):
                                                                                 labels=torch_labels,
                                                                                 method=self.cfg.model.in_sub_mode,
                                                                                 return_inverse=True)
+                                                                                
 
-            # pl = pv.Plotter(window_size=[1600, 900])
-            # pl.add_points(torch_points.cpu().numpy(),
-            #               render_points_as_spheres=False,
-            #               scalars=torch_features[:, 1:4].cpu().numpy(),
-            #               rgb=True,
-            #               point_size=6.0)
-            # pl.add_points(in_points.cpu().numpy() + np.array([[5.0, 0, 0]]),
-            #               render_points_as_spheres=False,
-            #               scalars=in_features[:, 1:4].cpu().numpy(),
-            #               rgb=True,
-            #               point_size=8.0)
-            # pl.set_background('white')
-            # pl.enable_eye_dome_lighting()
-            # pl.show()
+            # TODO:
+            # Here, point resampling like in PointNeXt in case 
+
+            # if self.cfg.train.in_radius < 0:
+
+
+            # write_ply('results/test_' +str(p_i)+'.ply',
+            #           [in_points],
+            #           ['x', 'y', 'z'])
 
             # Stack batch
             tp_list += [torch_points]

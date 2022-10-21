@@ -1351,7 +1351,8 @@ def test_kpnext_3():
                   'KPNext48 1,14,28 kp_r=1.20 inv1/1',
                   'KPNextBig56 inv1/8',
                   'KPNextMega64 inv1/8',
-                  'KPNextMega64 inv1/8 upcut']
+                  'KPNextMega64 inv1/8 upcut',
+                  'KPNextBig56  inv1/8 upcut']
 
     # Write KPNExt architecture. Note: it is very similar to resnet, just the shortcuts 
     # are not in the same place otherwise everythong is similar. SO write KPNext and then 
@@ -1416,8 +1417,8 @@ def test_kpnext_3():
         logs = logs[:len(logs_names)]
     logs_names = np.array(logs_names[:len(logs)])
 
-    logs = logs[[-1, -3, -4]]
-    logs_names = logs_names[[-1, -3, -4]]
+    # logs = logs[[-1, -3, -4]]
+    # logs_names = logs_names[[-1, -3, -4]]
 
     return logs, logs_names
 
@@ -1491,11 +1492,11 @@ if __name__ == '__main__':
     underline("Ploting training info")
 
     # Plot the training loss and accuracy
-    # compare_trainings(all_cfgs, logs, logs_names)
+    compare_trainings(all_cfgs, logs, logs_names)
 
 
     # Test the network or show validation
-    perform_test = True
+    perform_test = False
     if perform_test:
 
         print()
