@@ -91,6 +91,7 @@ def init_cfg():
 
     cfg.model.kpinv_reduc = 1           #   Int, reduction ration for kpinv gen mlp
     cfg.model.kpx_expansion = 8         #   Int, expansion parameter for kpinvX
+    cfg.model.kpx_upcut = False         #  Bool, Use upcut in KPConvX block effectively creating two shortcut passes for features
 
     cfg.model.use_strided_conv = True   #  Bool, Use convolution op for strided layers instead of involution
     cfg.model.first_inv_layer = 0       #   Int, Use involution layers only from this layer index

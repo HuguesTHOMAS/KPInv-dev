@@ -1265,7 +1265,7 @@ def compare_on_test_set(list_of_cfg,
         cfg.test.batch_limit = 1
         cfg.test.max_steps_per_epoch = 9999999
         cfg.test.max_votes = 5
-        cfg.test.chkp_idx = 2
+        cfg.test.chkp_idx = 1
 
         # Augmentations
         cfg.augment_test.anisotropic = False

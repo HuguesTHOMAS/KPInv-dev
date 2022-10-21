@@ -67,14 +67,16 @@ def my_config():
     # Network parameters
     # ------------------
 
-    cfg.model.layer_blocks = (3,  3,  5,  9,  3)
+    # cfg.model.layer_blocks = (3,  3,  5,  9,  3)
+    cfg.model.layer_blocks = (3,  4,  9, 12,  3)
+    # cfg.model.layer_blocks = (4,  5, 12, 21,  5)
     # cfg.model.layer_blocks = (1, 2, 2, 2, 2, 4, 4, 4, 2)
 
     cfg.model.norm = 'batch' # batch, layer
-    cfg.model.init_channels = 48  # 48, 64, 80, 96
+    cfg.model.init_channels = 56  # 48, 64, 80, 96
     cfg.model.channel_scaling = 1.41  # 2 or sqrt(2) or in between?
 
-    cfg.model.kp_mode = 'kpconvd'       # Choose ['kpconv', 'kpdef', 'kpinv', 'kpinvx'].
+    cfg.model.kp_mode = 'kpconvx'       # Choose ['kpconv', 'kpdef', 'kpinv', 'kpinvx'].
                                         # Choose ['inv_v1', 'inv_v2', 'inv_v3', 'inv_v4', 'transformer']
                                         # Choose ['kpconv-mod', 'kpdef-mod', 'kpconv-geom'] for modulations
                                         # Choose ['kpconv-depth'] for depthwise conv (groups = input channels = output chanels)
@@ -99,7 +101,8 @@ def my_config():
     cfg.model.upsample_n = 3          # Number of neighbors used for nearest neighbor linear interpolation
 
     cfg.model.input_channels = 5    # This value has to be compatible with one of the dataset input features definition
-    cfg.model.neighbor_limits = [10, 11, 13, 14, 14]      # Use empty list to let calibration get the values
+    
+    cfg.model.neighbor_limits = [10, 11, 12, 12, 12]      # Use empty list to let calibration get the values
     # cfg.model.neighbor_limits = [16, 17, 18, 18, 18]      # Use empty list to let calibration get the values
     # cfg.model.neighbor_limits = [35, 40, 50, 50, 50]    # Use empty list to let calibration get the values
     # cfg.model.neighbor_limits = [16, 16, 16, 16, 16]    # List for point_transformer
@@ -108,9 +111,10 @@ def my_config():
     # Specific parameters for involution and transformers
     cfg.model.use_strided_conv = True           # Use convolution op for strided layers instead of involution
     cfg.model.first_inv_layer = 1               # Use involution layers only from this layer index (from 0 to n_layer - 1)
-    cfg.model.inv_groups = 16                   # negative values to specify CpG instead of G
+    cfg.model.inv_groups = 8                    # negative values to specify CpG instead of G
     cfg.model.inv_grp_norm = True
     cfg.model.inv_act = 'sigmoid'               # 'none', 'sigmoid', 'softmax', 'tanh'
+    cfg.model.kpx_upcut = True
             
     # Specific parameters for kpinv 
     cfg.model.kpinv_reduc = 1
@@ -299,6 +303,7 @@ if __name__ == '__main__':
 
     bool_args = ['model.use_strided_conv',
                  'model.inv_grp_norm',
+                 'model.kpx_upcut',
                  'data.use_cubes',
                  'data.cylindric_input',
                  'augment_train.chromatic_contrast',

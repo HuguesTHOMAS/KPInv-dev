@@ -656,7 +656,7 @@ class KPNeXt(nn.Module):
                                         expansion=4,
                                         drop_path_p=-1.,
                                         layer_scale_init_v=-1.,
-                                        use_upcut=False,
+                                        use_upcut=cfg.model.kpx_upcut,
                                         shared_kp_data=shared_kp_data,
                                         influence_mode=cfg.model.kp_influence,
                                         dimension=cfg.data.dim,

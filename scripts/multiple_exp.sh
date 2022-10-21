@@ -19,11 +19,8 @@ training_script="experiments/S3DIS_simple/train_S3DIS_simple.py"
 # Declare an array variable
 # *************************
 
-declare -a arg_arr=("--kp_radius 1.1 --shell_sizes 1 14 28"
-                    "--kp_radius 1.15 --shell_sizes 1 14 28"
-                    "--kp_radius 1.2 --shell_sizes 1 14 28"
-                    "--kp_radius 1.25 --shell_sizes 1 14 28"
-                    "--kp_radius 1.3 --shell_sizes 1 14 28")
+declare -a arg_arr=("--kpx_upcut 0"
+                    "--kpx_upcut 1")
 
 
 echo ""

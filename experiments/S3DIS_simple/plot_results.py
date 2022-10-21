@@ -1263,17 +1263,7 @@ def test_kpnext():
                   'KPNext48 G1 first_x=2',
                   'KPNext48 G1 first_x=3',
                   'KPNext48 s3 kp_r=1.2',
-                  'KPNext48 s3 kp_r=1.4',
-                  '... TODO new function',
-                  'KPNext48 1,21 kp_r=0.6',
-                  'KPNext48 1,21 kp_r=0.8',
-                  'KPNext48 1,21 kp_r=1.0',
-                  'KPNext48 1,21 kp_r=1.2',
-                  'KPNext48 1,21 kp_r=1.4',
-                  'KPNext48 1,21 kp_r=1.6',
-                  'KPNext48 1,21 kp_r=1.8',
-                  'KPNext48 1,21 kp_r=2.0',
-                  '...']
+                  'KPNext48 s3 kp_r=1.4']
 
     # safe check log names
     if len(logs) > len(logs_names):
@@ -1357,7 +1347,11 @@ def test_kpnext_3():
                   'KPNext48 1,14,28 kp_r=1.15 inv0/1',
                   'KPNext48 1,14,28 kp_r=1.20 inv1/16',
                   'KPNext48 1,14,28 kp_r=1.20 kpconvd',
-                  '...']
+                  'KPNext48 1,14,28 kp_r=1.20 kpconvd',
+                  'KPNext48 1,14,28 kp_r=1.20 inv1/1',
+                  'KPNextBig56 inv1/8',
+                  'KPNextMega64 inv1/8',
+                  'KPNextMega64 inv1/8 upcut']
 
     # Write KPNExt architecture. Note: it is very similar to resnet, just the shortcuts 
     # are not in the same place otherwise everythong is similar. SO write KPNext and then 
@@ -1422,8 +1416,8 @@ def test_kpnext_3():
         logs = logs[:len(logs_names)]
     logs_names = np.array(logs_names[:len(logs)])
 
-    # logs = logs[[-1, 3]]
-    # logs_names = logs_names[[-1, 3]]
+    logs = logs[[-1, -3, -4]]
+    logs_names = logs_names[[-1, -3, -4]]
 
     return logs, logs_names
 
@@ -1497,11 +1491,11 @@ if __name__ == '__main__':
     underline("Ploting training info")
 
     # Plot the training loss and accuracy
-    compare_trainings(all_cfgs, logs, logs_names)
+    # compare_trainings(all_cfgs, logs, logs_names)
 
 
     # Test the network or show validation
-    perform_test = False
+    perform_test = True
     if perform_test:
 
         print()
