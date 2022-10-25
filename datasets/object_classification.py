@@ -53,7 +53,7 @@ from utils.gpu_init import init_gpu
 from utils.gpu_subsampling import subsample_numpy, subsample_pack_batch, subsample_cloud
 from utils.gpu_neigbors import tiled_knn
 from utils.torch_pyramid import build_full_pyramid, pyramid_neighbor_stats, build_base_pyramid
-from utils.cpp_funcs import batch_knn_neighbors
+from utils.cpp_funcs import furthest_point_sample_cpp
 
 from utils.transform import ComposeAugment, RandomRotate, RandomScaleFlip, RandomJitter, FloorCentering, \
     ChromaticAutoContrast, ChromaticTranslation, ChromaticJitter, HueSaturationTranslation, RandomDropColor, \
@@ -233,21 +233,41 @@ class ObjClassifDataset(Dataset):
             torch_points = torch.from_numpy(in_points)
             torch_features = torch.from_numpy(in_features)
 
-            # Input subsampling only if in_sub_size > init_sub_size
-            in_dl = self.cfg.model.in_sub_size
-            if in_dl > 0 and in_dl > self.cfg.data.init_sub_size * 1.01:
-                torch_points, torch_features, torch_labels, _ = subsample_cloud(torch_points,
-                                                                                in_dl,
-                                                                                features=torch_features,
-                                                                                labels=torch_labels,
-                                                                                method=self.cfg.model.in_sub_mode,
-                                                                                return_inverse=True)
-                                                                                
+            # Input subsampling if asked
+            if self.cfg.data.init_sub_mode == 'grid':
+                torch_points, torch_features = subsample_cloud(torch_points,
+                                                               self.cfg.data.init_sub_size,
+                                                               features=torch_features,
+                                                               labels=None,
+                                                               method=self.cfg.data.init_sub_mode,
+                                                               return_inverse=False)
 
-            # TODO:
-            # Here, point resampling like in PointNeXt in case 
+            elif self.cfg.data.init_sub_mode == 'fps' and self.cfg.train.in_radius < 0:
+                # initial fps subsampling like pointnext
+                npoints = -self.cfg.train.in_radius
+                if torch_points.shape[0] > npoints:  # point resampling strategy
+                    point_all = npoints
+                    if self.set == 'training':
+                        if npoints in [1024, 1200]:
+                            point_all = 1200
+                        elif npoints == 4096:
+                            point_all = 4800
+                        elif npoints == 8192:
+                            point_all = 8192
+                        else:
+                            raise NotImplementedError()
+                            
+                    sub_inds = furthest_point_sample_cpp(torch_points, new_n=point_all)
+                    torch_points = torch_points[sub_inds]
+                    torch_features = torch_features[sub_inds]
 
-            # if self.cfg.train.in_radius < 0:
+            # Random drop if asked      
+            if self.cfg.train.in_radius < 0:
+                npoints = -self.cfg.train.in_radius
+                if torch_points.shape[0] > npoints:
+                    selection = torch.randperm(torch_points.shape[0])[:npoints]
+                    torch_points = torch_points[selection]
+                    torch_features = torch_features[selection]
 
 
             # write_ply('results/test_' +str(p_i)+'.ply',
@@ -293,6 +313,10 @@ class ObjClassifDataset(Dataset):
                                             self.cfg.model.neighbor_limits,
                                             0,
                                             sub_mode=self.cfg.model.in_sub_mode)
+            
+            # for i in range(len(input_dict.lengths[0])):
+            #     print([int(lll[i]) for lll in input_dict.lengths])
+            # print('----------------------------------------------------------------')
 
         else:
             input_dict = build_base_pyramid(stacked_points,

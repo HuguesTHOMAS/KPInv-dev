@@ -70,7 +70,7 @@ def my_config():
     # cfg.model.layer_blocks = (3,  3,  5,  9,  3)
     cfg.model.layer_blocks = (3,  4,  9, 12,  3)
     # cfg.model.layer_blocks = (4,  5, 12, 21,  5)
-    # cfg.model.layer_blocks = (1, 2, 2, 2, 2, 4, 4, 4, 2) this with channelscaling = 1.2
+    # cfg.model.layer_blocks = (2, 2, 3, 3, 3, 5, 5, 3, 3)   # this with channelscaling = 1.2
     
     cfg.model.norm = 'batch' # batch, layer
     cfg.model.init_channels = 48  # 48, 64, 80, 96
@@ -99,12 +99,12 @@ def my_config():
     # cfg.model.radius_scaling = 2.0      # We increase the convolution radius more slowly here.
     # cfg.train.in_radius = -1024         # If negative, =number of points per input
 
-    cfg.data.init_sub_size = 0.02       # Even if we do not subsample initially, we still have to define this to define the size of convolutions 
-    cfg.data.init_sub_mode = 'none'     # Mode for initial subsampling of data
-    cfg.model.in_sub_size = 0.02        # First layer subsampling sizeo optional. Try to keep a ratio of ~50 (*0.67 if fps). If negative, and fps, it is stride
+    cfg.data.init_sub_size = 0.19       # Even if we do not subsample initially, we still have to define this to define the size of convolutions 
+    cfg.data.init_sub_mode = 'grid'     # Mode for initial subsampling of data
+    cfg.model.in_sub_size = 0.019       # First layer subsampling sizeo optional. Try to keep a ratio of ~50 (*0.67 if fps). If negative, and fps, it is stride
     cfg.model.in_sub_mode = 'grid'      # Mode for input subsampling
     cfg.model.radius_scaling = 2.0      # We increase the convolution radius more slowly here.
-    cfg.train.in_radius = 1.0           # If negative, =number of points per input
+    cfg.train.in_radius = -1024           # If negative, =number of points per input
 
     # TODO: When using fps, init_sub_size controls the radius of convolution, 
     # TODO: When using grid subsampling, init_sub_size should be -1 otherwise we do not subsample the first layer, but is it bad?
@@ -112,12 +112,20 @@ def my_config():
     #       https://github.com/guochengqian/PointNeXt/blob/9d5179281169a4d52fe3892986b9ccce156e2805/examples/classification/train.py#L244-L250
 
     # TODO: Then experiment with different conv radius
+    # TODO: plots
+    #       - KPNextBig48 grid0.02 + upcut
+    #       - KPNextBig48 grid0.02
+    #       - KPNextDouble48 grid0.02 + upcut
+    #       - KPNextDouble48 grid0.02
+    #       - KPNextBig48 grid0.025
 
     cfg.model.upsample_n = 3          # Number of neighbors used for nearest neighbor linear interpolation
 
     cfg.model.input_channels = 2    # This value has to be compatible with one of the dataset input features definition
     
-    cfg.model.neighbor_limits = [10, 11, 12, 12, 12]      # Use empty list to let calibration get the values
+
+    # cfg.model.neighbor_limits = [8, 8, 8, 9, 9, 10, 10, 10, 10]      # Use empty list to let calibration get the values
+    cfg.model.neighbor_limits = [6, 7, 9, 11, 12]      # Use empty list to let calibration get the values
     # cfg.model.neighbor_limits = [16, 17, 18, 18, 18]      # Use empty list to let calibration get the values
     # cfg.model.neighbor_limits = [35, 40, 50, 50, 50]    # Use empty list to let calibration get the values
     # cfg.model.neighbor_limits = [16, 16, 16, 16, 16]    # List for point_transformer
@@ -129,7 +137,7 @@ def my_config():
     cfg.model.inv_groups = 8                   # negative values to specify CpG instead of G
     cfg.model.inv_grp_norm = True
     cfg.model.inv_act = 'sigmoid'               # 'none', 'sigmoid', 'softmax', 'tanh'
-    cfg.model.kpx_upcut = True
+    cfg.model.kpx_upcut = False
             
     # Specific parameters for kpinv 
     cfg.model.kpinv_reduc = 1
@@ -302,6 +310,8 @@ if __name__ == '__main__':
                 'model.inv_act']
 
     float_args = ['train.weight_decay',
+                  'data.init_sub_size',
+                  'model.in_sub_size',
                   'train.in_radius',
                   'model.kp_radius',
                   'model.channel_scaling',

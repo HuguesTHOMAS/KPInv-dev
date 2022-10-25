@@ -13,14 +13,22 @@ max_containers="2"
 # Training script used
 # ********************
 
-training_script="experiments/S3DIS_simple/train_S3DIS_simple.py"
+training_script="experiments/ScanObjectNN/train.py"
+# training_script="experiments/S3DIS_simple/train_S3DIS_simple.py"
 
 
 # Declare an array variable
 # *************************
 
-declare -a arg_arr=("--kpx_upcut 0"
-                    "--kpx_upcut 1")
+declare -a arg_arr=("--in_sub_size 0.014"
+                    "--in_sub_size 0.015"
+                    "--in_sub_size 0.016"
+                    "--in_sub_size 0.017"
+                    "--in_sub_size 0.018"
+                    "--in_sub_size 0.019"
+                    "--in_sub_size 0.02"
+                    "--in_sub_size 0.021"
+                    "--in_sub_size 0.022")
 
 
 echo ""

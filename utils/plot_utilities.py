@@ -999,16 +999,17 @@ def compare_convergences_segment(list_of_cfg, list_of_paths, list_of_names=None)
     plt.show()
 
 
-def compare_convergences_classif(list_of_paths, list_of_labels=None):
+def compare_convergences_classif(list_of_cfg, list_of_paths, list_of_names=None):
 
     # Parameters
     # **********
 
-    steps_per_epoch = 0
-    smooth_n = 12
+    print('\nCollecting validation logs')
+    t0 = time.time()
+    smooth_n = 2
 
-    if list_of_labels is None:
-        list_of_labels = [str(i) for i in range(len(list_of_paths))]
+    if list_of_names is None:
+        list_of_names = [str(i) for i in range(len(list_of_paths))]
 
     # Read Logs
     # *********
@@ -1019,18 +1020,17 @@ def compare_convergences_classif(list_of_paths, list_of_labels=None):
     all_vote_OA = []
     all_vote_confs = []
 
+    all_n_params = []
+    all_val_throughput = []
 
-    for path in list_of_paths:
 
-        # Load parameters
-        config = Config()
-        config.load(list_of_paths[0])
+    for path, cfg in zip(list_of_paths, list_of_cfg):
 
         # Get the number of classes
-        n_class = config.num_classes
+        n_class = cfg.data.num_classes
 
         # Load epochs
-        epochs, _, _, _, _, _ = load_training_results(path)
+        epochs, _, _, _, _ = load_training_results(path)
         first_e = np.min(epochs)
 
         # Get validation confusions
@@ -1047,6 +1047,11 @@ def compare_convergences_classif(list_of_paths, list_of_labels=None):
             vote_C2 = val_C1
             vote_PRE, vote_REC, vote_F1, vote_IoU, vote_ACC = (val_PRE, val_REC, val_F1, val_IoU, val_ACC)
 
+        # Get model size and throughput info
+        n_params, gpu_memory, throughput = get_log_info(path)
+        all_n_params.append(n_params)
+        all_val_throughput.append(np.mean([tp[len(tp) // 2 + 1] for tp in throughput['validation'][:-1]]))
+
         # Aggregate results
         all_pred_epochs += [np.array([i+first_e for i in range(len(val_ACC))])]
         all_val_OA += [val_ACC]
@@ -1058,13 +1063,19 @@ def compare_convergences_classif(list_of_paths, list_of_labels=None):
     # Best scores
     # ***********
 
-    for i, label in enumerate(list_of_labels):
+    all_best_OA = []
+    all_corresp_mAcc = []
+    all_best_mAcc = []
+    all_corresp_OA = []
+
+    for i, label in enumerate(list_of_names):
 
         print('\n' + label + '\n' + '*' * len(label) + '\n')
         print(list_of_paths[i])
 
         best_epoch = np.argmax(all_vote_OA[i])
         print('Best Accuracy : {:.1f} % (epoch {:d})'.format(100 * all_vote_OA[i][best_epoch], best_epoch))
+
 
         confs = all_vote_confs[i]
 
@@ -1084,6 +1095,32 @@ def compare_convergences_classif(list_of_paths, list_of_labels=None):
 
         print('Corresponding mAcc : {:.1f} %'.format(100 * class_avg_ACC[best_epoch]))
 
+        all_best_OA.append(100 * all_vote_OA[i][best_epoch])
+        all_corresp_mAcc.append(100 * class_avg_ACC[best_epoch])
+
+        best_epoch_2 = np.argmax(class_avg_ACC)
+        all_best_mAcc.append(100 * class_avg_ACC[best_epoch_2])
+        all_corresp_OA.append(100 * all_vote_OA[i][best_epoch_2])
+
+
+    # Print table of results
+    # **********************
+     
+    columns = [list_of_names,
+               all_best_mAcc,
+               all_corresp_OA,
+               all_best_OA,
+               np.array(all_n_params) * 1e-6,
+               all_val_throughput]
+
+    table_str = table_to_str(['logs', 'best mAcc', 'corresp OA', '(best OA)', '#params', 'val_TP'],
+                             columns,
+                             ['{:s}', '{:.1f} %', '{:.1f} %', '({:.1f} %)', '{:.3f} M', '{:.1f} ins/sec'])
+
+    print()
+    print(table_str)
+    print()
+
     # Plots
     # *****
 
@@ -1091,7 +1128,7 @@ def compare_convergences_classif(list_of_paths, list_of_labels=None):
 
         # Figure
         fig = plt.figure(fig_name)
-        for i, label in enumerate(list_of_labels):
+        for i, label in enumerate(list_of_names):
             plt.plot(all_pred_epochs[i], OA[i], linewidth=1, label=label)
         plt.xlabel('epochs')
         plt.ylabel(fig_name + ' Accuracy')
@@ -1107,7 +1144,7 @@ def compare_convergences_classif(list_of_paths, list_of_labels=None):
         ax.grid(linestyle='-.', which='both')
         #ax.set_yticks(np.arange(0.8, 1.02, 0.02))
 
-    #for i, label in enumerate(list_of_labels):
+    #for i, label in enumerate(list_of_names):
     #    print(label, np.max(all_train_OA[i]), np.max(all_val_OA[i]))
 
     # Show all
