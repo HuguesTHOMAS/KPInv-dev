@@ -181,6 +181,10 @@ def main():
             file_types += ['_vh_clean_2.labels.ply']
         # Temporary Mine
 
+    ###################
+    # special downloads
+    ###################
+
     if args.task_data:  # download task data
         download_task_data(out_dir_tasks)
     elif args.label_map:  # download label map file
@@ -219,7 +223,13 @@ def main():
                 if True or key.strip().lower() == 'n':
                     scan_file_types.remove('.sens')
             download_scan(scan_id, out_dir, scan_file_types, use_v1_sens)
-    else:  # download entire release
+
+    #########################
+    # download entire release
+    #########################
+
+    else:  
+
         if len(file_types) == len(FILETYPES):
             print('WARNING: You are downloading the entire ScanNet ' + RELEASE_NAME + ' release which requires ' + RELEASE_SIZE + ' of space.')
         else:

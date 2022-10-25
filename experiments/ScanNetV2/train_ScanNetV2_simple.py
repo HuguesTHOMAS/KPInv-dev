@@ -193,7 +193,7 @@ def my_config():
     # ---------------
 
     # How do we sample the input elements (spheres or cubes)
-    cfg.test.in_radius = 4.0                # For ScanNetV2 4 meters is very large, cover a whole part of the test set with full rooms
+    cfg.test.in_radius = 1000.0                # For ScanNetV2 we want to predict the whole scene at once
     cfg.test.data_sampler = 'regular'       # 'regular' to pick spheres regularly accross the data.
 
     cfg.test.max_steps_per_epoch = 100       # Size of one validation epoch (should be small)

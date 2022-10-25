@@ -21,6 +21,5 @@
 # Number of docker allowed to work in parrallel
 # *********************************************
 
-python3 experiments/Scannetv2/download_scannetv2.py -o ../Data/Scannetv2 --type _vh_clean_2.ply
-# python3 experiments/Scannetv2/download_scannetv2.py -o ../Data/Scannetv2 --type _vh_clean_2.labels.ply
+python3 experiments/ScanNetV2/download_scannetv2.py -o ../Data/ScanNetV2 --type _vh_clean_2.ply
 

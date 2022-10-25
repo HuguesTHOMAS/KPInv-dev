@@ -290,11 +290,53 @@ def test_kpnext_3():
                   'fps1024 + grid0.016',
                   'fps1024 + grid0.017',
                   'fps1024 + grid0.018',
-                  'fps1024 + grid0.019',
+                  'fps1024 + grid0.019 12',
                   'fps1024 + grid0.020',
                   'fps1200 + grid0.019',
-                  'fps1024 + grid0.019bis',
-                  'grid0.019 + grid0.019']
+                  'fps1024 + grid0.019 10',
+                  'grid1024 + grid0.019 10']
+
+    # safe check log names
+    if len(logs) > len(logs_names):
+        logs = logs[:len(logs_names)]
+    logs_names = np.array(logs_names[:len(logs)])
+
+    # logs = logs[[-1, -3, -4]]
+    # logs_names = logs_names[[-1, -3, -4]]
+
+    return logs, logs_names
+
+
+def test_grid019():
+    """
+    GOGO KPNext experiments
+    """
+
+    # Using the dates of the logs, you can easily gather consecutive ones. All logs should be of the same dataset.
+    start = 'Log_2022-10-25_16-41-25'
+    end = 'Log_2022-12-29_23-43-08'
+
+    # Name of the result path
+    res_path = 'results'
+
+    # Gather logs and sort by date
+    logs = np.sort([join(res_path, l) for l in listdir_str(res_path) if start <= l <= end])
+
+    # Optionally add a specific log at a specific place in the log list
+    logs = logs.astype('<U50')
+    logs = np.insert(logs, 0, 'results/Log_2022-10-25_14-14-19')  # 'grid1024 + grid0.019 10'
+    logs = np.insert(logs, 1, 'results/Log_2022-10-25_14-13-17')  # 'fps1024 + grid0.019 10'
+    logs = np.insert(logs, 2, 'results/Log_2022-10-25_09-15-27')  # 'fps1024 + grid0.019 12'
+
+    # Give names to the logs (for plot legends)
+    logs_names = ['grid1024 + grid0.019 10',
+                  'fps1024 + grid0.019 10',
+                  'fps1024 + grid0.019 12',
+                  'fps1024 + grid0.019 12',
+                  'fps1024 + grid0.019 14']
+
+    # TODO: next: [16, 17, 18, 18, 18]
+    # TODO: then: best neighbors with grid
 
     # TODO: Next exp: radius scaling = 2.5 test different input grid size
     # TODO: Test other architectures lighter and faster??? Can we reach 4000 instances per second at test time?
@@ -337,51 +379,6 @@ def test_kpnext_3():
     # logs = logs[[-1, -3, -4]]
     # logs_names = logs_names[[-1, -3, -4]]
 
-
-
-
-
-    # path = '../Data/Scannetv2/scans'
-    # scenes = np.sort([f for f in listdir(path)])
-    # print()
-    # for sc in scenes:
-    #     files = np.sort([f for f in listdir(join(path, sc))])
-    #     print(sc, len(files))
-    # print()
-
-    # print('Problems:')
-    # for sc in scenes:
-    #     files = np.sort([f for f in listdir(join(path, sc))])
-    #     if  len(files) > 2:
-    #         print(sc, len(files))
-    # print('OK')
-
-
-    # print()
-    # print('Ply')
-    # for sc in scenes:
-    #     files = np.sort([f for f in listdir(join(path, sc))])
-    #     plyfiles = [f for f in files if f.endswith('.ply')]
-    #     if len(plyfiles) > 1:
-    #         print()
-    #         print(plyfiles[0])
-    #         print(plyfiles[1])
-
-    #         data1, _ = read_ply(join(path, sc, plyfiles[0]), triangular_mesh=True)
-    #         points = np.vstack((data1['x'], data1['y'], data1['z'])).T  
-    #         labels = data1['label']
-
-    #         data2, _ = read_ply(join(path, sc, plyfiles[1]), triangular_mesh=True)
-    #         colors = np.vstack((data2['red'], data2['green'], data2['blue'])).T
-
-
-    #         print(points.shape, points.dtype)
-    #         print(colors.shape, colors.dtype)
-    #         print(labels.shape, labels.dtype)
-
-    # a = 1/0
-
-
     return logs, logs_names
 
 
@@ -410,7 +407,7 @@ if __name__ == '__main__':
     ######################################################
 
     # My logs: choose the logs to show
-    logs, logs_names = test_kpnext_3()
+    logs, logs_names = test_grid019()
 
     frame_lines_1(["Plot ScanObjectNN experiments"])
 

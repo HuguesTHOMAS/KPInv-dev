@@ -99,12 +99,12 @@ def my_config():
     # cfg.model.radius_scaling = 2.0      # We increase the convolution radius more slowly here.
     # cfg.train.in_radius = -1024         # If negative, =number of points per input
 
-    cfg.data.init_sub_size = 0.19       # Even if we do not subsample initially, we still have to define this to define the size of convolutions 
-    cfg.data.init_sub_mode = 'grid'     # Mode for initial subsampling of data
+    cfg.data.init_sub_size = -1         # Even if we do not subsample initially, we still have to define this to define the size of convolutions 
+    cfg.data.init_sub_mode = 'fps'      # Mode for initial subsampling of data
     cfg.model.in_sub_size = 0.019       # First layer subsampling sizeo optional. Try to keep a ratio of ~50 (*0.67 if fps). If negative, and fps, it is stride
     cfg.model.in_sub_mode = 'grid'      # Mode for input subsampling
     cfg.model.radius_scaling = 2.0      # We increase the convolution radius more slowly here.
-    cfg.train.in_radius = -1024           # If negative, =number of points per input
+    cfg.train.in_radius = -1024         # If negative, =number of points per input
 
     # TODO: When using fps, init_sub_size controls the radius of convolution, 
     # TODO: When using grid subsampling, init_sub_size should be -1 otherwise we do not subsample the first layer, but is it bad?
@@ -125,7 +125,8 @@ def my_config():
     
 
     # cfg.model.neighbor_limits = [8, 8, 8, 9, 9, 10, 10, 10, 10]      # Use empty list to let calibration get the values
-    cfg.model.neighbor_limits = [6, 7, 9, 11, 12]      # Use empty list to let calibration get the values
+    # cfg.model.neighbor_limits = [10, 11, 12, 12, 12]      # Use empty list to let calibration get the values
+    cfg.model.neighbor_limits = [14, 15, 16, 16, 16]      # Use empty list to let calibration get the values
     # cfg.model.neighbor_limits = [16, 17, 18, 18, 18]      # Use empty list to let calibration get the values
     # cfg.model.neighbor_limits = [35, 40, 50, 50, 50]    # Use empty list to let calibration get the values
     # cfg.model.neighbor_limits = [16, 16, 16, 16, 16]    # List for point_transformer
