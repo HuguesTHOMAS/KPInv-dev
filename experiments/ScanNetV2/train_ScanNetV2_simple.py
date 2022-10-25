@@ -18,8 +18,6 @@
 #
 
 # Common libs
-from decimal import MAX_PREC
-from operator import mod
 import os
 import sys
 import time
@@ -45,7 +43,7 @@ from models.InvolutionNet import InvolutionFCNN
 
 from datasets.scene_seg import SceneSegSampler, SceneSegCollate
 
-from experiments.ScanNetV2_simple.ScanNetV2 import ScanNetV2_cfg, ScanNetV2Dataset
+from experiments.ScanNetV2.ScanNetV2 import ScanNetV2_cfg, ScanNetV2Dataset
 
 from tasks.trainval import train_and_validate
 
