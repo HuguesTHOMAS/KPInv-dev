@@ -552,9 +552,6 @@ class KPNeXt(nn.Module):
                 if self.add_decoder_layer:
                     conv_r *= 1 / self.radius_scaling
                     conv_sig *= 1 / self.radius_scaling
-
-                    print('decoder_layer_{:d}'.format(layer), C, C)
-
                     decoder_layer_i = self.get_residual_block(C, C, conv_r, conv_sig, cfg,
                                                               shared_kp_data=self.shared_kp[l - 1])
                     setattr(self, 'decoder_layer_{:d}'.format(layer), decoder_layer_i)
@@ -791,9 +788,11 @@ class KPNeXt(nn.Module):
                 unary = getattr(self, 'decoder_unary_{:d}'.format(layer))
                 feats = unary(feats)
 
+                print(layer, feats.shape)
+
                 # Optional Decoder layers
                 if self.add_decoder_layer:
-                    block_list = getattr(self, 'decoder_layer_{:d}'.format(layer))
+                    block = getattr(self, 'decoder_layer_{:d}'.format(layer))
                     feats, _ = block(batch.in_dict.points[l], batch.in_dict.points[l], feats, batch.in_dict.neighbors[l])
 
 
