@@ -333,7 +333,65 @@ def test_grid019():
                   'fps1024 + grid0.019 10',
                   'fps1024 + grid0.019 12',
                   'fps1024 + grid0.019 12',
-                  'fps1024 + grid0.019 14']
+                  'fps1024 + grid0.019 14',
+                  'fps1024 + grid0.019 12',
+                  'grid1024 + grid0.019 12',
+                  'fps1024 + grid0.019 12 Snet',
+                  'fps1024 + grid0.019 12 Mnet']
+
+    # safe check log names
+    if len(logs) > len(logs_names):
+        logs = logs[:len(logs_names)]
+    logs_names = np.array(logs_names[:len(logs)])
+
+    # logs = logs[[-1, -3, -4]]
+    # logs_names = logs_names[[-1, -3, -4]]
+
+    return logs, logs_names
+
+
+def test_architecture():
+    """
+    GOGO KPNext experiments
+    """
+
+    # Using the dates of the logs, you can easily gather consecutive ones. All logs should be of the same dataset.
+    start = 'Log_2022-10-26_07-35-08'
+    end = 'Log_2022-12-29_23-43-08'
+
+    # Name of the result path
+    res_path = 'results'
+
+    # Gather logs and sort by date
+    logs = np.sort([join(res_path, l) for l in listdir_str(res_path) if start <= l <= end])
+
+    # Optionally add a specific log at a specific place in the log list
+    logs = logs.astype('<U50')
+    logs = np.insert(logs, 0, 'results/Log_2022-10-25_14-13-17')
+    logs = np.insert(logs, 1, 'results/Log_2022-10-25_09-15-27')
+    logs = np.insert(logs, 2, 'results/Log_2022-10-25_16-41-25')
+    logs = np.insert(logs, 3, 'results/Log_2022-10-25_16-41-39')
+    logs = np.insert(logs, 4, 'results/Log_2022-10-25_20-50-59')
+
+
+    # Give names to the logs (for plot legends)
+    logs_names = ['net1 (10)',
+                  'net1 (12)',
+                  'net1 (12)',
+                  'net1 (14)',
+                  'net1 (12)',
+                  'net2',
+                  'net3',
+                  'net4',
+                  'net4++',
+                  'net5 0.014',
+                  'net5 0.015',
+                  'net5 0.016',
+                  'net5 0.017',
+                  'net5 0.018',
+                  'net5 0.019',
+                  'net5 0.020',
+                  'net5 0.021']
 
     # TODO: next: [16, 17, 18, 18, 18]
     # TODO: then: best neighbors with grid
@@ -407,7 +465,7 @@ if __name__ == '__main__':
     ######################################################
 
     # My logs: choose the logs to show
-    logs, logs_names = test_grid019()
+    logs, logs_names = test_architecture()
 
     frame_lines_1(["Plot ScanObjectNN experiments"])
 
@@ -429,7 +487,10 @@ if __name__ == '__main__':
     # Print differences in a nice table
     print_cfg_diffs(logs_names,
                     all_cfgs,
-                    # show_params=['model.in_sub_size',
+                    # show_params=['data.init_sub_size',
+                    #              'data.init_sub_mode',
+                    #              'model.in_sub_size',
+                    #              'model.in_sub_mode',
                     #              'train.in_radius'],
                     hide_params=['test.batch_limit',
                                  'train.batch_limit',

@@ -53,7 +53,8 @@ def fill_pyramid(pyramid: EasyDict,
                  radius_scaling: float,
                  neighbor_limits: List[int],
                  upsample_n: int = 1,
-                 sub_mode: str = 'grid'):
+                 sub_mode: str = 'grid',
+                 grid_pool_mode: bool = False):
     """
     Fill the graph pyramid, with:
         > The subampled points for each layer, in pack mode.
@@ -92,7 +93,12 @@ def fill_pyramid(pyramid: EasyDict,
     lengths0 = pyramid.lengths[0]
     for i in range(num_layers):
         if i > 0:
-            sub_points, sub_lengths = subsample_pack_batch(points0, lengths0, sub_size, method=sub_mode)
+            if sub_mode == 'grid' and grid_pool_mode:
+                sub_points, sub_lengths, pools, ups = subsample_pack_batch(points0, lengths0, sub_size, method=sub_mode, return_pool_up=True)
+                # TODO: Implement this function and then adapt the rest of the pyramid and then adapt the network ops
+            else:
+                sub_points, sub_lengths = subsample_pack_batch(points0, lengths0, sub_size, method=sub_mode)
+
             pyramid.points.append(sub_points)
             pyramid.lengths.append(sub_lengths)
             if sub_mode == 'fps':
@@ -149,7 +155,8 @@ def build_full_pyramid(points: Tensor,
                        radius_scaling: float,
                        neighbor_limits: List[int],
                        upsample_n: int = 1,
-                       sub_mode: str = 'grid'):
+                       sub_mode: str = 'grid',
+                       grid_pool_mode: bool = False):
     """
     Build the graph pyramid, consisting of:
         > The subampled points for each layer, in pack mode.
@@ -168,7 +175,8 @@ def build_full_pyramid(points: Tensor,
                  radius_scaling,
                  neighbor_limits,
                  upsample_n,
-                 sub_mode)
+                 sub_mode,
+                 grid_pool_mode)
 
     return pyramid
 

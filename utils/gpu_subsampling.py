@@ -589,7 +589,7 @@ def subsample_cloud(points, sub_size, features=None, labels=None, method='grid',
     return return_list
 
     
-def subsample_pack_batch(points, lengths, sub_size, method='grid'):
+def subsample_pack_batch(points, lengths, sub_size, method='grid', return_pool_up=False):
     """
     Subsample torch batch of point clouds with different method,
     separating the batch in a list of point clouds.

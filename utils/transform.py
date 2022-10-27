@@ -1,6 +1,8 @@
 
 import numpy as np
+import torch
 from utils.rotation import get_random_rotations
+from utils.cpp_funcs import furthest_point_sample_cpp
 
 
 class ComposeAugment(object):
@@ -74,7 +76,6 @@ class FloorCentering(object):
         coord[:, self.gravity_dim] -= np.min(coord[:, self.gravity_dim])
         return coord, feat, label
 
-
 class UnitScaleCentering(object):
     """
     Centering the point cloud in the xy plane
@@ -98,6 +99,32 @@ class UnitScaleCentering(object):
 
         return coord, feat, label
 
+class RandomDrop(object):
+    def __init__(self, p=0.15, fps=False):
+        self.p = p
+        self.fps = fps
+
+    def __call__(self, coord, feat, label):
+
+        if 0 < self.p < 1:
+            N1 = coord.shape[0]
+            N2 = int(np.ceil(N1 * (1 - self.p)))
+
+            if self.fps:
+                # Regular fps subsampling
+                selection = np.random.permutation(N1)[:N2]
+                selection = furthest_point_sample_cpp(torch.from_numpy(coord), new_n=N2)
+            else:
+                # Random drop of points
+                selection = np.random.permutation(N1)[:N2]
+
+            coord = coord[selection]
+            if feat is not None:
+                feat = feat[selection]
+            if label is not None:
+                label = label[selection]
+
+        return coord, feat, label
 
 class RandomJitter(object):
     def __init__(self, sigma=0.01, clip=0.05):

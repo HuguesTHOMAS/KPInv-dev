@@ -56,7 +56,7 @@ from utils.cpp_funcs import batch_knn_neighbors
 
 from utils.transform import ComposeAugment, RandomRotate, RandomScaleFlip, RandomJitter, FloorCentering, \
     ChromaticAutoContrast, ChromaticTranslation, ChromaticJitter, HueSaturationTranslation, RandomDropColor, \
-    ChromaticNormalize, HeightNormalize, RandomFullColor
+    ChromaticNormalize, HeightNormalize, RandomFullColor, RandomDrop
 
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -138,7 +138,10 @@ class SceneSegDataset(Dataset):
         else:
             a_cfg = cfg.augment_test
 
-        self.base_augments = []
+        self.base_augments = [] 
+        
+        self.base_augments.append(RandomDrop(p=a_cfg.pts_drop_p,
+                                             fps=a_cfg.pts_drop_reg))
         self.base_augments.append(RandomScaleFlip(scale=a_cfg.scale,
                                             anisotropic=a_cfg.anisotropic,
                                             flip_p=a_cfg.flips))
@@ -200,6 +203,12 @@ class SceneSegDataset(Dataset):
         # Load KDTrees
         ##############
 
+        # Advanced display
+        pN = len(self.scene_files)
+        progress_n = 30
+        fmt_str = '[{:<' + str(progress_n) + '}] {:5.1f}%'
+        print('\nInitial subsampling ({:.3f}) and input KDTree preparation:'.format(dl))
+
         for i, file_path in enumerate(self.scene_files):
 
             # Restart timer
@@ -217,7 +226,6 @@ class SceneSegDataset(Dataset):
 
             # Check if inputs have already been computed
             if exists(KDTree_file):
-                print('\nFound KDTree for cloud {:s}, subsampled at {:.3f}'.format(cloud_name, dl))
 
                 # read ply with data
                 if dl > 0:
@@ -240,7 +248,6 @@ class SceneSegDataset(Dataset):
                         sub_z = None
 
             else:
-                print('\nPreparing KDTree for cloud {:s}, subsampled at {:.3f}'.format(cloud_name, dl))
 
                 # Read ply file
                 data = read_ply(file_path)
@@ -306,10 +313,13 @@ class SceneSegDataset(Dataset):
             self.input_features += [sub_features]
             self.input_labels += [sub_labels]
             self.input_z += [sub_z]
+            
+            print('', end='\r')
+            print(fmt_str.format('#' * ((i * progress_n) // pN), 100 * i / pN), end='', flush=True)
 
-            size = sub_features.shape[0] * 4 * 7
-            print('{:.1f} MB loaded in {:.1f}s'.format(size * 1e-6, time.time() - t0))
-
+        print('', end='\r')
+        print(fmt_str.format('#' * progress_n, 100), end='', flush=True)
+        print('\n')
 
         ######################
         # Reprojection indices
@@ -318,7 +328,11 @@ class SceneSegDataset(Dataset):
         # Only necessary for validation and test sets
         if dl > 0 and self.set in ['validation', 'test']:
 
-            print('\nPreparing reprojection indices for testing')
+            # Advanced display
+            pN = len(self.scene_files)
+            progress_n = 30
+            fmt_str = '[{:<' + str(progress_n) + '}] {:5.1f}%'
+            print('\nPreparing reprojection indices for testing:')
 
             # Get validation/test reprojection indices
             for i, file_path in enumerate(self.scene_files):
@@ -360,7 +374,13 @@ class SceneSegDataset(Dataset):
 
                 self.test_proj += [proj_inds]
                 self.val_labels += [labels]
-                print('{:s} done in {:.1f}s'.format(self.scene_names[i], time.time() - t0))
+            
+                print('', end='\r')
+                print(fmt_str.format('#' * ((i * progress_n) // pN), 100 * i / pN), end='', flush=True)
+
+            print('', end='\r')
+            print(fmt_str.format('#' * progress_n, 100), end='', flush=True)
+            print('\n')
 
         print()
 
@@ -685,7 +705,6 @@ class SceneSegDataset(Dataset):
                 in_labels = torch_labels
                 inv_inds = torch.arange(torch_points.shape[0], dtype=torch.long)
 
-
             # pl = pv.Plotter(window_size=[1600, 900])
             # pl.add_points(torch_points.cpu().numpy(),
             #               render_points_as_spheres=False,
@@ -701,6 +720,7 @@ class SceneSegDataset(Dataset):
             # pl.enable_eye_dome_lighting()
             # pl.show()
 
+            
             # Stack batch
             p_list += [in_points]
             f_list += [in_features]
@@ -745,6 +765,23 @@ class SceneSegDataset(Dataset):
         input_invs = torch.cat(pinv_list, dim=0)
         stack_lengths = torch.LongTensor([int(pp.shape[0]) for pp in p_list])
         stack_lengths0 = torch.LongTensor([int(pp.shape[0]) for pp in pi_list])
+    
+        # Optional Mix3D augment (we just need to modify the lengths)
+        if self.set == 'training' and self.cfg.augment_train.mix3D > 0:
+
+            # Choose how much we merge
+            B = len(p_list)
+            untouched = max(0, int(np.ceil(B * (1 - self.cfg.augment_train.mix3D))))
+            if (B - untouched) % 2 == 1:
+                untouched += 1
+
+            # Combine lengths
+            combined_lengths = torch.sum(torch.reshape(stack_lengths[:-untouched], (-1, 2)), axis=1)
+            stack_lengths = torch.cat([combined_lengths, stack_lengths[-untouched:]])
+            combined_lengths0 = torch.sum(torch.reshape(stack_lengths0[:-untouched], (-1, 2)), axis=1)
+            stack_lengths0 = torch.cat([combined_lengths0, stack_lengths0[-untouched:]])
+
+            # We do not care about: center_points, cloud_ind, input_inds or input_invs (only used for test)
 
 
         #######################

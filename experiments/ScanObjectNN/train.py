@@ -66,15 +66,21 @@ def my_config():
 
     # Network parameters
     # ------------------
+    
+    cfg.model.layer_blocks = (3,  6,  12, 9,  3)  # for r_scaling 2.5
 
     # cfg.model.layer_blocks = (3,  3,  5,  9,  3)
-    cfg.model.layer_blocks = (3,  4,  9, 12,  3)
+    # cfg.model.layer_blocks = (3,  4,  9, 12,  3)
+
+    # cfg.model.layer_blocks = (1,  2,  3,  3,  9,  3)
+    # cfg.model.layer_blocks = (3,  3,  5,  9,  12,  3)
+
     # cfg.model.layer_blocks = (4,  5, 12, 21,  5)
     # cfg.model.layer_blocks = (2, 2, 3, 3, 3, 5, 5, 3, 3)   # this with channelscaling = 1.2
     
     cfg.model.norm = 'batch' # batch, layer
-    cfg.model.init_channels = 48  # 48, 64, 80, 96
-    cfg.model.channel_scaling = 1.41  # 48, 64, 80, 96
+    cfg.model.init_channels = 64  # 48, 64, 80, 96
+    cfg.model.channel_scaling = 1.41  # 1.41 (1/2) or 1.59 (2/3)
 
     cfg.model.kp_mode = 'kpconvx'       # Choose ['kpconv', 'kpdef', 'kpinv', 'kpinvx'].
                                         # Choose ['inv_v1', 'inv_v2', 'inv_v3', 'inv_v4', 'transformer']
@@ -92,41 +98,21 @@ def my_config():
     
     cfg.model.share_kp = True       #  share kernels within layers                
 
-    # cfg.data.init_sub_size = 0.025      # In object classification, we do not subsample initially but still have to define this to define the size of convolutions 
-    # cfg.data.init_sub_mode = 'none'     # Mode for initial subsampling of data
-    # cfg.model.in_sub_size = -3          # Adapt this with train.in_radius. Try to keep a ratio of ~50 (*0.67 if fps). If negative, and fps, it is stride
-    # cfg.model.in_sub_mode = 'fps'       # Mode for input subsampling
-    # cfg.model.radius_scaling = 2.0      # We increase the convolution radius more slowly here.
-    # cfg.train.in_radius = -1024         # If negative, =number of points per input
-
     cfg.data.init_sub_size = -1         # Even if we do not subsample initially, we still have to define this to define the size of convolutions 
     cfg.data.init_sub_mode = 'fps'      # Mode for initial subsampling of data
     cfg.model.in_sub_size = 0.019       # First layer subsampling sizeo optional. Try to keep a ratio of ~50 (*0.67 if fps). If negative, and fps, it is stride
     cfg.model.in_sub_mode = 'grid'      # Mode for input subsampling
-    cfg.model.radius_scaling = 2.0      # We increase the convolution radius more slowly here.
+    cfg.model.radius_scaling = 2.5     # We increase the convolution radius more slowly here.
     cfg.train.in_radius = -1024         # If negative, =number of points per input
 
-    # TODO: When using fps, init_sub_size controls the radius of convolution, 
-    # TODO: When using grid subsampling, init_sub_size should be -1 otherwise we do not subsample the first layer, but is it bad?
-    # TODO: Rework the init subsampling strategy and parameters and add the point resampling strategy: 
-    #       https://github.com/guochengqian/PointNeXt/blob/9d5179281169a4d52fe3892986b9ccce156e2805/examples/classification/train.py#L244-L250
-
-    # TODO: Then experiment with different conv radius
-    # TODO: plots
-    #       - KPNextBig48 grid0.02 + upcut
-    #       - KPNextBig48 grid0.02
-    #       - KPNextDouble48 grid0.02 + upcut
-    #       - KPNextDouble48 grid0.02
-    #       - KPNextBig48 grid0.025
 
     cfg.model.upsample_n = 3          # Number of neighbors used for nearest neighbor linear interpolation
-
     cfg.model.input_channels = 2    # This value has to be compatible with one of the dataset input features definition
     
 
-    # cfg.model.neighbor_limits = [8, 8, 8, 9, 9, 10, 10, 10, 10]      # Use empty list to let calibration get the values
-    # cfg.model.neighbor_limits = [10, 11, 12, 12, 12]      # Use empty list to let calibration get the values
-    cfg.model.neighbor_limits = [14, 15, 16, 16, 16]      # Use empty list to let calibration get the values
+    # cfg.model.neighbor_limits = [8, 8, 8, 9, 9, 10, 10, 10, 10]
+    # cfg.model.neighbor_limits = [8, 9, 10, 12, 12, 12]
+    cfg.model.neighbor_limits = [10, 11, 12, 14, 14]      # Use empty list to let calibration get the values
     # cfg.model.neighbor_limits = [16, 17, 18, 18, 18]      # Use empty list to let calibration get the values
     # cfg.model.neighbor_limits = [35, 40, 50, 50, 50]    # Use empty list to let calibration get the values
     # cfg.model.neighbor_limits = [16, 16, 16, 16, 16]    # List for point_transformer
@@ -135,7 +121,7 @@ def my_config():
     # Specific parameters for involution and transformers
     cfg.model.use_strided_conv = True           # Use convolution op for strided layers instead of involution
     cfg.model.first_inv_layer = 1               # Use involution layers only from this layer index (from 0 to n_layer - 1)
-    cfg.model.inv_groups = 8                   # negative values to specify CpG instead of G
+    cfg.model.inv_groups = 1                   # negative values to specify CpG instead of G
     cfg.model.inv_grp_norm = True
     cfg.model.inv_act = 'sigmoid'               # 'none', 'sigmoid', 'softmax', 'tanh'
     cfg.model.kpx_upcut = False
@@ -246,27 +232,6 @@ def adjust_config(cfg):
         cfg.model.kp_sigma = cfg.model.kp_radius
     else:
         cfg.model.kp_sigma = 0.7 * cfg.model.kp_radius
-
-
-    # Input radius
-    if cfg.train.in_radius > 0:
-
-        # In case we use cubes adjust the size
-        if cfg.data.use_cubes:
-            if cfg.data.cylindric_input:
-                cfg.train.in_radius *= np.pi**(1/2) / 2  # ratio between square and circle area
-            else:
-                cfg.train.in_radius *= (4 / 3 * np.pi)**(1/3) / 2  # ratio between cube and sphere volume
-
-    else:
-
-        # In case we sample a fixed number od points, some options cannot be used
-        if cfg.train.data_sampler == 'regular':
-            raise ValueError('Unable to use regular sampling with fixed number of input points. We need fixed radius.')
-
-        # We have to used input already subsampled at the right size
-        if cfg.model.in_sub_size > 0:
-            cfg.data.init_sub_size = cfg.model.in_sub_size
 
     # Checkpoint gap
     cfg.train.checkpoint_gap = cfg.train.max_epoch // 5

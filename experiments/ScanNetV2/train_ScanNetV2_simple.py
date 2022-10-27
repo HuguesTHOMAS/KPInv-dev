@@ -90,9 +90,9 @@ def my_config():
     
     cfg.model.share_kp = True       #  share kernels within layers                
 
-    cfg.data.init_sub_size = 0.04       # -1.0 so that dataset point clouds are not initially subsampled
+    cfg.data.init_sub_size = 0.02       # -1.0 so that dataset point clouds are not initially subsampled
     cfg.data.init_sub_mode = 'grid'     # Mode for initial subsampling of data
-    cfg.model.in_sub_size = 0.04        # Adapt this with train.in_radius. Try to keep a ratio of ~50 (*0.67 if fps). If negative, and fps, it is stride
+    cfg.model.in_sub_size = 0.02        # Adapt this with train.in_radius. Try to keep a ratio of ~50 (*0.67 if fps). If negative, and fps, it is stride
     cfg.model.in_sub_mode = 'grid'      # Mode for input subsampling
     cfg.model.radius_scaling = 2.0     # Increase conv radius by this much  
 
@@ -382,22 +382,24 @@ if __name__ == '__main__':
                                     chosen_set='training',
                                     precompute_pyramid=True)
     underline('Loading validation dataset')
-    test_dataset = ScanNetV2Dataset(cfg,
+    val_dataset = ScanNetV2Dataset(cfg,
                                 chosen_set='validation',
                                 precompute_pyramid=True)
+    
+    a = 1/0
     
     # Calib from training data
     training_dataset.calib_batch(cfg, update_test=False)
     training_dataset.calib_neighbors(cfg)
-    test_dataset.b_n = cfg.test.batch_size
-    test_dataset.b_lim = cfg.test.batch_limit
+    val_dataset.b_n = cfg.test.batch_size
+    val_dataset.b_lim = cfg.test.batch_limit
 
     # Save configuration now that it is complete
     save_cfg(cfg)
     
     # Initialize samplers
     training_sampler = SceneSegSampler(training_dataset)
-    test_sampler = SceneSegSampler(test_dataset)
+    val_sampler = SceneSegSampler(val_dataset)
 
     # Initialize the dataloader
     training_loader = DataLoader(training_dataset,
@@ -406,9 +408,9 @@ if __name__ == '__main__':
                                  collate_fn=SceneSegCollate,
                                  num_workers=cfg.train.num_workers,
                                  pin_memory=True)
-    test_loader = DataLoader(test_dataset,
+    val_loader = DataLoader(val_dataset,
                              batch_size=1,
-                             sampler=test_sampler,
+                             sampler=val_sampler,
                              collate_fn=SceneSegCollate,
                              num_workers=cfg.test.num_workers,
                              pin_memory=True)
@@ -426,14 +428,12 @@ if __name__ == '__main__':
     # Define network model
     t1 = time.time()
 
-
     modulated = False
     if 'mod' in cfg.model.kp_mode:
         modulated = True
 
     if cfg.model.kp_mode in ['kpconvx', 'kpconvd']:
         net = KPNeXt(cfg)
-
 
     elif cfg.model.kp_mode.startswith('kpconv') or cfg.model.kp_mode in ['kpmini', 'kpminix']:
         net = KPConvFCNN(cfg, modulated=modulated, deformable=False)
@@ -592,7 +592,7 @@ if __name__ == '__main__':
     frame_lines_1(['Training and Validation'])
 
     # Go
-    train_and_validate(net, training_loader, test_loader, cfg, on_gpu=True)
+    train_and_validate(net, training_loader, val_loader, cfg, on_gpu=True)
 
     print('Forcing exit now')
     os.kill(os.getpid(), signal.SIGINT)
