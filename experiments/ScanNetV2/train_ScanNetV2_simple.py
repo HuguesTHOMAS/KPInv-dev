@@ -36,7 +36,7 @@ from utils.config import init_cfg, save_cfg, get_directories
 from utils.printing import frame_lines_1, underline
 from utils.gpu_init import init_gpu
 
-from models.KPNext import KPNeXt, KPCNN_old
+from models.KPNext import KPNeXt
 from models.KPConvNet import KPFCNN as KPConvFCNN
 from models.KPInvNet import KPInvFCNN
 from models.InvolutionNet import InvolutionFCNN

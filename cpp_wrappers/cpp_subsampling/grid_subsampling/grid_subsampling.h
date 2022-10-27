@@ -79,6 +79,12 @@ public:
 	}
 };
 
+void grid_pools_and_ups(vector<PointXYZ> &original_points,
+						vector<PointXYZ> &subsampled_points,
+						vector<int> &poolings,
+						vector<int> &upsamplings,
+						float sampleDl);
+
 void grid_subsampling(vector<PointXYZ>& original_points,
                       vector<PointXYZ>& subsampled_points,
                       vector<float>& original_features,
@@ -98,4 +104,12 @@ void batch_grid_subsampling(vector<PointXYZ>& original_points,
                             vector<int>& subsampled_batches,
                             float sampleDl,
                             int max_p);
+
+void partition_batch_grid(vector<PointXYZ>& original_points,
+                              vector<PointXYZ>& subsampled_points,
+                              vector<int>& original_batches,
+                              vector<int>& subsampled_batches,
+                              vector<int>& pooling_inds,
+                              vector<int>& upsampling_inds,
+                              float sampleDl);
 

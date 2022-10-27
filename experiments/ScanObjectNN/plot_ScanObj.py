@@ -386,8 +386,7 @@ def test_architecture():
                   'net4++',
                   'net5 0.014',
                   'net5 0.015',
-                  'net5 0.016',,
-                  'net5 0.019',]
+                  'net5 0.016',]
 
     # TODO: next: [16, 17, 18, 18, 18]
     # TODO: then: best neighbors with grid
@@ -461,15 +460,17 @@ def test_architecture2():
                   'net5 0.014',
                   'net5 0.015',
                   'net5 0.016',
-                  'net5 0.017',
-                  'net5 0.018',
-                  'net5 0.019',
-                  'net5 0.020',
-                  'net5 0.021']
+                  'net6 0.019',
+                  'net1bis + gridpool']
 
-    # TODO: Next exp: radius scaling = 2.5 test different input grid size
-    # TODO: Test other architectures lighter and faster??? Can we reach 4000 instances per second at test time?
-    # TODO: Add other stuff from convnext like droppath etc
+    # OK stop for now, best so far was net1 (12). Use it as base for new experiemnts in the future
+
+    # TODO: What we have not done yet:
+    #           - Try different kp_radius than 1.2 (it will mean more neighbors) and other disp as 1 14 28
+    #           - Try more architectures
+    #           - Try no group in inv
+    #           - Add other stuff from convnext like droppath etc
+    #           - Faster to reach  4000 instances per second at test time?
 
     # TODO:
     #

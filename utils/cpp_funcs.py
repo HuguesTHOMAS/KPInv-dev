@@ -62,61 +62,31 @@ def grid_subsampling(points, features=None, labels=None, sampleDl=0.1, verbose=0
                                          verbose=verbose)
 
 
-def batch_grid_subsampling(points, batches_len, features=None, labels=None,
-                           sampleDl=0.1, max_p=0, verbose=0, random_grid_orient=True):
+def batch_grid_partition(points, batches_len, sampleDl=0.1):
     """
-    CPP wrapper for a grid subsampling (method = barycenter for points and features)
+    CPP wrapper for a grid subsampling (method = barycenter for points and features).
+    Also returns pooling and upsampling inds
     :param points: (N, 3) matrix of input points
-    :param features: optional (N, d) matrix of features (floating number)
-    :param labels: optional (N,) matrix of integer labels
     :param sampleDl: parameter defining the size of grid voxels
-    :param verbose: 1 to display
     :return: subsampled points, with features and/or labels depending of the input
     """
 
-    ###########
-    # Sunsample
-    ###########
 
-    if (features is None) and (labels is None):
-        s_points, s_len = cpp_subsampling.grid_subsample_batch(points,
-                                                               batches_len,
-                                                               sampleDl=sampleDl,
-                                                               max_p=max_p,
-                                                               verbose=verbose)
-        return s_points, s_len
-
-    elif (labels is None):
-        s_points, s_len, s_features = cpp_subsampling.grid_subsample_batch(points,
+    s_points, s_len, pools, ups = cpp_subsampling.batch_grid_partitionning(points,
                                                                            batches_len,
-                                                                           features=features,
-                                                                           sampleDl=sampleDl,
-                                                                           max_p=max_p,
-                                                                           verbose=verbose)
-        return s_points, s_len, s_features
+                                                                           sampleDl=sampleDl)
 
-    elif (features is None):
-        s_points, s_len, s_labels = cpp_subsampling.grid_subsample_batch(points,
-                                                                         batches_len,
-                                                                         classes=labels,
-                                                                         sampleDl=sampleDl,
-                                                                         max_p=max_p,
-                                                                         verbose=verbose)
-        return s_points, s_len, s_labels
+    if torch.is_tensor(points):
+        s_points = torch.from_numpy(s_points).to(points.device)
+        s_len = torch.from_numpy(s_len).to(points.device)
+        pools = torch.from_numpy(pools).to(points.device)
+        ups = torch.from_numpy(ups).to(points.device)
 
-    else:
-        s_points, s_len, s_features, s_labels = cpp_subsampling.grid_subsample_batch(points,
-                                                                                     batches_len,
-                                                                                     features=features,
-                                                                                     classes=labels,
-                                                                                     sampleDl=sampleDl,
-                                                                                     max_p=max_p,
-                                                                                     verbose=verbose)
-        return s_points, s_len, s_features, s_labels
+    return s_points, s_len, pools, ups
 
 
 
-def batch_grid_subsampling_old(points, batches_len, features=None, labels=None,
+def batch_grid_subsampling(points, batches_len, features=None, labels=None,
                            sampleDl=0.1, max_p=0, verbose=0, random_grid_orient=True):
     """
     CPP wrapper for a grid subsampling (method = barycenter for points and features)

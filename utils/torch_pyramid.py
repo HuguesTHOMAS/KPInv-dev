@@ -8,7 +8,7 @@ from utils.batch_conversion import batch_to_pack, pack_to_batch, pack_to_list, l
 from utils.gpu_subsampling import subsample_pack_batch
 
 from utils.gpu_neigbors import radius_search_pack_mode, keops_radius_count
-from utils.cpp_funcs import furthest_point_sample_cpp, batch_knn_neighbors
+from utils.cpp_funcs import furthest_point_sample_cpp, batch_knn_neighbors, batch_grid_partition
 
 from utils.cuda_funcs import furthest_point_sample
 
@@ -99,9 +99,9 @@ def fill_pyramid(pyramid: EasyDict,
         if i > 0:
 
             if grid_pool_mode:
-                sub_points, sub_lengths, pools, ups = subsample_pack_batch(points0, lengths0, sub_size, method=sub_mode, return_pool_up=True)
-                pyramid.pools.append(pools)
-                pyramid.upsamples.append(ups)
+                sub_points, sub_lengths, poolings, upsamplings = batch_grid_partition(points0, lengths0, sub_size)
+                pyramid.pools.append(poolings)
+                pyramid.upsamples.append(upsamplings)
                 points0 = sub_points
                 lengths0 = sub_lengths
 

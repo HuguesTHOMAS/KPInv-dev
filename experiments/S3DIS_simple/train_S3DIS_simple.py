@@ -38,7 +38,7 @@ from utils.config import init_cfg, save_cfg, get_directories
 from utils.printing import frame_lines_1, underline
 from utils.gpu_init import init_gpu
 
-from models.KPNext import KPNeXt, KPCNN_old
+from models.KPNext import KPNeXt
 from models.KPConvNet import KPFCNN as KPConvFCNN
 from models.KPInvNet import KPInvFCNN
 from models.InvolutionNet import InvolutionFCNN
@@ -68,7 +68,7 @@ def my_config():
     # ------------------
 
     # cfg.model.layer_blocks = (3,  3,  5,  9,  3)
-    cfg.model.layer_blocks = (3,  4,  9, 12,  3)
+    cfg.model.layer_blocks = (4,  6,  12, 18,  4)
     # cfg.model.layer_blocks = (4,  5, 12, 21,  5)
     # cfg.model.layer_blocks = (1, 2, 2, 2, 2, 4, 4, 4, 2)
 
@@ -100,7 +100,7 @@ def my_config():
 
 
     cfg.model.grid_pool = True         #  Bool, Are we using pure grid pooling and unpooling like PointTransformer v2
-    cfg.model.decoder_layer = False     #  Bool, Add a layer in decoder like PointTransformer v2
+    cfg.model.decoder_layer = True     #  Bool, Add a layer in decoder like PointTransformer v2
     cfg.model.upsample_n = 3            # Number of neighbors used for nearest neighbor linear interpolation (ignoeed if grid_pool)
 
     cfg.model.input_channels = 5    # This value has to be compatible with one of the dataset input features definition
@@ -452,7 +452,7 @@ if __name__ == '__main__':
         net = KPNeXt(cfg, modulated=modulated, deformable=False)
 
     print()
-    print(net)
+    # print(net)
     print("Model size %i" % sum(param.numel() for param in net.parameters() if param.requires_grad))
 
     debug = False

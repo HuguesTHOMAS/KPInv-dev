@@ -39,7 +39,7 @@ from utils.printing import frame_lines_1, underline
 from models.KPConvNet import KPFCNN as KPConvFCNN
 from models.KPInvNet import KPInvFCNN
 from models.InvolutionNet import InvolutionFCNN
-from models.KPNext import KPNeXt, KPCNN_old
+from models.KPNext import KPNeXt
 
 from datasets.scene_seg import SceneSegSampler, SceneSegCollate
 
