@@ -214,6 +214,7 @@ class KPInvFCNN(nn.Module):
         self.upsample_n = cfg.model.upsample_n
         self.share_kp = cfg.model.share_kp
         self.kp_mode = cfg.model.kp_mode
+        self.grid_pool = cfg.model.grid_pool
 
         # List of valid labels (those not ignored in loss)
         self.valid_labels = np.sort([c for c in cfg.data.label_values if c not in cfg.data.ignored_labels])
@@ -466,7 +467,8 @@ class KPInvFCNN(nn.Module):
                          self.radius_scaling,
                          self.neighbor_limits,
                          self.upsample_n,
-                         sub_mode=self.in_sub_mode)
+                         sub_mode=self.in_sub_mode,
+                         grid_pool_mode=self.grid_pool)
 
         if verbose:
             torch.cuda.synchronize(batch.device())

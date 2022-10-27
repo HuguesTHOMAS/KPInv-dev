@@ -130,7 +130,7 @@ def local_maxpool(x, inds):
     """
 
     # Add a last row with minimum features for shadow pools (N+1, C)
-    x = torch.cat((x, torch.zeros_like(x[:1, :])), 0)
+    x = torch.cat((x, torch.zeros_like(x[:1, :]) - 1e6), 0)
 
     # Get all features for each pooling location (M, K, C)
     # pool_features = gather(x, inds)

@@ -217,6 +217,7 @@ class KPFCNN(nn.Module):
         self.modulated = modulated
         self.upsample_n = cfg.model.upsample_n
         self.share_kp = cfg.model.share_kp
+        self.grid_pool = cfg.model.grid_pool
         
         
         # List of valid labels (those not ignored in loss)
@@ -418,7 +419,8 @@ class KPFCNN(nn.Module):
                          self.radius_scaling,
                          self.neighbor_limits,
                          self.upsample_n,
-                         sub_mode=self.in_sub_mode)
+                         sub_mode=self.in_sub_mode,
+                         grid_pool_mode=self.grid_pool)
 
         if verbose: 
             torch.cuda.synchronize(batch.device())                           
@@ -593,6 +595,7 @@ class KPNeXt(nn.Module):
         self.deformable = deformable
         self.modulated = modulated
         self.upsample_n = cfg.model.upsample_n
+        self.grid_pool = cfg.model.grid_pool
         
         
         # List of valid labels (those not ignored in loss)
@@ -771,7 +774,8 @@ class KPNeXt(nn.Module):
                          self.radius_scaling,
                          self.neighbor_limits,
                          self.upsample_n,
-                         sub_mode=self.in_sub_mode)
+                         sub_mode=self.in_sub_mode,
+                         grid_pool_mode=self.grid_pool)
 
         if verbose: 
             torch.cuda.synchronize(batch.device())                           

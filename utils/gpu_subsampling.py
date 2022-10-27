@@ -2,11 +2,13 @@
 import numpy as np
 import torch
 import itertools
+import torch.nn.functional as F
 
 from utils.gpu_init import init_gpu, tensor_MB
 
 from utils.cuda_funcs import furthest_point_sample
 from utils.cpp_funcs import furthest_point_sample_cpp
+from utils.gpu_neigbors import keops_knn
 
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -38,7 +40,7 @@ def ravel_hash_func(voxels, max_voxels):
 
 
 @torch.no_grad()
-def grid_subsample(points, voxel_size, features=None, labels=None, return_inverse=False):
+def grid_subsample(points, voxel_size, features=None, labels=None, return_inverse=False, return_counts=False):
     """Grid subsample of a simple point cloud on GPU.
     Args:
         points (Tensor): the original points (N, D).
@@ -63,8 +65,8 @@ def grid_subsample(points, voxel_size, features=None, labels=None, return_invers
 
     # Get unique values and subsampled indices
     _, inv_indices0, unique_counts = torch.unique(hash_values,
-                                                 return_inverse=True,
-                                                 return_counts=True)  # (M) (N) (M)
+                                                  return_inverse=True,
+                                                  return_counts=True)  # (M) (N) (M)
 
     # Get average points per voxel
     inv_indices = inv_indices0.unsqueeze(1).expand(-1, pts_dim)  # (N, D)
@@ -96,6 +98,8 @@ def grid_subsample(points, voxel_size, features=None, labels=None, return_invers
         return_list.append(s_labels)
     if return_inverse:
         return_list.append(inv_indices0)
+    if return_counts:
+        return_list.append(unique_counts)
     if len(return_list) > 1:
         return return_list
     else:
@@ -553,6 +557,27 @@ def fp_subsample(points, sub_size,
         return return_list[0]
 
 
+def pools_from_invs(inv_inds, counts):
+
+    M = counts.shape[0]
+    k = torch.max(counts)
+    queries = torch.arange(M, dtype=inv_inds.dtype)
+
+    # Choose which function we use
+    if 'cuda' in inv_inds.device.type:
+        queries = queries.unsqueeze(-1)
+        supports = inv_inds.unsqueeze(-1)
+        knn_distances, knn_indices = keops_knn(queries, supports, k) 
+
+    else:
+        xi = queries.unsqueeze(-1)  # (M, 1)
+        xj = inv_inds.unsqueeze(-2)  # (1, N)
+        dij = torch.abs(xi - xj) # (M, N)
+        knn_distances, knn_indices = torch.topk(dij, k, dim=-1, largest=False)
+
+    return knn_indices, torch.gt(knn_distances, 0)
+
+
 def subsample_cloud(points, sub_size, features=None, labels=None, method='grid', return_inverse=False):
     """
     Subsample torch point clouds with different method, handling features and labels as well.
@@ -626,14 +651,36 @@ def subsample_pack_batch(points, lengths, sub_size, method='grid', return_pool_u
     # Parameters
     batch_size = lengths.shape[0]
     start_index = 0
+    sub_start_index = 0
     sampled_points_list = []
+    pools_list = []
+    ups_list = []
 
     # Looping on each batch point cloud
     for i in range(batch_size):
         length = lengths[i].item()
         end_index = start_index + length
         points0 = points[start_index:end_index]
-        sampled_points_list.append(subsampling_func(points0, sub_size))
+        if return_pool_up and  method == 'grid':
+
+            # Grid subsampling followed by pooling indices retrieval
+            sub_pts, inv_inds, counts = subsampling_func(points0, sub_size, return_inverse=True, return_counts=True)
+            pool_inds, shadow_mask = pools_from_invs(inv_inds, counts)
+
+            # Accumulate inds and handle shadow inds
+            ups = inv_inds + sub_start_index
+            pools = pool_inds + start_index
+            pools.masked_fill_(shadow_mask, points.shape[0])
+
+            # add to list
+            ups_list.append(ups.unsqueeze(1))
+            pools_list.append(pools)
+            sampled_points_list.append(sub_pts)
+            sub_start_index += sub_pts.shape[0]
+
+        else:
+            # Simple subsampling
+            sampled_points_list.append(subsampling_func(points0, sub_size))
         start_index = end_index
 
     # Packing the list of points
@@ -642,4 +689,19 @@ def subsample_pack_batch(points, lengths, sub_size, method='grid', return_pool_u
     if not length_as_list:
         sampled_lengths = torch.LongTensor(sampled_lengths).to(points.device)
 
+    # Packing ups and pools if needed
+    if return_pool_up and  method == 'grid':
+        
+        # Uniform pool size
+        max_k = int(np.max([int(pools.shape[1]) for pools in pools_list]))
+
+        pools_list = [F.pad(pools, (0, max_k - pools.shape[1]), mode='constant', value=points.shape[0])
+                      for pools in pools_list]
+
+        stacked_ups = torch.cat(ups_list, dim=0)
+        stacked_pools = torch.cat(pools_list, dim=0)
+
+        return sampled_points, sampled_lengths, stacked_pools, stacked_ups
+
+    
     return sampled_points, sampled_lengths

@@ -1147,6 +1147,7 @@ class KPNextMultiShortcutBlock(nn.Module):
         # Apply downcut
         if self.in_channels != self.out_channels:
             downcut = self.mlp_downcut(downcut)
+
         x = downcut + x
 
         # Final activation

@@ -74,6 +74,60 @@ def batch_grid_subsampling(points, batches_len, features=None, labels=None,
     :return: subsampled points, with features and/or labels depending of the input
     """
 
+    ###########
+    # Sunsample
+    ###########
+
+    if (features is None) and (labels is None):
+        s_points, s_len = cpp_subsampling.grid_subsample_batch(points,
+                                                               batches_len,
+                                                               sampleDl=sampleDl,
+                                                               max_p=max_p,
+                                                               verbose=verbose)
+        return s_points, s_len
+
+    elif (labels is None):
+        s_points, s_len, s_features = cpp_subsampling.grid_subsample_batch(points,
+                                                                           batches_len,
+                                                                           features=features,
+                                                                           sampleDl=sampleDl,
+                                                                           max_p=max_p,
+                                                                           verbose=verbose)
+        return s_points, s_len, s_features
+
+    elif (features is None):
+        s_points, s_len, s_labels = cpp_subsampling.grid_subsample_batch(points,
+                                                                         batches_len,
+                                                                         classes=labels,
+                                                                         sampleDl=sampleDl,
+                                                                         max_p=max_p,
+                                                                         verbose=verbose)
+        return s_points, s_len, s_labels
+
+    else:
+        s_points, s_len, s_features, s_labels = cpp_subsampling.grid_subsample_batch(points,
+                                                                                     batches_len,
+                                                                                     features=features,
+                                                                                     classes=labels,
+                                                                                     sampleDl=sampleDl,
+                                                                                     max_p=max_p,
+                                                                                     verbose=verbose)
+        return s_points, s_len, s_features, s_labels
+
+
+
+def batch_grid_subsampling_old(points, batches_len, features=None, labels=None,
+                           sampleDl=0.1, max_p=0, verbose=0, random_grid_orient=True):
+    """
+    CPP wrapper for a grid subsampling (method = barycenter for points and features)
+    :param points: (N, 3) matrix of input points
+    :param features: optional (N, d) matrix of features (floating number)
+    :param labels: optional (N,) matrix of integer labels
+    :param sampleDl: parameter defining the size of grid voxels
+    :param verbose: 1 to display
+    :return: subsampled points, with features and/or labels depending of the input
+    """
+
     R = None
     B = len(batches_len)
     if random_grid_orient:

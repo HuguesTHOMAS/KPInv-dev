@@ -386,12 +386,8 @@ def test_architecture():
                   'net4++',
                   'net5 0.014',
                   'net5 0.015',
-                  'net5 0.016',
-                  'net5 0.017',
-                  'net5 0.018',
-                  'net5 0.019',
-                  'net5 0.020',
-                  'net5 0.021']
+                  'net5 0.016',,
+                  'net5 0.019',]
 
     # TODO: next: [16, 17, 18, 18, 18]
     # TODO: then: best neighbors with grid
@@ -440,6 +436,82 @@ def test_architecture():
     return logs, logs_names
 
 
+def test_architecture2():
+    """
+    GOGO KPNext experiments
+    """
+
+    # Using the dates of the logs, you can easily gather consecutive ones. All logs should be of the same dataset.
+    start = 'Log_2022-10-26_17-31-33'
+    end = 'Log_2022-12-29_23-43-08'
+
+    # Name of the result path
+    res_path = 'results'
+
+    # Gather logs and sort by date
+    logs = np.sort([join(res_path, l) for l in listdir_str(res_path) if start <= l <= end])
+
+    # Optionally add a specific log at a specific place in the log list
+    logs = logs.astype('<U50')
+    logs = np.insert(logs, 0, 'results/Log_2022-10-25_09-15-27')
+
+
+    # Give names to the logs (for plot legends)
+    logs_names = ['net1 (12)',
+                  'net5 0.014',
+                  'net5 0.015',
+                  'net5 0.016',
+                  'net5 0.017',
+                  'net5 0.018',
+                  'net5 0.019',
+                  'net5 0.020',
+                  'net5 0.021']
+
+    # TODO: Next exp: radius scaling = 2.5 test different input grid size
+    # TODO: Test other architectures lighter and faster??? Can we reach 4000 instances per second at test time?
+    # TODO: Add other stuff from convnext like droppath etc
+
+    # TODO:
+    #
+    #       2. Poisson disk sampling
+    #
+    #       3. (Border repulsive loss) + (Mix3D) + (model ensemble) and submit to Scannetv2
+    #
+    #       Need to cite point transformer v2: https://arxiv.org/pdf/2210.05666.pdf
+    #
+    #       4. Go implement other datasets (NPM3D, Semantic3D, Scannetv2)
+    #          Also other task: ModelNet40, ShapeNetPart, SemanticKitti
+    #          Add code for completely different tasks??? Invariance??
+    #          New classif dataset: ScanObjectNN
+    #          Revisiting point cloud classification: A new benchmark dataset 
+    #          and classification model on real-world data
+    #
+    #       5. Parameters to play with at the end
+    #           > color drop
+    #           > init_feature_dim
+    #           > layers
+    #           > radius (sphere or cylinder)
+    #           > knn
+    #           > kp radius (for kp) and K and shells
+    #           > trainer
+    #           > KPConvX vs KPConvD vs KPInv
+    #           > groups in KPConvX
+    #           > n_layers in KPConvX
+    #
+
+
+    # safe check log names
+    if len(logs) > len(logs_names):
+        logs = logs[:len(logs_names)]
+    logs_names = np.array(logs_names[:len(logs)])
+
+    # logs = logs[[-1, -3, -4]]
+    # logs_names = logs_names[[-1, -3, -4]]
+
+    return logs, logs_names
+
+
+
 # ----------------------------------------------------------------------------------------------------------------------
 #
 #           Main Call
@@ -465,7 +537,7 @@ if __name__ == '__main__':
     ######################################################
 
     # My logs: choose the logs to show
-    logs, logs_names = test_architecture()
+    logs, logs_names = test_architecture2()
 
     frame_lines_1(["Plot ScanObjectNN experiments"])
 

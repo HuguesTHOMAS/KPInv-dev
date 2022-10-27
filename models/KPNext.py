@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 import numpy as np
 
-from models.generic_blocks import LinearUpsampleBlock, UnaryBlock, local_nearest_pool, GlobalAverageBlock, SmoothCrossEntropyLoss
+from models.generic_blocks import LinearUpsampleBlock, NearestUpsampleBlock, UnaryBlock, local_nearest_pool, GlobalAverageBlock, MaxPoolBlock, SmoothCrossEntropyLoss
 from models.kpconv_blocks import KPConvBlock, KPConvResidualBlock, KPConvInvertedBlock
 from models.kpnext_blocks import KPNextResidualBlock, KPNextInvertedBlock, KPNextMultiShortcutBlock, KPNextBlock
 
@@ -47,6 +47,7 @@ class KPCNN_old(nn.Module):
         self.upsample_n = cfg.model.upsample_n
         self.share_kp = cfg.model.share_kp
         self.kp_mode = cfg.model.kp_mode
+        self.grid_pool = cfg.model.grid_pool
 
         # List of valid labels (those not ignored in loss)
         self.valid_labels = np.sort([c for c in cfg.data.label_values if c not in cfg.data.ignored_labels])
@@ -250,7 +251,8 @@ class KPCNN_old(nn.Module):
                          self.radius_scaling,
                          self.neighbor_limits,
                          self.upsample_n,
-                         sub_mode=self.in_sub_mode)
+                         sub_mode=self.in_sub_mode,
+                         grid_pool_mode=self.grid_pool)
 
         if verbose:
             torch.cuda.synchronize(batch.device())
@@ -422,6 +424,8 @@ class KPNeXt(nn.Module):
         self.share_kp = cfg.model.share_kp
         self.kp_mode = cfg.model.kp_mode
         self.task = cfg.data.task
+        self.grid_pool = cfg.model.grid_pool
+        self.add_decoder_layer = cfg.model.decoder_layer
         
         # List of valid labels (those not ignored in loss)
         self.valid_labels = np.sort([c for c in cfg.data.label_values if c not in cfg.data.ignored_labels])
@@ -466,8 +470,9 @@ class KPNeXt(nn.Module):
         # Next blocks
         self.encoder_1 = nn.ModuleList()
         use_conv = cfg.model.first_inv_layer >= 1
-        for _ in range(self.layer_blocks[0]):
-            self.encoder_1.append(self.get_residual_block(C, C, conv_r, conv_sig, cfg,
+        for block_i in range(self.layer_blocks[0]):
+            Cout = layer_C[1] if self.grid_pool and block_i == self.layer_blocks[0] - 1 else C
+            self.encoder_1.append(self.get_residual_block(C, Cout, conv_r, conv_sig, cfg,
                                                           shared_kp_data=self.shared_kp[0],
                                                           conv_layer=use_conv))
 
@@ -487,8 +492,9 @@ class KPNeXt(nn.Module):
             # Layer blocks
             use_conv = cfg.model.first_inv_layer >= layer
             encoder_i = nn.ModuleList()
-            for _ in range(self.layer_blocks[l]):
-                encoder_i.append(self.get_residual_block(C, C, conv_r, conv_sig, cfg,
+            for block_i in range(self.layer_blocks[l]):
+                Cout = layer_C[l+1] if self.grid_pool and layer < self.num_layers and block_i == self.layer_blocks[l] - 1 else C
+                encoder_i.append(self.get_residual_block(C, Cout, conv_r, conv_sig, cfg,
                                                          shared_kp_data=self.shared_kp[l],
                                                          conv_layer=use_conv))
             setattr(self, 'encoder_{:d}'.format(layer), encoder_i)
@@ -525,13 +531,31 @@ class KPNeXt(nn.Module):
             # ------ Layers [4, 3, 2, 1] ------
             for layer in range(self.num_layers - 1, 0, -1):
 
+                # Upsample block
+                if self.grid_pool:
+                    upsampling_i = NearestUpsampleBlock()
+                else:
+                    upsampling_i = LinearUpsampleBlock(self.upsample_n)
+                setattr(self, 'upsampling_{:d}'.format(layer), upsampling_i)
+
+                # Network layers in decoder
                 C = layer_C[layer - 1]
                 C1 = layer_C[layer]
-                decoder_i = self.get_unary_block(C + C1, C, cfg)
-                upsampling_i = LinearUpsampleBlock(self.upsample_n)
+                if self.grid_pool:
+                    Cin = C1 + C1
+                else:
+                    Cin = C + C1
+                decoder_unary_i = self.get_unary_block(Cin, C, cfg)
+                setattr(self, 'decoder_unary_{:d}'.format(layer), decoder_unary_i)
 
-                setattr(self, 'decoder_{:d}'.format(layer), decoder_i)
-                setattr(self, 'upsampling_{:d}'.format(layer), upsampling_i)
+                # Additionnal network layer (optional)
+                if self.add_decoder_layer:
+                    conv_r *= 1 / self.radius_scaling
+                    conv_sig *= 1 / self.radius_scaling
+                    decoder_layer_i = self.get_residual_block(C, C, conv_r, conv_sig, cfg,
+                                                            shared_kp_data=self.shared_kp[l])
+                    setattr(self, 'decoder_layer_{:d}'.format(layer), decoder_layer_i)
+
 
             #  ------ Head ------
             
@@ -609,35 +633,39 @@ class KPNeXt(nn.Module):
 
     def get_pooling_block(self, in_C, out_C, radius, sigma, cfg, use_mod=False):
 
-        # Depthwise conv 
-        if cfg.model.use_strided_conv:
-            return KPConvBlock(in_C,
-                            out_C,
-                            cfg.model.shell_sizes,
-                            radius,
-                            sigma,
-                            influence_mode=cfg.model.kp_influence,
-                            aggregation_mode=cfg.model.kp_aggregation,
-                            dimension=cfg.data.dim,
-                            norm_type=cfg.model.norm,
-                            bn_momentum=cfg.model.bn_momentum)
+        if self.grid_pool:
+            return MaxPoolBlock()
 
         else:
-            attention_groups = cfg.model.inv_groups
-            if 'kpconvd' in self.kp_mode or not use_mod:
-                attention_groups = 0
-            return KPNextBlock(in_C,
-                            out_C,
-                            cfg.model.shell_sizes,
-                            radius,
-                            sigma,
-                            attention_groups=attention_groups,
-                            attention_act=cfg.model.inv_act,
-                            mod_grp_norm=cfg.model.inv_grp_norm,
-                            influence_mode=cfg.model.kp_influence,
-                            dimension=cfg.data.dim,
-                            norm_type=cfg.model.norm,
-                            bn_momentum=cfg.model.bn_momentum)
+            # Depthwise conv 
+            if cfg.model.use_strided_conv:
+                return KPConvBlock(in_C,
+                                out_C,
+                                cfg.model.shell_sizes,
+                                radius,
+                                sigma,
+                                influence_mode=cfg.model.kp_influence,
+                                aggregation_mode=cfg.model.kp_aggregation,
+                                dimension=cfg.data.dim,
+                                norm_type=cfg.model.norm,
+                                bn_momentum=cfg.model.bn_momentum)
+
+            else:
+                attention_groups = cfg.model.inv_groups
+                if 'kpconvd' in self.kp_mode or not use_mod:
+                    attention_groups = 0
+                return KPNextBlock(in_C,
+                                out_C,
+                                cfg.model.shell_sizes,
+                                radius,
+                                sigma,
+                                attention_groups=attention_groups,
+                                attention_act=cfg.model.inv_act,
+                                mod_grp_norm=cfg.model.inv_grp_norm,
+                                influence_mode=cfg.model.kp_influence,
+                                dimension=cfg.data.dim,
+                                norm_type=cfg.model.norm,
+                                bn_momentum=cfg.model.bn_momentum)
                            
     def get_residual_block(self, in_C, out_C, radius, sigma, cfg, shared_kp_data=None, conv_layer=False):
 
@@ -680,7 +708,8 @@ class KPNeXt(nn.Module):
                          self.radius_scaling,
                          self.neighbor_limits,
                          self.upsample_n,
-                         sub_mode=self.in_sub_mode)
+                         sub_mode=self.in_sub_mode,
+                         grid_pool_mode=self.grid_pool)
 
         if verbose: 
             torch.cuda.synchronize(batch.device())                           
@@ -720,7 +749,10 @@ class KPNeXt(nn.Module):
 
                 # Pooling
                 layer_pool = getattr(self, 'pooling_{:d}'.format(layer))
-                feats = layer_pool(batch.in_dict.points[l+1], batch.in_dict.points[l], feats, batch.in_dict.pools[l])
+                if self.grid_pool:
+                    feats = layer_pool(feats, batch.in_dict.pools[l])
+                else:
+                    feats = layer_pool(batch.in_dict.points[l+1], batch.in_dict.points[l], feats, batch.in_dict.pools[l])
 
          
         if verbose:    
@@ -741,17 +773,25 @@ class KPNeXt(nn.Module):
 
                 # Get layer blocks
                 l = layer -1    # 3, 2, 1, 0
-                unary = getattr(self, 'decoder_{:d}'.format(layer))
                 upsample = getattr(self, 'upsampling_{:d}'.format(layer))
 
                 # Upsample
-                feats = upsample(feats, batch.in_dict.upsamples[l], batch.in_dict.up_distances[l])
+                if self.grid_pool:
+                    feats = upsample(feats, batch.in_dict.upsamples[l])
+                else:
+                    feats = upsample(feats, batch.in_dict.upsamples[l], batch.in_dict.up_distances[l])
 
                 # Concat with skip features
                 feats = torch.cat([feats, skip_feats[l]], dim=1)
-
+                
                 # MLP
+                unary = getattr(self, 'decoder_unary_{:d}'.format(layer))
                 feats = unary(feats)
+
+                # Optional Decoder layers
+                if self.add_decoder_layer:
+                    block_list = getattr(self, 'decoder_layer_{:d}'.format(layer))
+                    feats, _ = block(batch.in_dict.points[l], batch.in_dict.points[l], feats, batch.in_dict.neighbors[l])
 
 
         #  ------ Head ------

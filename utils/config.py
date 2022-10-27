@@ -103,6 +103,9 @@ def init_cfg():
     cfg.model.in_sub_size = 0.04        # Float, initial subampling size, (voxel size, lattice size of fps minimum distance)
     cfg.model.in_sub_mode = 'grid'      #   Str, subsampling mode ('grid', 'ph', 'fps')
     cfg.model.radius_scaling = 2.0      # Float, scaling of the radius at each layer.
+
+    cfg.model.grid_pool = False         #  Bool, Are we using pure grid pooling and unpooling like PointTransformer v2
+    cfg.model.decoder_layer = False     #  Bool, Add a layer in decoder like PointTransformer v2
     
     cfg.model.upsample_n = 1            #   Int, Number of neighbors used for nearest neighbor linear interpolation
 

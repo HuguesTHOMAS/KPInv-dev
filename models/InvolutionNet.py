@@ -41,7 +41,8 @@ class InvolutionFCNN(nn.Module):
         self.first_sigma = radius0 * self.kp_sigma
         self.layer_blocks = cfg.model.layer_blocks
         self.num_layers = len(self.layer_blocks)
-        self.upsample_n = cfg.model.upsample_n
+        self.upsample_n = cfg.model.upsample_n,
+        self.grid_pool = cfg.model.grid_pool
         
         # List of valid labels (those not ignored in loss)
         self.valid_labels = np.sort([c for c in cfg.data.label_values if c not in cfg.data.ignored_labels])
@@ -232,7 +233,8 @@ class InvolutionFCNN(nn.Module):
                          self.radius_scaling,
                          self.neighbor_limits,
                          self.upsample_n,
-                         sub_mode=self.in_sub_mode)
+                         sub_mode=self.in_sub_mode,
+                         grid_pool_mode=self.grid_pool)
 
         if verbose: 
             torch.cuda.synchronize(batch.device())                           

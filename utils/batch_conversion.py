@@ -95,7 +95,7 @@ def pack_to_list(pack_tensor: Tensor, lengths: Tensor) -> List[Tensor]:
 def list_to_pack(tensor_list: List[Tensor]) -> Tuple[Tensor, Tensor]:
     """Convert Tensor from list mode to stack mode.
     Args:
-        tensor_list (Tensor): the input tensor in batch mode (B, N, C) or (B, N).
+        tensor_list (Tensor): the input tensors in a list.
     Returns:
         A Tensor in pack mode in the shape of (M, C) or (M).
         A LongTensor of the length of each sample in the batch in the shape of (B).

@@ -312,7 +312,8 @@ class ObjClassifDataset(Dataset):
                                             self.cfg.model.radius_scaling,
                                             self.cfg.model.neighbor_limits,
                                             0,
-                                            sub_mode=self.cfg.model.in_sub_mode)
+                                            sub_mode=self.cfg.model.in_sub_mode,
+                                            grid_pool_mode=self.cfg.model.grid_pool)
             
             # for i in range(len(input_dict.lengths[0])):
             #     print([int(lll[i]) for lll in input_dict.lengths])

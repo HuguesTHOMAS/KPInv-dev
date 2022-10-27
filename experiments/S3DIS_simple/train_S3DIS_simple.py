@@ -96,9 +96,12 @@ def my_config():
     cfg.data.init_sub_mode = 'grid'     # Mode for initial subsampling of data
     cfg.model.in_sub_size = 0.04        # Adapt this with train.in_radius. Try to keep a ratio of ~50 (*0.67 if fps). If negative, and fps, it is stride
     cfg.model.in_sub_mode = 'grid'      # Mode for input subsampling
-    cfg.model.radius_scaling = 2.0     # Increase conv radius by this much  
+    cfg.model.radius_scaling = 2.0      # Increase conv radius by this much  
 
-    cfg.model.upsample_n = 3          # Number of neighbors used for nearest neighbor linear interpolation
+
+    cfg.model.grid_pool = True         #  Bool, Are we using pure grid pooling and unpooling like PointTransformer v2
+    cfg.model.decoder_layer = False     #  Bool, Add a layer in decoder like PointTransformer v2
+    cfg.model.upsample_n = 3            # Number of neighbors used for nearest neighbor linear interpolation (ignoeed if grid_pool)
 
     cfg.model.input_channels = 5    # This value has to be compatible with one of the dataset input features definition
     
@@ -114,7 +117,7 @@ def my_config():
     cfg.model.inv_groups = 8                    # negative values to specify CpG instead of G
     cfg.model.inv_grp_norm = True
     cfg.model.inv_act = 'sigmoid'               # 'none', 'sigmoid', 'softmax', 'tanh'
-    cfg.model.kpx_upcut = True
+    cfg.model.kpx_upcut = False
             
     # Specific parameters for kpinv 
     cfg.model.kpinv_reduc = 1

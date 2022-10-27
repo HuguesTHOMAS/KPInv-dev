@@ -81,6 +81,9 @@ def fill_pyramid(pyramid: EasyDict,
     if len(pyramid.lengths) > 1:
         raise ValueError('Trying to fill a pyramid that already have more than one lengths')
 
+    # Grid pool mode can only happen if method is grid
+    grid_pool_mode = sub_mode == 'grid' and grid_pool_mode
+
     # Choose neighbor function depending on device
     if 'cuda' in pyramid.points[0].device.type:
         neighb_func = radius_search_pack_mode
@@ -92,18 +95,26 @@ def fill_pyramid(pyramid: EasyDict,
     points0 = pyramid.points[0]
     lengths0 = pyramid.lengths[0]
     for i in range(num_layers):
+
         if i > 0:
-            if sub_mode == 'grid' and grid_pool_mode:
+
+            if grid_pool_mode:
                 sub_points, sub_lengths, pools, ups = subsample_pack_batch(points0, lengths0, sub_size, method=sub_mode, return_pool_up=True)
-                # TODO: Implement this function and then adapt the rest of the pyramid and then adapt the network ops
+                pyramid.pools.append(pools)
+                pyramid.upsamples.append(ups)
+                points0 = sub_points
+                lengths0 = sub_lengths
+
+
             else:
                 sub_points, sub_lengths = subsample_pack_batch(points0, lengths0, sub_size, method=sub_mode)
+                if sub_mode == 'fps':
+                    points0 = sub_points
+                    lengths0 = sub_lengths
 
             pyramid.points.append(sub_points)
             pyramid.lengths.append(sub_lengths)
-            if sub_mode == 'fps':
-                points0 = sub_points
-                lengths0 = sub_lengths
+            
         if sub_size > 0:
             sub_size *= radius_scaling
 
@@ -120,7 +131,7 @@ def fill_pyramid(pyramid: EasyDict,
         pyramid.neighbors.append(neighbors)
 
         # Relation with next layer 
-        if i < num_layers - 1:
+        if not grid_pool_mode and i < num_layers - 1:
             sub_points = pyramid.points[i + 1]
             sub_lengths = pyramid.lengths[i + 1]
 

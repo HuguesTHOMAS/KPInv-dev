@@ -804,7 +804,10 @@ class SceneSegDataset(Dataset):
                                             self.cfg.model.radius_scaling,
                                             self.cfg.model.neighbor_limits,
                                             self.cfg.model.upsample_n,
-                                            sub_mode=self.cfg.model.in_sub_mode)
+                                            sub_mode=self.cfg.model.in_sub_mode,
+                                            grid_pool_mode=self.cfg.model.grid_pool)
+                                            
+
 
         else:
             input_dict = build_base_pyramid(stacked_points,

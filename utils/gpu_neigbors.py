@@ -4,7 +4,6 @@ import torch
 from torch import Tensor
 
 from utils.batch_conversion import batch_to_pack, pack_to_batch, pack_to_list, list_to_pack
-from utils.gpu_subsampling import subsample_pack_batch
 
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -57,6 +56,7 @@ def keops_knn(q_points: Tensor, s_points: Tensor, k: int) -> Tuple[Tensor, Tenso
     dij = (xi - xj).sqnorm2()  # (*, N, M)
     knn_d2, knn_indices = dij.Kmin_argKmin(k, dim=q_points.dim() - 1)  # (*, N, K)
     return knn_d2, knn_indices
+    
 
 @torch.no_grad()
 def knn(q_points: Tensor,
