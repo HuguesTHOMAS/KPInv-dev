@@ -104,11 +104,17 @@ class RandomDrop(object):
         self.p = p
         self.fps = fps
 
+        # A large negative value indicate teh number of point that we want to remain
+        self.N2 = int(-self.p) if self.p < -2.5 else 0
+
     def __call__(self, coord, feat, label):
 
         if 0 < self.p < 1:
             N1 = coord.shape[0]
-            N2 = int(np.ceil(N1 * (1 - self.p)))
+            if self.N2 > 0:
+                N2 = self.N2
+            else:
+                N2 = int(np.ceil(N1 * (1 - self.p)))
 
             if self.fps:
                 # Regular fps subsampling

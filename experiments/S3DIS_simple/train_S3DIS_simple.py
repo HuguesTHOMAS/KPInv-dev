@@ -73,7 +73,7 @@ def my_config():
     # cfg.model.layer_blocks = (1, 2, 2, 2, 2, 4, 4, 4, 2)
 
     cfg.model.norm = 'batch' # batch, layer
-    cfg.model.init_channels = 56  # 48, 64, 80, 96
+    cfg.model.init_channels = 48  # 48, 64, 80, 96
     cfg.model.channel_scaling = 1.41  # 2 or sqrt(2) or in between?
 
     cfg.model.kp_mode = 'kpconvx'       # Choose ['kpconv', 'kpdef', 'kpinv', 'kpinvx'].
@@ -192,6 +192,11 @@ def my_config():
     cfg.augment_train.chromatic_all = False
     cfg.augment_train.chromatic_norm = True
     cfg.augment_train.height_norm = False
+    
+    cfg.augment_train.pts_drop_p = -12288
+    cfg.augment_train.mix3D = 0.8  # 0.8
+
+    
 
     
     # Test parameters
@@ -216,6 +221,7 @@ def my_config():
     cfg.augment_test.color_drop = 0.0
     cfg.augment_test.chromatic_contrast = False
     cfg.augment_test.chromatic_all = False
+    cfg.augment_train.pts_drop_p = -1.0
 
     return cfg
 
