@@ -553,7 +553,7 @@ class KPNeXt(nn.Module):
                     conv_r *= 1 / self.radius_scaling
                     conv_sig *= 1 / self.radius_scaling
                     decoder_layer_i = self.get_residual_block(C, C, conv_r, conv_sig, cfg,
-                                                              shared_kp_data=self.shared_kp[l - 1])
+                                                              shared_kp_data=self.shared_kp[layer - 1])
                     setattr(self, 'decoder_layer_{:d}'.format(layer), decoder_layer_i)
 
 
