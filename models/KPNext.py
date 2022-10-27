@@ -788,8 +788,6 @@ class KPNeXt(nn.Module):
                 unary = getattr(self, 'decoder_unary_{:d}'.format(layer))
                 feats = unary(feats)
 
-                print(layer, feats.shape)
-
                 # Optional Decoder layers
                 if self.add_decoder_layer:
                     block = getattr(self, 'decoder_layer_{:d}'.format(layer))
