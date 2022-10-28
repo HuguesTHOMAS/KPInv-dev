@@ -426,6 +426,9 @@ class KPNeXt(nn.Module):
         self.task = cfg.data.task
         self.grid_pool = cfg.model.grid_pool
         self.add_decoder_layer = cfg.model.decoder_layer
+
+        # Stochastic depth decay rule
+        dpr_list = np.linspace(0, cfg.model.drop_path_rate, sum(self.layer_blocks)) 
         
         # List of valid labels (those not ignored in loss)
         self.valid_labels = np.sort([c for c in cfg.data.label_values if c not in cfg.data.ignored_labels])
@@ -474,7 +477,8 @@ class KPNeXt(nn.Module):
             Cout = layer_C[1] if self.grid_pool and block_i == self.layer_blocks[0] - 1 else C
             self.encoder_1.append(self.get_residual_block(C, Cout, conv_r, conv_sig, cfg,
                                                           shared_kp_data=self.shared_kp[0],
-                                                          conv_layer=use_conv))
+                                                          conv_layer=use_conv,
+                                                          drop_path=dpr_list[block_i]))
 
         # Pooling block
         self.pooling_1 = self.get_pooling_block(C, layer_C[1], conv_r, conv_sig, cfg,
@@ -496,7 +500,8 @@ class KPNeXt(nn.Module):
                 Cout = layer_C[l+1] if self.grid_pool and layer < self.num_layers and block_i == self.layer_blocks[l] - 1 else C
                 encoder_i.append(self.get_residual_block(C, Cout, conv_r, conv_sig, cfg,
                                                          shared_kp_data=self.shared_kp[l],
-                                                         conv_layer=use_conv))
+                                                         conv_layer=use_conv,
+                                                         drop_path=dpr_list[sum(self.layer_blocks[:l]) + block_i]))
             setattr(self, 'encoder_{:d}'.format(layer), encoder_i)
 
             # Pooling block (not for the last layer)
@@ -667,7 +672,7 @@ class KPNeXt(nn.Module):
                                 norm_type=cfg.model.norm,
                                 bn_momentum=cfg.model.bn_momentum)
                            
-    def get_residual_block(self, in_C, out_C, radius, sigma, cfg, shared_kp_data=None, conv_layer=False):
+    def get_residual_block(self, in_C, out_C, radius, sigma, cfg, shared_kp_data=None, conv_layer=False, drop_path=-1):
 
         attention_groups = cfg.model.inv_groups
         if conv_layer or 'kpconvd' in self.kp_mode:
@@ -682,7 +687,7 @@ class KPNeXt(nn.Module):
                                         attention_act=cfg.model.inv_act,
                                         mod_grp_norm=cfg.model.inv_grp_norm,
                                         expansion=4,
-                                        drop_path_p=-1.,
+                                        drop_path_p=drop_path,
                                         layer_scale_init_v=-1.,
                                         use_upcut=cfg.model.kpx_upcut,
                                         shared_kp_data=shared_kp_data,

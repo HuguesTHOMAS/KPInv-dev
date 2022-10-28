@@ -106,6 +106,7 @@ def init_cfg():
 
     cfg.model.grid_pool = False         #  Bool, Are we using pure grid pooling and unpooling like PointTransformer v2
     cfg.model.decoder_layer = False     #  Bool, Add a layer in decoder like PointTransformer v2
+    cfg.model.drop_path_rate = 0.0      # Float, Rate for DropPath to make a stochastic depth model.
     
     cfg.model.upsample_n = 1            #   Int, Number of neighbors used for nearest neighbor linear interpolation
 

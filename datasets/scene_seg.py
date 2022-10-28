@@ -719,7 +719,6 @@ class SceneSegDataset(Dataset):
             # pl.set_background('white')
             # pl.enable_eye_dome_lighting()
             # pl.show()
-
             
             # Stack batch
             p_list += [in_points]

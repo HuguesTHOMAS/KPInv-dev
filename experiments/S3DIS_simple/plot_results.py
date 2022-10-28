@@ -1354,6 +1354,52 @@ def test_kpnext_3():
                   'KPNextMega64 inv1/8 upcut',
                   'KPNextBig56  inv1/8 upcut']
 
+    # safe check log names
+    if len(logs) > len(logs_names):
+        logs = logs[:len(logs_names)]
+    logs_names = np.array(logs_names[:len(logs)])
+
+    # logs = logs[[-1, -3, -4]]
+    # logs_names = logs_names[[-1, -3, -4]]
+
+    return logs, logs_names
+
+
+def test_new_kpnext():
+    """
+    GOGO KPNext experiments
+    """
+
+    # Using the dates of the logs, you can easily gather consecutive ones. All logs should be of the same dataset.
+    start = 'Log_2022-10-27_15-42-25'
+    end = 'Log_2022-12-29_23-43-08'
+
+    # Name of the result path
+    res_path = 'results'
+
+    # Gather logs and sort by date
+    logs = np.sort([join(res_path, l) for l in listdir_str(res_path) if start <= l <= end])
+
+    # Optionally add a specific log at a specific place in the log list
+    logs = logs.astype('<U50')
+    logs = np.insert(logs, 0, 'results/Log_2022-10-13_17-07-58')
+    logs = np.insert(logs, 1, 'results/Log_2022-10-20_11-30-07')
+    logs = np.insert(logs, 2, 'results/Log_2022-10-20_12-58-47')
+    logs = np.insert(logs, 3, 'results/Log_2022-10-20_19-40-50')
+
+    # Give names to the logs (for plot legends)
+    logs_names = ['KPNext48 1,14,28 kp_r=1.20 inv1/1',
+                  'KPNext48 1,14,28 kp_r=1.20 inv1/1',
+                  'KPNextBig56 inv1/8',
+                  'KPNextMega64 inv1/8 upcut',
+                  'New KPNext (no drop points)',
+                  'New KPNext (no drop points no decoder_layer)',
+                  'New KPNext 2 + drop_pts',
+                  'Same + upcut',
+                  'KPNextUpcut r_scal=2.5',
+                  'Best + Mix3D',
+                  ]
+
     # Write KPNExt architecture. Note: it is very similar to resnet, just the shortcuts 
     # are not in the same place otherwise everythong is similar. SO write KPNext and then 
     # rewrite KPFCNN with equivalent nubmer of params. KPFCNN should be biggger because of 
@@ -1448,7 +1494,7 @@ if __name__ == '__main__':
     ######################################################
 
     # My logs: choose the logs to show
-    logs, logs_names = test_kpnext_3()
+    logs, logs_names = test_new_kpnext()
 
     frame_lines_1(["Plot S3DIS experiments"])
 

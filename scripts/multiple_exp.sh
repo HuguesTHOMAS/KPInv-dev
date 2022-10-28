@@ -20,15 +20,8 @@ training_script="experiments/ScanObjectNN/train.py"
 # Declare an array variable
 # *************************
 
-declare -a arg_arr=("--in_sub_size 0.014"
-                    "--in_sub_size 0.015"
-                    "--in_sub_size 0.016"
-                    "--in_sub_size 0.017"
-                    "--in_sub_size 0.018"
-                    "--in_sub_size 0.019"
-                    "--in_sub_size 0.02"
-                    "--in_sub_size 0.021"
-                    "--in_sub_size 0.022")
+declare -a arg_arr=("--radius_scaling 2.0"
+                    "--radius_scaling 2.5")
 
 
 echo ""

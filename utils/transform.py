@@ -103,13 +103,12 @@ class RandomDrop(object):
     def __init__(self, p=0.15, fps=False):
         self.p = p
         self.fps = fps
-
         # A large negative value indicate teh number of point that we want to remain
         self.N2 = int(-self.p) if self.p < -2.5 else 0
 
     def __call__(self, coord, feat, label):
 
-        if 0 < self.p < 1:
+        if 0 < self.p < 1 or self.N2 > 0:
             N1 = coord.shape[0]
             if self.N2 > 0:
                 N2 = self.N2

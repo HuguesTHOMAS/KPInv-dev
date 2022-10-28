@@ -1044,7 +1044,7 @@ class KPNextMultiShortcutBlock(nn.Module):
         self.bn_momentum = bn_momentum
         self.norm_type = norm_type
         self.use_upcut = use_upcut
-        mid_channels = out_channels * expansion
+        mid_channels = in_channels * expansion
 
 
         # KPConvX or KPConvD
@@ -1091,13 +1091,12 @@ class KPNextMultiShortcutBlock(nn.Module):
         else:
             self.mlp_downcut = nn.Identity()
 
-
-
         # Optimizations
         if layer_scale_init_v > 0:
             self.gamma = nn.Parameter(layer_scale_init_v * torch.ones((out_channels)), requires_grad=True)
         else:
             self.gamma = None
+            
         self.drop_path_p = drop_path_p
         if self.drop_path_p > 0:
             self.drop_path = DropPathPack(drop_path_p)
@@ -1117,7 +1116,8 @@ class KPNextMultiShortcutBlock(nn.Module):
         # Upscale features
         x = self.up_mlp(x)
 
-        # Optional drop path
+        # Apply drop path before the incoming upcut so that the incoming upcut 
+        # is just transfered as is to the next layer
         if self.drop_path_p > 0:
             x, drop_mask = self.drop_path(x, return_mask=True)
 
@@ -1141,7 +1141,7 @@ class KPNextMultiShortcutBlock(nn.Module):
         if self.gamma is not None:
             x = self.gamma * x
 
-        # Same drop path should be applied here
+        # Same drop path should be applied here and this whole block is now ignored by the network
         if self.drop_path_p > 0:
             x = drop_mask * x
 
