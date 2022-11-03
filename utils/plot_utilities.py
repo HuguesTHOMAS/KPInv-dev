@@ -821,6 +821,7 @@ def compare_convergences_segment(list_of_cfg, list_of_paths, list_of_names=None)
     print('\nCollecting validation logs')
     t0 = time.time()
     smooth_n = 5
+    gaussian_plot_smooth = 2
 
     if list_of_names is None:
         list_of_names = [str(i) for i in range(len(list_of_paths))]
@@ -948,7 +949,7 @@ def compare_convergences_segment(list_of_cfg, list_of_paths, list_of_names=None)
     fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=[12.4, 4.8], sharey=True)
     max_v = 0
     for i, name in enumerate(list_of_names):
-        ysmoothed = gaussian_filter1d(np.mean(all_snap_vote_IoUs[i], axis=1), sigma=2)
+        ysmoothed = gaussian_filter1d(np.mean(all_snap_vote_IoUs[i], axis=1), sigma=gaussian_plot_smooth)
         ax1.plot(all_snap_epochs[i], ysmoothed, linewidth=1, label=name)
         max_v = max(max_v, np.max(ysmoothed))
     ax1.set_xlabel('epochs')
@@ -956,12 +957,12 @@ def compare_convergences_segment(list_of_cfg, list_of_paths, list_of_names=None)
     ax1.set_ylim(max(0.0, max_v - 0.18), min(max_v + 0.04, 1.01))
 
     for i, name in enumerate(list_of_names):
-        ysmoothed = gaussian_filter1d(np.mean(all_snap_IoUs[i], axis=1), sigma=2)
+        ysmoothed = gaussian_filter1d(np.mean(all_snap_IoUs[i], axis=1), sigma=gaussian_plot_smooth)
         ax2.plot(all_snap_epochs[i], ysmoothed, linewidth=1, label=name)
     ax2.set_xlabel('epochs')
 
     for i, name in enumerate(list_of_names):
-        ysmoothed = gaussian_filter1d(all_mIoUs[i], sigma=2)
+        ysmoothed = gaussian_filter1d(all_mIoUs[i], sigma=gaussian_plot_smooth)
         ax3.plot(all_pred_epochs[i], ysmoothed, '--', linewidth=1, label=name)
     ax3.set_xlabel('epochs')
 
@@ -1302,7 +1303,7 @@ def compare_on_test_set(list_of_cfg,
         cfg.test.batch_limit = 1
         cfg.test.max_steps_per_epoch = 9999999
         cfg.test.max_votes = 5
-        cfg.test.chkp_idx = 1
+        cfg.test.chkp_idx = 2
 
         # Augmentations
         cfg.augment_test.anisotropic = False

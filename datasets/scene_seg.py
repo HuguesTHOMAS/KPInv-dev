@@ -111,7 +111,10 @@ class SceneSegDataset(Dataset):
         self.pred_values = np.array(cfg.data.pred_values, dtype=np.int32)
 
         # Variables you need to populate for your own dataset
+        self.scene_names = []
         self.scene_files = []
+        self.merge_inds = []
+        self.merge_names = []
         
         # Variables taht will be automatically populated
         self.input_trees = []
@@ -178,13 +181,12 @@ class SceneSegDataset(Dataset):
 
         return
 
-    def load_evaluation_points(self, file_path):
+    def load_scene_file(self, file_path):
+        # Implement this function in child class, specific to each dataset
+        raise NotImplementedError()
+        return
 
-        # Get original points
-        data = read_ply(file_path)
-        return np.vstack((data['x'], data['y'], data['z'])).T
-
-    def load_scenes_in_memory(self, label_property='label', f_properties=[], f_scales=[]):
+    def load_scenes_in_memory(self, label_property='label', f_properties=[], f_scales=[], merge=False):
 
         # Parameter
         dl = self.cfg.data.init_sub_size
@@ -227,18 +229,13 @@ class SceneSegDataset(Dataset):
             # Check if inputs have already been computed
             if exists(KDTree_file):
 
+
                 # read ply with data
                 if dl > 0:
-                    data = read_ply(sub_ply_file)
+                    points, sub_features, sub_labels = self.load_scene_file(sub_ply_file)
                 else:
-                    data = read_ply(file_path)
-                sub_features = np.vstack([data[f_prop].astype(np.float32) for f_prop in f_properties]).T
-
-                if label_property in [p for p, _ in data.dtype.fields.items()]:
-                    sub_labels = data[label_property]
-                else:
-                    sub_labels = None
-
+                    points, sub_features, sub_labels = self.load_scene_file(file_path)
+                    
                 # Read pkl with search tree
                 with open(KDTree_file, 'rb') as f:
                     if self.cylindric_input:
@@ -249,14 +246,8 @@ class SceneSegDataset(Dataset):
 
             else:
 
-                # Read ply file
-                data = read_ply(file_path)
-                points = np.vstack((data['x'], data['y'], data['z'])).T
-                if label_property in [p for p, _ in data.dtype.fields.items()]:
-                    labels = data[label_property].astype(np.int32)
-                else:
-                    labels = None
-                features = np.vstack([data[f_prop].astype(np.float32) for f_prop in f_properties]).T
+                # Read file (custom user function)
+                points, features, labels = self.load_scene_file(file_path)
 
                 # Subsample cloud (optional)
                 if dl > 0:
@@ -283,7 +274,7 @@ class SceneSegDataset(Dataset):
 
                 else:
                     sub_points, sub_features, sub_labels = (points, features, labels)
-                
+
                 # Project data in 2D if we want infinite height
                 if self.cylindric_input:
                     sub_z = sub_points[:, 2:].astype(np.float32)
@@ -293,6 +284,7 @@ class SceneSegDataset(Dataset):
 
                 # Compute KD Tree
                 search_tree = KDTree(sub_points, leaf_size=10)
+
 
                 # Save KDTree
                 with open(KDTree_file, 'wb') as f:
@@ -349,12 +341,8 @@ class SceneSegDataset(Dataset):
                         proj_inds, labels = pickle.load(f)
                 else:
 
-                    data = read_ply(file_path)
-                    points = np.vstack((data['x'], data['y'], data['z'])).T
-                    if label_property in [p for p, _ in data.dtype.fields.items()]:
-                        labels = data[label_property].astype(np.int32)
-                    else:
-                        labels = np.zeros((0,), dtype=np.int32)
+                    # Read file (custom user function)
+                    points, _, labels = self.load_scene_file(file_path)
 
                     # Get data on GPU
                     device = init_gpu()
@@ -485,7 +473,7 @@ class SceneSegDataset(Dataset):
                 v += float(self.reg_sampling_i.item()) / reg_sampling_N
         return v
     
-    def sample_input_center(self, center_noise=1.0):
+    def sample_input_center(self, center_noise=0.05):
 
         if self.data_sampler == 'regular':
             
@@ -519,6 +507,12 @@ class SceneSegDataset(Dataset):
                     rand_l = np.random.choice(self.num_classes)
                 rand_ind = np.random.choice(self.label_indices[rand_l].shape[1])
                 cloud_ind, point_ind = self.label_indices[rand_l][:, rand_ind]
+
+            elif self.data_sampler == 'A-random':
+                # Choose a random cloud and then a random point
+                cloud_ind = np.random.choice(len(self.input_features))
+                point_ind = np.random.choice(self.input_features[cloud_ind].shape[0])
+
             else:
                 # Directly choose a random point regardless of labels
                 rand_ind = np.random.choice(self.all_inds.shape[1])
@@ -533,9 +527,7 @@ class SceneSegDataset(Dataset):
                 center_point = np.hstack((center_point, self.input_z[cloud_ind][point_ind].reshape(1, 1)))
 
             # Add a small noise to center point
-            center_point += np.random.normal(scale=center_noise * self.cfg.data.init_sub_size, size=center_point.shape)
-
-            
+            center_point += np.random.normal(scale=center_noise, size=center_point.shape)
 
         else:
             raise ValueError('Unknown data_sampler type: {:s}. Must be in ("regular", "random", "c-random")'.format(self.data_sampler))
@@ -564,12 +556,17 @@ class SceneSegDataset(Dataset):
             if self.use_cubes:
                 k*=2
 
-            # Query points
-            input_inds = self.input_trees[cloud_ind].query(q_point, k, return_distance=False)
-            input_inds = np.squeeze(input_inds)
-
             # Get points from tree structure
             points = np.array(self.input_trees[cloud_ind].data, copy=False)
+            
+            # Query points
+            if points.shape[0] > k:
+                input_inds = self.input_trees[cloud_ind].query(q_point, k, return_distance=False)
+                input_inds = np.squeeze(input_inds)
+            else:
+                input_inds = np.arange(points.shape[0], dtype=np.int32)
+               
+            # Get input points
             input_points = points[input_inds].astype(np.float32)
 
             # Crop the cube if wanted
@@ -589,6 +586,8 @@ class SceneSegDataset(Dataset):
                     r *= np.sqrt(self.dim - 1)
                 else:
                     r *= np.sqrt(self.dim)
+
+
 
             # Query points
             input_inds = self.input_trees[cloud_ind].query_radius(q_point, r=r)[0]

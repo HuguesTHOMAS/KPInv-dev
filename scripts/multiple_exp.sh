@@ -13,15 +13,15 @@ max_containers="2"
 # Training script used
 # ********************
 
-training_script="experiments/ScanObjectNN/train.py"
-# training_script="experiments/S3DIS_simple/train_S3DIS_simple.py"
+# training_script="experiments/ScanObjectNN/train.py"
+training_script="experiments/S3DIS_simple/train_S3DIS_simple.py"
 
 
 # Declare an array variable
 # *************************
 
-declare -a arg_arr=("--radius_scaling 2.0"
-                    "--radius_scaling 2.5")
+declare -a arg_arr=("--shell_sizes 1 14 28"
+                    "--shell_sizes 1 14")
 
 
 echo ""

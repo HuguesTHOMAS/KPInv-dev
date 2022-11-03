@@ -1396,9 +1396,61 @@ def test_new_kpnext():
                   'New KPNext (no drop points no decoder_layer)',
                   'New KPNext 2 + drop_pts',
                   'Same + upcut',
-                  'KPNextUpcut r_scal=2.5',
-                  'Best + Mix3D',
+                  'KPSmall r_scal=2.0',
+                  'KPMini no upcut',
+                  'KPMini upcut',
+                  'KPSmall layernorm',
+                  'KPSmall r_scal=2.0',
+                  'KPSmall r_scal=2.2',
+                  'KPSmall r_scal=2.5',
+                  'KPSmall r_scal=3.0',
+                  'KPMega dl=0.03',
+                  'KPMega dl=0.04',
+                  'KPMega dl=0.05',
                   ]
+
+
+    # safe check log names
+    if len(logs) > len(logs_names):
+        logs = logs[:len(logs_names)]
+    logs_names = np.array(logs_names[:len(logs)])
+
+    # logs = logs[-3:]
+    # logs_names = logs_names[-3:]
+
+    return logs, logs_names
+
+
+def test_rooms():
+    """
+    GOGO new dataset with S3DIS rooms, to compare with recent papers
+    """
+
+    # Using the dates of the logs, you can easily gather consecutive ones. All logs should be of the same dataset.
+    start = 'Log_2022-11-02_17-59-05'
+    end = 'Log_2022-12-29_23-43-08'
+
+    # Name of the result path
+    res_path = 'results'
+
+    # Gather logs and sort by date
+    logs = np.sort([join(res_path, l) for l in listdir_str(res_path) if start <= l <= end])
+
+    # Optionally add a specific log at a specific place in the log list
+    logs = logs.astype('<U50')
+
+    # Give names to the logs (for plot legends)
+    logs_names = ['KPMega 2.2*0.04',
+                  'KPMega 2.2*0.04 + droppath',
+                  'KPMega 2.0*0.04',
+                  'KPMega 2.0*0.04 1/14',]
+
+    # TODO: 
+    #   1. Train on New dataset, room per room
+    #   2. Random point selected when training and subsampling grid (have a new mode grid_random)
+    #   3. Test Droppath
+    #   4. Test mix3D or randomly drop all point from one class?
+    #   5. Go Scannet
 
     # Write KPNExt architecture. Note: it is very similar to resnet, just the shortcuts 
     # are not in the same place otherwise everythong is similar. SO write KPNext and then 
@@ -1463,11 +1515,12 @@ def test_new_kpnext():
         logs = logs[:len(logs_names)]
     logs_names = np.array(logs_names[:len(logs)])
 
+    # logs = logs[-3:]
+    # logs_names = logs_names[-3:]
     # logs = logs[[-1, -3, -4]]
     # logs_names = logs_names[[-1, -3, -4]]
 
     return logs, logs_names
-
 
 # ----------------------------------------------------------------------------------------------------------------------
 #
@@ -1494,7 +1547,7 @@ if __name__ == '__main__':
     ######################################################
 
     # My logs: choose the logs to show
-    logs, logs_names = test_new_kpnext()
+    logs, logs_names = test_rooms()
 
     frame_lines_1(["Plot S3DIS experiments"])
 
@@ -1509,7 +1562,7 @@ if __name__ == '__main__':
 
     # Verify that we are dealing with S3DIS logs
     for cfg in all_cfgs:
-        if cfg.data.name != "S3DIS":
+        if not cfg.data.name.startswith('S3DI'):
             err_mess = '\nTrying to plot S3DIS experiments, but {:s} was trained on {:s} dataset.'
             raise ValueError(err_mess.format(cfg.exp.date, cfg.data.name))
             

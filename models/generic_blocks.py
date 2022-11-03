@@ -566,7 +566,7 @@ class DropPathPack(nn.Module):
         if self.drop_prob <= 0 or not self.training:
             if return_mask:
                 shape = (x.shape[0],) + (1,) * (x.ndim - 1)
-                mask = torch.ones(shape)
+                mask = torch.ones(shape, device=x.device)
                 return x, mask
             else:
                 return x

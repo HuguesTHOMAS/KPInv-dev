@@ -745,7 +745,7 @@ class KPNeXt(nn.Module):
             # Layer blocks
             upcut = None
             for block in block_list:
-                feats, upcut = block(batch.in_dict.points[l], batch.in_dict.points[l], feats, batch.in_dict.neighbors[l], upcut=upcut)
+                feats, upcut = block(batch.in_dict.points[l], batch.in_dict.points[l], feats, batch.in_dict.neighbors[l], batch.in_dict.lengths[l], upcut=upcut)
             
             if layer < self.num_layers:
 
@@ -796,8 +796,7 @@ class KPNeXt(nn.Module):
                 # Optional Decoder layers
                 if self.add_decoder_layer:
                     block = getattr(self, 'decoder_layer_{:d}'.format(layer))
-                    feats, _ = block(batch.in_dict.points[l], batch.in_dict.points[l], feats, batch.in_dict.neighbors[l])
-
+                    feats, _ = block(batch.in_dict.points[l], batch.in_dict.points[l], feats, batch.in_dict.neighbors[l], batch.in_dict.lengths[l])
 
         #  ------ Head ------
 

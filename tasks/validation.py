@@ -316,13 +316,11 @@ def cloud_segmentation_validation(epoch, net, val_loader, cfg, val_data, device,
             sub_vote_preds = val_loader.dataset.probs_to_preds(sub_vote_probs)
 
             # Path of saved validation file
-            cloud_name = file_path.split('/')[-1]
-            val_name = join(val_path, cloud_name)
+            val_name = join(val_path, val_loader.dataset.scene_names[c_i] + '.ply')
 
             # Save file
             labels = val_loader.dataset.input_labels[c_i]
 
-            print(points.shape, sub_vote_preds.shape, sub_preds.shape, labels.shape)
             write_ply(val_name,
                       [points, sub_vote_preds, sub_preds, labels.astype(np.int32)],
                       ['x', 'y', 'z', 'vote_pre', 'last_pre', 'class'])

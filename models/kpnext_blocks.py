@@ -1103,7 +1103,7 @@ class KPNextMultiShortcutBlock(nn.Module):
 
         return
 
-    def forward(self, q_pts, s_pts, s_feats, neighbor_indices, upcut=None):
+    def forward(self, q_pts, s_pts, s_feats, neighbor_indices, q_lengths, upcut=None):
 
         # Get downcut here
         downcut = s_feats
@@ -1119,7 +1119,7 @@ class KPNextMultiShortcutBlock(nn.Module):
         # Apply drop path before the incoming upcut so that the incoming upcut 
         # is just transfered as is to the next layer
         if self.drop_path_p > 0:
-            x, drop_mask = self.drop_path(x, return_mask=True)
+            x, drop_mask = self.drop_path(x, q_lengths, return_mask=True)
 
         # Apply incoming upcut (we never need linear on this shortcut)
         if upcut is not None:

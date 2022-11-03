@@ -45,7 +45,8 @@ from models.InvolutionNet import InvolutionFCNN
 
 from datasets.scene_seg import SceneSegSampler, SceneSegCollate
 
-from experiments.S3DIS_simple.S3DIS import S3DIS_cfg, S3DISDataset
+# from experiments.S3DIS_simple.S3DIS import S3DIS_cfg, S3DISDataset
+from experiments.S3DIS_simple.S3DIS_rooms import S3DIR_cfg, S3DIRDataset
 
 from tasks.trainval import train_and_validate
 
@@ -73,7 +74,7 @@ def my_config():
     # cfg.model.layer_blocks = (1, 2, 2, 2, 2, 4, 4, 4, 2)
 
     cfg.model.norm = 'batch' # batch, layer
-    cfg.model.init_channels = 56  # 48, 64, 80, 96
+    cfg.model.init_channels = 64  # 48, 64, 80, 96
     cfg.model.channel_scaling = 1.41  # 2 or sqrt(2) or in between?
 
     cfg.model.kp_mode = 'kpconvx'       # Choose ['kpconv', 'kpdef', 'kpinv', 'kpinvx'].
@@ -119,6 +120,7 @@ def my_config():
     cfg.model.inv_grp_norm = True
     cfg.model.inv_act = 'sigmoid'               # 'none', 'sigmoid', 'softmax', 'tanh'
     cfg.model.kpx_upcut = True
+    
             
     # Specific parameters for kpinv 
     cfg.model.kpinv_reduc = 1
@@ -135,16 +137,16 @@ def my_config():
     cfg.data.cylindric_input = False
 
     # How do we sample the input elements (spheres or cubes)
-    cfg.train.data_sampler = 'random'   # 'c-random' for class balanced random sampling
+    cfg.train.data_sampler = 'A-random'   # 'c-random' for class balanced random sampling
 
     # Input spheres radius. Adapt this with model.in_sub_size. Try to keep a ratio of ~50
-    cfg.train.in_radius = -15000  # If negative, =number of points per input. Use negative to compare models
+    cfg.train.in_radius = 2.0  # If negative, =number of points per input. Use negative to compare models
 
     # Batch related_parames
-    cfg.train.batch_size = 6                 # Target batch size. If you don't want calibration, you can directly set train.batch_limit
-    cfg.train.accum_batch = 4                 # Accumulate batches for an effective batch size of batch_size * accum_batch.
+    cfg.train.batch_size = 4                 # Target batch size. If you don't want calibration, you can directly set train.batch_limit
+    cfg.train.accum_batch = 6                 # Accumulate batches for an effective batch size of batch_size * accum_batch.
     cfg.train.steps_per_epoch = 300
-    
+
     # Training length
     cfg.train.max_epoch = 180
     
@@ -204,7 +206,7 @@ def my_config():
     # ---------------
 
     # How do we sample the input elements (spheres or cubes)
-    cfg.test.in_radius = 4.0                # For S3DIS 4 meters is very large, cover a whole part of the test set with full rooms
+    cfg.test.in_radius = 100.0                # For S3DIS 4 meters is very large, cover a whole part of the test set with full rooms
     cfg.test.data_sampler = 'regular'       # 'regular' to pick spheres regularly accross the data.
 
     cfg.test.max_steps_per_epoch = 100       # Size of one validation epoch (should be small)
@@ -300,6 +302,8 @@ if __name__ == '__main__':
 
     float_args = ['train.weight_decay',
                   'train.in_radius',
+                  'data.init_sub_size',
+                  'model.in_sub_size',
                   'model.kp_radius',
                   'model.channel_scaling',
                   'model.kp_sigma',
@@ -355,7 +359,7 @@ if __name__ == '__main__':
     cfg = my_config()
 
     # Load data parameters
-    cfg.data.update(S3DIS_cfg(cfg).data)
+    cfg.data.update(S3DIR_cfg(cfg).data)
 
     # Load experiment parameters
     if args.log_path is not None:
@@ -391,11 +395,11 @@ if __name__ == '__main__':
 
     # Load dataset
     underline('Loading training dataset')
-    training_dataset = S3DISDataset(cfg,
+    training_dataset = S3DIRDataset(cfg,
                                     chosen_set='training',
                                     precompute_pyramid=True)
     underline('Loading validation dataset')
-    test_dataset = S3DISDataset(cfg,
+    test_dataset = S3DIRDataset(cfg,
                                 chosen_set='validation',
                                 precompute_pyramid=True)
     
@@ -476,12 +480,10 @@ if __name__ == '__main__':
         print('\n*************************************\n')
 
     print()
-
-    a= 1/0
     
     ################
     # Start training
-    ################ python3 experiments/S3DIS_simple/train_S3DIS_simple.py
+    ################
 
     # TODO:
     #
