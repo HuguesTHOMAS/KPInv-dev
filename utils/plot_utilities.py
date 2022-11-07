@@ -40,7 +40,7 @@ from scipy.ndimage.filters import gaussian_filter1d
 
 # My libs
 from utils.printing import frame_lines_1, underline, print_color, table_to_str
-from utils.metrics import IoU_from_confusions, smooth_metrics, fast_confusion
+from utils.metrics import IoU_from_confusions, smooth_metrics, fast_confusion, metrics_from_confusions
 from utils.ply import read_ply, write_ply
 from utils.config import load_cfg
 
@@ -384,7 +384,7 @@ def load_snap_clouds(path, cfg, only_last=False):
             vote_confs[v_i] += confs[v_i]
 
 
-    return conf_epochs, IoU_from_confusions(confs), IoU_from_confusions(vote_confs)
+    return conf_epochs, confs, vote_confs
 
 
 def cfg_differences(list_of_cfg, ignore_params=[]):
@@ -835,6 +835,10 @@ def compare_convergences_segment(list_of_cfg, list_of_paths, list_of_names=None)
     all_snap_epochs = []
     all_snap_IoUs = []
     all_snap_vote_IoUs = []
+    all_OA = []
+    all_vote_OA = []
+    all_mAcc = []
+    all_vote_mAcc = []
 
     class_list = [name for label, name in list_of_cfg[0].data.label_and_names
                   if label not in list_of_cfg[0].data.ignored_labels]
@@ -856,7 +860,10 @@ def compare_convergences_segment(list_of_cfg, list_of_paths, list_of_names=None)
         all_class_IoUs += [class_IoUs]
 
         # Get optional full validation on clouds
-        snap_epochs, snap_IoUs, snap_vote_IoUs = load_snap_clouds(path, cfg)
+        snap_epochs, snap_confs, snap_vote_confs = load_snap_clouds(path, cfg)
+
+        OA, IoUs, PREs, RECs = metrics_from_confusions(snap_confs)
+        vOA, vIoUs, vPREs, vRECs = metrics_from_confusions(snap_vote_confs)
 
         # smooth_full_n
         # # Get mean IoU per class for consecutive epochs to directly get a mean without further smoothing
@@ -870,8 +877,13 @@ def compare_convergences_segment(list_of_cfg, list_of_paths, list_of_names=None)
 
         # return smoothed_IoUs, smoothed_mIoUs
         all_snap_epochs += [snap_epochs]
-        all_snap_IoUs += [snap_IoUs]
-        all_snap_vote_IoUs += [snap_vote_IoUs]
+        all_snap_IoUs += [IoUs]
+        all_snap_vote_IoUs += [vIoUs]
+        all_OA += [OA]
+        all_vote_OA += [vOA]
+        all_mAcc += [np.mean(PREs, axis=-1)]
+        all_vote_mAcc += [np.mean(vPREs, axis=-1)]
+
 
     print('Done in {:.3f} s'.format(time.time() - t0))
 
@@ -940,10 +952,36 @@ def compare_convergences_segment(list_of_cfg, list_of_paths, list_of_names=None)
         print(s)
     print('\n')
 
+
+    # Print table of results
+    # **********************
+     
+    columns = [list_of_names,
+               [100 * np.mean(IoU[-10:]) for IoU in all_snap_IoUs],
+               [100 * np.mean(OA[-10:]) for OA in all_OA],
+               [100 * np.mean(mAcc[-10:]) for mAcc in all_mAcc]]
+
+    table_str = table_to_str(['logs', 'mIoU', 'OA', 'mAcc'],
+                             columns,
+                             ['{:s}', '{:.2f}', '{:.2f}', '{:.2f}'])
+    print('No Vote')
+    print(table_str)
+    print()
+
+    columns = [list_of_names,
+               [100 * np.mean(IoU[-2:]) for IoU in all_snap_vote_IoUs],
+               [100 * np.mean(OA[-2:]) for OA in all_vote_OA],
+               [100 * np.mean(mAcc[-2:]) for mAcc in all_vote_mAcc]]
+    table_str = table_to_str(['logs', 'mIoU', 'OA', 'mAcc'],
+                             columns,
+                             ['{:s}', '{:.2f}', '{:.2f}', '{:.2f}'])
+    print('Vote')
+    print(table_str)
+    print()
+     
+
     # Plots
     # *****
-
-
 
     # Figure
     fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=[12.4, 4.8], sharey=True)
@@ -962,8 +1000,8 @@ def compare_convergences_segment(list_of_cfg, list_of_paths, list_of_names=None)
     ax2.set_xlabel('epochs')
 
     for i, name in enumerate(list_of_names):
-        ysmoothed = gaussian_filter1d(all_mIoUs[i], sigma=gaussian_plot_smooth)
-        ax3.plot(all_pred_epochs[i], ysmoothed, '--', linewidth=1, label=name)
+        ysmoothed = gaussian_filter1d(all_vote_mAcc[i], sigma=gaussian_plot_smooth)
+        ax3.plot(all_snap_epochs[i], ysmoothed, '--', linewidth=1, label=name)
     ax3.set_xlabel('epochs')
 
     # Display legends and title

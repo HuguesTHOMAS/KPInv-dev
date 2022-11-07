@@ -20,8 +20,10 @@ training_script="experiments/S3DIS_simple/train_S3DIS_simple.py"
 # Declare an array variable
 # *************************
 
-declare -a arg_arr=("--shell_sizes 1 14 28"
-                    "--shell_sizes 1 14")
+declare -a arg_arr=("--inv_groups 8"
+                    "--inv_groups 16"
+                    "--inv_groups -1"
+                    "--inv_groups 0")
 
 
 echo ""

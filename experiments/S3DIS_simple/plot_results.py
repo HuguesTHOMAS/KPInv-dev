@@ -1440,17 +1440,21 @@ def test_rooms():
     logs = logs.astype('<U50')
 
     # Give names to the logs (for plot legends)
-    logs_names = ['KPMega 2.2*0.04',
-                  'KPMega 2.2*0.04 + droppath',
-                  'KPMega 2.0*0.04',
-                  'KPMega 2.0*0.04 1/14',]
-
-    # TODO: 
-    #   1. Train on New dataset, room per room
-    #   2. Random point selected when training and subsampling grid (have a new mode grid_random)
-    #   3. Test Droppath
-    #   4. Test mix3D or randomly drop all point from one class?
-    #   5. Go Scannet
+    logs_names = ['KPNetX-L no droppath',
+                  'KPNetX-L',
+                  'ignored KPNetX-L (2.0*0.04)',
+                  'ignored KPNetX-L (2.0*0.04) 1/14',
+                  'KPNetX-L (1/14)',
+                  'KPNetX-S (1/14)',
+                  ' - decoder_layer',
+                  'KPNetX-S 1/14/28',
+                  'KPNetX-L - upcut',
+                  'KPNetX-L G=1',
+                  'KPNetX-L G=4',
+                  'KPNetX-L G=16',
+                  'KPNetX-L G=-1',
+                  'KPNetX-L G=0',
+                  'todo']
 
     # Write KPNExt architecture. Note: it is very similar to resnet, just the shortcuts 
     # are not in the same place otherwise everythong is similar. SO write KPNext and then 
@@ -1515,8 +1519,8 @@ def test_rooms():
         logs = logs[:len(logs_names)]
     logs_names = np.array(logs_names[:len(logs)])
 
-    # logs = logs[-3:]
-    # logs_names = logs_names[-3:]
+    logs = np.hstack((logs[:2], logs[4:]))
+    logs_names = np.hstack((logs_names[:2], logs_names[4:]))
     # logs = logs[[-1, -3, -4]]
     # logs_names = logs_names[[-1, -3, -4]]
 
@@ -1591,7 +1595,7 @@ if __name__ == '__main__':
     underline("Ploting training info")
 
     # Plot the training loss and accuracy
-    compare_trainings(all_cfgs, logs, logs_names)
+    # compare_trainings(all_cfgs, logs, logs_names)
 
 
     # Test the network or show validation

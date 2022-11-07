@@ -116,10 +116,14 @@ class ScanNetV2Dataset(SceneSegDataset):
         # Stop data is not needed
         if not load_data:
             return
+
+        # Properties of input files
+        self.label_property = 'label'
+        self.f_properties = ['red', 'green', 'blue']
         
         # Start loading
-        self.load_scenes_in_memory(label_property='label',
-                                   f_properties=['red', 'green', 'blue'],
+        self.load_scenes_in_memory(label_property=self.label_property,
+                                   f_properties=self.f_properties,
                                    f_scales=[1/255, 1/255, 1/255])
 
         ###########################
@@ -151,6 +155,19 @@ class ScanNetV2Dataset(SceneSegDataset):
             raise ValueError('Only accepted input dimensions are 1, 4 and 5')
 
         return selected_features
+
+
+    def load_scene_file(self, file_path):
+            
+        data = read_ply(file_path)
+        points = np.vstack((data['x'], data['y'], data['z'])).T
+        if self.label_property in [p for p, _ in data.dtype.fields.items()]:
+            labels = data[self.label_property].astype(np.int32)
+        else:
+            labels = None
+        features = np.vstack([data[f_prop].astype(np.float32) for f_prop in self.f_properties]).T
+
+        return points, features, labels
 
 
     def ScanNetV2_files(self):
@@ -191,7 +208,7 @@ class ScanNetV2Dataset(SceneSegDataset):
             print('Scenes')
             for n, f in zip(scene_names, scene_files):
                 print(n, f, exists(f))
-            raise ValueError('NOt all scene have been preprocessed')
+            raise ValueError('Not all scene have been preprocessed')
 
         return scene_names, scene_files
 
@@ -327,6 +344,3 @@ class ScanNetV2Dataset(SceneSegDataset):
         # a = 1/0
 
         return train_scenes, val_scenes, test_scenes
-
-
-

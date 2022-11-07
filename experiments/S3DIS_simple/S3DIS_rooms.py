@@ -108,12 +108,14 @@ class S3DIRDataset(SceneSegDataset):
         if not load_data:
             return
         
+        # Properties of input files
+        self.label_property = 'class'
+        self.f_properties = ['red', 'green', 'blue']
+
         # Start loading (merge when testing)
-        merge = self.set in ['validation', 'test']
-        self.load_scenes_in_memory(label_property='class',
-                                   f_properties=['red', 'green', 'blue'],
-                                   f_scales=[1/255, 1/255, 1/255],
-                                   merge=merge)
+        self.load_scenes_in_memory(label_property=self.label_property,
+                                   f_properties=self.f_properties,
+                                   f_scales=[1/255, 1/255, 1/255])
 
         ###########################
         # Sampling data preparation
@@ -199,17 +201,14 @@ class S3DIRDataset(SceneSegDataset):
     def load_scene_file(self, file_path):
 
         if file_path.endswith('.ply'):
-
-            label_property='class'
-            f_properties=['red', 'green', 'blue']
             
             data = read_ply(file_path)
             points = np.vstack((data['x'], data['y'], data['z'])).T
-            if label_property in [p for p, _ in data.dtype.fields.items()]:
-                labels = data[label_property].astype(np.int32)
+            if self.label_property in [p for p, _ in data.dtype.fields.items()]:
+                labels = data[self.label_property].astype(np.int32)
             else:
                 labels = None
-            features = np.vstack([data[f_prop].astype(np.float32) for f_prop in f_properties]).T
+            features = np.vstack([data[f_prop].astype(np.float32) for f_prop in self.f_properties]).T
 
         elif file_path.endswith('.npy'):
 

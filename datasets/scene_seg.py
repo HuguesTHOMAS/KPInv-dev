@@ -186,7 +186,7 @@ class SceneSegDataset(Dataset):
         raise NotImplementedError()
         return
 
-    def load_scenes_in_memory(self, label_property='label', f_properties=[], f_scales=[], merge=False):
+    def load_scenes_in_memory(self, label_property='label', f_properties=[], f_scales=[]):
 
         # Parameter
         dl = self.cfg.data.init_sub_size

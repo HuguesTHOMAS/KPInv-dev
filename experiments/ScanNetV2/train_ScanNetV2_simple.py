@@ -66,12 +66,12 @@ def my_config():
     # ------------------
 
     # cfg.model.layer_blocks = (3,  3,  5,  9,  3)
-    cfg.model.layer_blocks = (3,  4,  9, 12,  3)
-    # cfg.model.layer_blocks = (4,  5, 12, 21,  5)
+    # cfg.model.layer_blocks = (3,  4,  9, 12,  3)
+    cfg.model.layer_blocks = (4,  4, 12, 20,  4)
     # cfg.model.layer_blocks = (1, 2, 2, 2, 2, 4, 4, 4, 2)
 
     cfg.model.norm = 'batch' # batch, layer
-    cfg.model.init_channels = 56  # 48, 64, 80, 96
+    cfg.model.init_channels = 64  # 48, 64, 80, 96
     cfg.model.channel_scaling = 1.41  # 2 or sqrt(2) or in between?
 
     cfg.model.kp_mode = 'kpconvx'       # Choose ['kpconv', 'kpdef', 'kpinv', 'kpinvx'].
@@ -90,17 +90,21 @@ def my_config():
     
     cfg.model.share_kp = True       #  share kernels within layers                
 
-    cfg.data.init_sub_size = 0.02       # -1.0 so that dataset point clouds are not initially subsampled
+    cfg.data.init_sub_size = 0.04       # -1.0 so that dataset point clouds are not initially subsampled
     cfg.data.init_sub_mode = 'grid'     # Mode for initial subsampling of data
-    cfg.model.in_sub_size = 0.02        # Adapt this with train.in_radius. Try to keep a ratio of ~50 (*0.67 if fps). If negative, and fps, it is stride
+    cfg.model.in_sub_size = 0.04        # Adapt this with train.in_radius. Try to keep a ratio of ~50 (*0.67 if fps). If negative, and fps, it is stride
     cfg.model.in_sub_mode = 'grid'      # Mode for input subsampling
-    cfg.model.radius_scaling = 2.0     # Increase conv radius by this much  
+    cfg.model.radius_scaling = 2.2     # Increase conv radius by this much
+    
 
-    cfg.model.upsample_n = 3          # Number of neighbors used for nearest neighbor linear interpolation
+    cfg.model.grid_pool = True          # Are we using pure grid pooling and unpooling like PointTransformer v2
+    cfg.model.decoder_layer = True      # Add a layer in decoder like PointTransformer v2
+    cfg.model.upsample_n = 3            # Number of neighbors used for nearest neighbor linear interpolation (ignoeed if grid_pool)
+    cfg.model.drop_path_rate = 0.3      # Rate for DropPath to make a stochastic depth model.
 
     cfg.model.input_channels = 5    # This value has to be compatible with one of the dataset input features definition
     
-    cfg.model.neighbor_limits = [10, 11, 12, 12, 12]      # Use empty list to let calibration get the values
+    cfg.model.neighbor_limits = [10, 12, 12, 12, 12]      # Use empty list to let calibration get the values
     # cfg.model.neighbor_limits = [16, 17, 18, 18, 18]      # Use empty list to let calibration get the values
     # cfg.model.neighbor_limits = [35, 40, 50, 50, 50]    # Use empty list to let calibration get the values
     # cfg.model.neighbor_limits = [16, 16, 16, 16, 16]    # List for point_transformer
@@ -129,14 +133,14 @@ def my_config():
     cfg.data.cylindric_input = False
 
     # How do we sample the input elements (spheres or cubes)
-    cfg.train.data_sampler = 'random'   # 'c-random' for class balanced random sampling
+    cfg.train.data_sampler = 'A-random'   # 'c-random' for class balanced random sampling
 
     # Input spheres radius. Adapt this with model.in_sub_size. Try to keep a ratio of ~50
-    cfg.train.in_radius = -15000  # If negative, =number of points per input. Use negative to compare models
+    cfg.train.in_radius = 2.0  # If negative, =number of points per input. Use negative to compare models
 
     # Batch related_parames
-    cfg.train.batch_size = 6                 # Target batch size. If you don't want calibration, you can directly set train.batch_limit
-    cfg.train.accum_batch = 4                 # Accumulate batches for an effective batch size of batch_size * accum_batch.
+    cfg.train.batch_size = 4                 # Target batch size. If you don't want calibration, you can directly set train.batch_limit
+    cfg.train.accum_batch = 6                 # Accumulate batches for an effective batch size of batch_size * accum_batch.
     cfg.train.steps_per_epoch = 300
     
     # Training length
@@ -187,6 +191,9 @@ def my_config():
     cfg.augment_train.chromatic_all = False
     cfg.augment_train.chromatic_norm = True
     cfg.augment_train.height_norm = False
+    
+    cfg.augment_train.pts_drop_p = -1
+    cfg.augment_train.mix3D = -1.0  # 0.8
 
     
     # Test parameters
@@ -211,6 +218,8 @@ def my_config():
     cfg.augment_test.color_drop = 0.0
     cfg.augment_test.chromatic_contrast = False
     cfg.augment_test.chromatic_all = False
+    cfg.augment_test.pts_drop_p = -1.0
+
 
     return cfg
 
@@ -288,9 +297,12 @@ if __name__ == '__main__':
 
     float_args = ['train.weight_decay',
                   'train.in_radius',
+                  'data.init_sub_size',
+                  'model.in_sub_size',
                   'model.kp_radius',
                   'model.channel_scaling',
-                  'model.kp_sigma']
+                  'model.kp_sigma',
+                  'model.radius_scaling']
 
     int_args = ['model.conv_groups',
                 'model.inv_groups',
@@ -447,7 +459,7 @@ if __name__ == '__main__':
         net = KPNeXt(cfg, modulated=modulated, deformable=False)
 
     print()
-    print(net)
+    # print(net)
     print("Model size %i" % sum(param.numel() for param in net.parameters() if param.requires_grad))
 
     debug = False

@@ -228,3 +228,42 @@ def IoU_from_confusions(confusions):
     IoU += mask * mIoU
 
     return IoU
+
+
+def metrics_from_confusions(confusions):
+    """
+    Computes IoU from confusion matrices.
+    :param confusions: ([..., n_c, n_c] np.int32). Can be any dimension, the confusion matrices should be described by
+    the last axes. n_c = number of classes
+    :return: ([..., n_c] np.float32) IoU score
+    """
+
+    # Compute TP, FP, FN. This assume that the second to last axis counts the truths (like the first axis of a
+    # confusion matrix), and that the last axis counts the predictions (like the second axis of a confusion matrix)
+    TP = np.diagonal(confusions, axis1=-2, axis2=-1)
+    TP_plus_FN = np.sum(confusions, axis=-1)
+    TP_plus_FP = np.sum(confusions, axis=-2)
+
+    # Compute IoU
+    IoU = TP / (TP_plus_FP + TP_plus_FN - TP + 1e-6)
+
+    # Compute mIoU with only the actual classes
+    mask = TP_plus_FN < 1e-3
+
+    if np.any(mask):
+
+        # If a class is absent in one of the confusion matrices, it should not impact the average with a IoU of 0
+        counts = np.sum(1 - mask, axis=-1, keepdims=True)
+        mIoU = np.sum(IoU, axis=-1, keepdims=True) / (counts + 1e-6)
+
+        # We place mIoU in place of 0 IoU to get the actual mean later
+        IoU += mask * mIoU
+
+    # Compute overall Accuracy
+    OA = np.sum(TP, axis=-1) / (np.sum(confusions, axis=(-2, -1)) + 1e-6)
+
+    # Compute mAcc (actually mean precision)
+    PRE = TP / (TP_plus_FN + 1e-6)
+    REC = TP / (TP_plus_FP + 1e-6)
+
+    return OA, IoU, PRE, REC
