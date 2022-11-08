@@ -217,7 +217,7 @@ def cloud_segmentation_validation(epoch, net, val_loader, cfg, val_data, device,
     t2 = time.time()
 
     # Confusions for our subparts of validation set
-    Confs = np.zeros((len(predictions), nc_tot, nc_tot), dtype=np.int32)
+    Confs = np.zeros((len(predictions), nc_model, nc_model), dtype=np.int32)
     for i, (probs, truth) in enumerate(zip(predictions, targets)):
         preds = val_loader.dataset.probs_to_preds(probs)
         Confs[i, :, :] = fast_confusion(truth, preds, val_loader.dataset.pred_values).astype(np.int32)
@@ -298,8 +298,8 @@ def cloud_segmentation_validation(epoch, net, val_loader, cfg, val_data, device,
 
         # Save the subsampled input clouds with latest predictions
         files = val_loader.dataset.scene_files
-        scene_confs = np.zeros((cfg.data.num_classes, cfg.data.num_classes), dtype=np.int32)
-        scene_vote_confs = np.zeros((cfg.data.num_classes, cfg.data.num_classes), dtype=np.int32)
+        scene_confs = np.zeros((nc_model, nc_model), dtype=np.int32)
+        scene_vote_confs = np.zeros((nc_model, nc_model), dtype=np.int32)
         for c_i, file_path in enumerate(files):
 
             # Get subsampled points from tree structure

@@ -65,10 +65,8 @@ def my_config():
     # Network parameters
     # ------------------
 
-    # cfg.model.layer_blocks = (3,  3,  5,  9,  3)
-    # cfg.model.layer_blocks = (3,  4,  9, 12,  3)
-    cfg.model.layer_blocks = (4,  4, 12, 20,  4)
-    # cfg.model.layer_blocks = (1, 2, 2, 2, 2, 4, 4, 4, 2)
+    # cfg.model.layer_blocks = (3,  3,  9, 12, 3)   # KPNetX-S
+    cfg.model.layer_blocks = (4,  4, 12, 20,  4)    # KPNetX-L
 
     cfg.model.norm = 'batch' # batch, layer
     cfg.model.init_channels = 64  # 48, 64, 80, 96
@@ -90,13 +88,14 @@ def my_config():
     
     cfg.model.share_kp = True       #  share kernels within layers                
 
-    cfg.data.init_sub_size = 0.04       # -1.0 so that dataset point clouds are not initially subsampled
+    cfg.data.init_sub_size = 0.02       # -1.0 so that dataset point clouds are not initially subsampled
     cfg.data.init_sub_mode = 'grid'     # Mode for initial subsampling of data
-    cfg.model.in_sub_size = 0.04        # Adapt this with train.in_radius. Try to keep a ratio of ~50 (*0.67 if fps). If negative, and fps, it is stride
+    cfg.model.in_sub_size = 0.02        # Adapt this with train.in_radius. Try to keep a ratio of ~50 (*0.67 if fps). If negative, and fps, it is stride
     cfg.model.in_sub_mode = 'grid'      # Mode for input subsampling
-    cfg.model.radius_scaling = 2.2     # Increase conv radius by this much
+    cfg.model.radius_scaling = 2.2      # Increase conv radius by this much  
     
 
+    cfg.model.kpx_upcut = True          # Are we using upcuts
     cfg.model.grid_pool = True          # Are we using pure grid pooling and unpooling like PointTransformer v2
     cfg.model.decoder_layer = True      # Add a layer in decoder like PointTransformer v2
     cfg.model.upsample_n = 3            # Number of neighbors used for nearest neighbor linear interpolation (ignoeed if grid_pool)
@@ -104,7 +103,8 @@ def my_config():
 
     cfg.model.input_channels = 5    # This value has to be compatible with one of the dataset input features definition
     
-    cfg.model.neighbor_limits = [10, 12, 12, 12, 12]      # Use empty list to let calibration get the values
+    cfg.model.neighbor_limits = [13, 14, 16, 16, 16]      # Use empty list to let calibration get the values
+    # cfg.model.neighbor_limits = [12, 14, 16, 16, 16]      # Use empty list to let calibration get the values
     # cfg.model.neighbor_limits = [16, 17, 18, 18, 18]      # Use empty list to let calibration get the values
     # cfg.model.neighbor_limits = [35, 40, 50, 50, 50]    # Use empty list to let calibration get the values
     # cfg.model.neighbor_limits = [16, 16, 16, 16, 16]    # List for point_transformer
@@ -116,7 +116,6 @@ def my_config():
     cfg.model.inv_groups = 8                    # negative values to specify CpG instead of G
     cfg.model.inv_grp_norm = True
     cfg.model.inv_act = 'sigmoid'               # 'none', 'sigmoid', 'softmax', 'tanh'
-    cfg.model.kpx_upcut = True
             
     # Specific parameters for kpinv 
     cfg.model.kpinv_reduc = 1
@@ -398,7 +397,6 @@ if __name__ == '__main__':
                                 chosen_set='validation',
                                 precompute_pyramid=True)
     
-    a = 1/0
     
     # Calib from training data
     training_dataset.calib_batch(cfg, update_test=False)

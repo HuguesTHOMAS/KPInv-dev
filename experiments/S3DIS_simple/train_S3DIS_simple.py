@@ -107,7 +107,7 @@ def my_config():
     cfg.model.input_channels = 5    # This value has to be compatible with one of the dataset input features definition
     
     cfg.model.neighbor_limits = [10, 12, 12, 12, 12]      # Use empty list to let calibration get the values
-    # cfg.model.neighbor_limits = [12, 12, 14, 16, 16]      # Use empty list to let calibration get the values
+    # cfg.model.neighbor_limits = [12, 14, 16, 16, 16]      # Use empty list to let calibration get the values
     # cfg.model.neighbor_limits = [16, 17, 18, 18, 18]      # Use empty list to let calibration get the values
     # cfg.model.neighbor_limits = [35, 40, 50, 50, 50]    # Use empty list to let calibration get the values
     # cfg.model.neighbor_limits = [16, 16, 16, 16, 16]    # List for point_transformer
@@ -116,7 +116,7 @@ def my_config():
     # Specific parameters for involution and transformers
     cfg.model.use_strided_conv = True           # Use convolution op for strided layers instead of involution
     cfg.model.first_inv_layer = 1               # Use involution layers only from this layer index (from 0 to n_layer - 1)
-    cfg.model.inv_groups = 8                    # negative values to specify CpG instead of G
+    cfg.model.inv_groups = -1                    # negative values to specify CpG instead of G
     cfg.model.inv_grp_norm = True
     cfg.model.inv_act = 'sigmoid'               # 'none', 'sigmoid', 'softmax', 'tanh'
     

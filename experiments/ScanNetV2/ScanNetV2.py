@@ -222,6 +222,10 @@ class ScanNetV2Dataset(SceneSegDataset):
         You can remove the old format after this preprocessing is done to save disk space.
         """
 
+        # All ignored class are regouped with unclassified
+        nyu_to_limited = np.zeros((41,), dtype=np.int32)
+        nyu_to_limited[self.label_values] = self.label_values
+
         #####################################
         # First preprocessign of the raw data
         #####################################
@@ -291,11 +295,58 @@ class ScanNetV2Dataset(SceneSegDataset):
                     data1, _ = read_ply(join(sc, plyfiles[0]), triangular_mesh=True)
                     points = np.vstack((data1['x'], data1['y'], data1['z'])).T  
                     labels = data1['label']
+                    labels = nyu_to_limited[labels]
                     data2, _ = read_ply(join(sc, plyfiles[1]), triangular_mesh=True)
                     colors = np.vstack((data2['red'], data2['green'], data2['blue'])).T
                     write_ply(join(new_path, new_ply_name),
                             [points, colors, labels],
                             ['x', 'y', 'z', 'red', 'green', 'blue', 'label'])
+
+            
+
+
+
+                
+        # 1	wall
+        # 2	floor
+        # 3	cabinet
+        # 4	bed
+        # 5	chair
+        # 6	sofa
+        # 7	table
+        # 8	door
+        # 9	window
+        # 10	bookshelf
+        # 11	picture
+        # 12	counter
+        # 13	blinds
+        # 14	desk
+        # 15	shelves
+        # 16	curtain
+        # 17	dresser
+        # 18	pillow
+        # 19	mirror
+        # 20	floor mat
+        # 21	clothes
+        # 22	ceiling
+        # 23	books
+        # 24	refridgerator
+        # 25	television
+        # 26	paper
+        # 27	towel
+        # 28	shower curtain
+        # 29	box
+        # 30	whiteboard
+        # 31	person
+        # 32	nightstand
+        # 33	toilet
+        # 34	sink
+        # 35	lamp
+        # 36	bathtub
+        # 37	bag
+        # 38	otherstructure
+        # 39	otherfurniture
+        # 40	otherprop
 
         # ######
         # # TEMP

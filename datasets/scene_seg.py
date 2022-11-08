@@ -1095,7 +1095,7 @@ class SceneSegDataset(Dataset):
         all_neighbor_counts = [torch.concat(neighb_c_list, dim=0) for neighb_c_list in all_neighbor_counts]
 
         # Collect results
-        advised_neighbor_limits = [int(torch.quantile(neighb_c, 0.95)) for neighb_c in all_neighbor_counts]
+        advised_neighbor_limits = [int(torch.quantile(neighb_c, 0.99)) for neighb_c in all_neighbor_counts]
 
         if verbose:
 
@@ -1106,7 +1106,7 @@ class SceneSegDataset(Dataset):
             report_lines += ['']
 
             if overwrite:
-                report_lines += ['Calibrating for 5.0% of bigger neighborhoods:']
+                report_lines += ['Calibrating for 1.0% of bigger neighborhoods:']
                 str_format = num_layers * '{:6d} '
                 limit_str = str_format.format(*advised_neighbor_limits)
                 report_lines += ['   Neighbor limits = {:s}'.format(limit_str)]
@@ -1115,12 +1115,12 @@ class SceneSegDataset(Dataset):
                 str_format = num_layers * '{:6d} '
                 limit_str = str_format.format(*cfg.model.neighbor_limits)
                 report_lines += ['    Current limits = {:s}'.format(limit_str)]
-                str_format = num_layers * '{:5.1f}% '
+                str_format = num_layers * '{:5.2f}% '
                 trunc_str = str_format.format(*trunc_percents)
                 report_lines += ['total above limits = {:s}'.format(trunc_str)]
                 
                 report_lines += ['']
-                report_lines += ['Advised values for 5.0%:']
+                report_lines += ['Advised values for 1.0%:']
                 str_format = num_layers * '{:6d} '
                 limit_str = str_format.format(*advised_neighbor_limits)
                 report_lines += ['    Advised limits = {:s}'.format(limit_str)]
@@ -1130,7 +1130,7 @@ class SceneSegDataset(Dataset):
         if overwrite:
             cfg.model.neighbor_limits = advised_neighbor_limits
 
-        # After calibration reset counters for regular sampling
+        # After calibration reset counters for regular sampling experiments/ScanNetV2/train_ScanNetV2_simple.py
         self.reg_sampling_i *= 0
 
         return

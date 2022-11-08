@@ -66,6 +66,15 @@ def fast_confusion(true, pred, label_values=None):
         if len(np.unique(label_values)) < len(label_values):
             raise ValueError('Given labels are not unique')
 
+        # Verify that labels are valid
+        if not np.all(np.isin(pred, label_values)):
+            raise ValueError('Prediction values are not in the provided label values')
+        
+        # Ignore ignored labels
+        true_mask = np.isin(true, label_values)
+        true = true[true_mask]
+        pred = pred[true_mask]
+
     # Sort labels
     label_values = np.sort(label_values)
 

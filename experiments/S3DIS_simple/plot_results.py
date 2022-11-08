@@ -1451,6 +1451,9 @@ def test_rooms():
                   'KPNetX-L - upcut',
                   'KPNetX-L G=1',
                   'KPNetX-L G=4',
+                  'KPNetX-L G=8',
+                  'KPNetX-L G=8',
+                  'KPNetX-L G=8',
                   'KPNetX-L G=16',
                   'KPNetX-L G=-1',
                   'KPNetX-L G=0',
@@ -1526,6 +1529,173 @@ def test_rooms():
 
     return logs, logs_names
 
+
+def exp_KPNetX_L():
+    """
+    Multiple tries of KPNext-L. We see that more neighbors get better scores. Keep that in mind for best network tries
+    """
+
+    # Using the dates of the logs, you can easily gather consecutive ones. All logs should be of the same dataset.
+    start = 'Log_2022-11-05_03-34-33'
+    end = 'Log_2022-11-06_21-20-45'
+
+    # Name of the result path
+    res_path = 'results'
+
+    # Gather logs and sort by date
+    logs = np.sort([join(res_path, l) for l in listdir_str(res_path) if start <= l <= end])
+
+    # Optionally add a specific log at a specific place in the log list
+    logs = logs.astype('<U50')
+    logs = np.insert(logs, 0, 'results/Log_2022-11-02_17-59-39')
+
+    # Give names to the logs (for plot legends)
+    logs_names = ['KPNetX-L',
+                  'KPNetX-L',
+                  'KPNetX-L',
+                  'KPNetX-L',
+                  'todo']
+
+    # safe check log names
+    if len(logs) > len(logs_names):
+        logs = logs[:len(logs_names)]
+    logs_names = np.array(logs_names[:len(logs)])
+
+    # logs = logs[[-1, -3, -4]]
+    # logs_names = logs_names[[-1, -3, -4]]
+
+    return logs, logs_names
+
+
+def exp_ablation():
+    """
+    Multiple tries of KPNext-L. We see that more neighbors get better scores. Keep that in mind for best network tries
+    """
+
+    # Using the dates of the logs, you can easily gather consecutive ones. All logs should be of the same dataset.
+    start = 'Log_2022-11-02_17-59-05'
+    end = 'Log_2022-11-02_17-59-49'
+
+    # Name of the result path
+    res_path = 'results'
+
+    # Gather logs and sort by date
+    logs = np.sort([join(res_path, l) for l in listdir_str(res_path) if start <= l <= end])
+
+    print(logs)
+
+    # Optionally add a specific log at a specific place in the log list
+    logs = logs.astype('<U50')
+    logs = np.insert(logs, 0, 'results/Log_2022-11-04_10-16-53')
+    logs = np.insert(logs, 2, 'results/Log_2022-11-05_19-32-44')
+
+    # Give names to the logs (for plot legends)
+    logs_names = ['KPNetX-L - upcut',
+                  'KPNetX-L no droppath',
+                  'KPNetX-L',
+                  'KPNetX-L',
+                  'todo']
+
+    # safe check log names
+    if len(logs) > len(logs_names):
+        logs = logs[:len(logs_names)]
+    logs_names = np.array(logs_names[:len(logs)])
+
+    # logs = logs[[-1, -3, -4]]
+    # logs_names = logs_names[[-1, -3, -4]]
+
+    return logs, logs_names
+
+
+def exp_shells():
+    """
+    Multiple tries of KPNext-L. We see that more neighbors get better scores. Keep that in mind for best network tries
+    """
+
+    # Using the dates of the logs, you can easily gather consecutive ones. All logs should be of the same dataset.
+    start = 'Log_2022-11-03_16-08-25'
+    end = 'Log_2022-11-04_04-43-69'
+
+    # Name of the result path
+    res_path = 'results'
+
+    # Gather logs and sort by date
+    logs = np.sort([join(res_path, l) for l in listdir_str(res_path) if start <= l <= end])
+
+    # Optionally add a specific log at a specific place in the log list
+    logs = logs.astype('<U50')
+    logs = np.insert(logs, 0, 'results/Log_2022-11-02_17-59-39')
+    logs = np.insert(logs, 1, 'results/Log_2022-11-05_19-32-44')
+    logs = np.insert(logs, 3, 'results/Log_2022-11-04_09-33-24')
+
+    # Give names to the logs (for plot legends)
+    logs_names = ['KPNetX-L (1/14/28)',
+                  'KPNetX-L (1/14/28)',
+                  'KPNetX-L (1/14)',
+                  'KPNetX-S (1/14/28)',
+                  'KPNetX-S (1/14)',
+                  ' - decoder layer',
+                  'todo']
+
+    # safe check log names
+    if len(logs) > len(logs_names):
+        logs = logs[:len(logs_names)]
+    logs_names = np.array(logs_names[:len(logs)])
+
+    # logs = logs[[-1, -3, -4]]
+    # logs_names = logs_names[[-1, -3, -4]]
+
+    return logs, logs_names
+
+
+def exp_groups():
+    """
+    Multiple tries of KPNext-L. We see that more neighbors get better scores. Keep that in mind for best network tries
+    """
+
+    # Using the dates of the logs, you can easily gather consecutive ones. All logs should be of the same dataset.
+    start = 'Log_2022-11-06_21-20-49'
+    end = 'Log_2022-11-07_07-17-45'
+
+    # Name of the result path
+    res_path = 'results'
+
+    # Gather logs and sort by date
+    logs = np.sort([join(res_path, l) for l in listdir_str(res_path) if start <= l <= end])
+
+    # Optionally add a specific log at a specific place in the log list
+    logs = logs.astype('<U50')
+    logs = np.insert(logs, 0, 'results/Log_2022-11-04_23-40-28')
+    logs = np.insert(logs, 1, 'results/Log_2022-11-05_03-34-32')
+    logs = np.insert(logs, 2, 'results/Log_2022-11-05_19-32-44')
+
+    # Give names to the logs (for plot legends)
+    logs_names = ['KPNetX-L G1',
+                  'KPNetX-L G4',
+                  'KPNetX-L G8',
+                  'KPNetX-L G16',
+                  'KPNetX-L G-1',
+                  'KPNetX-L G0',
+                  'todo']
+
+    # safe check log names
+    if len(logs) > len(logs_names):
+        logs = logs[:len(logs_names)]
+    logs_names = np.array(logs_names[:len(logs)])
+
+    # logs = logs[[-1, -3, -4]]
+    # logs_names = logs_names[[-1, -3, -4]]
+
+    return logs, logs_names
+
+
+
+
+
+
+
+
+
 # ----------------------------------------------------------------------------------------------------------------------
 #
 #           Main Call
@@ -1551,7 +1721,7 @@ if __name__ == '__main__':
     ######################################################
 
     # My logs: choose the logs to show
-    logs, logs_names = test_rooms()
+    logs, logs_names = exp_groups()
 
     frame_lines_1(["Plot S3DIS experiments"])
 
@@ -1595,7 +1765,7 @@ if __name__ == '__main__':
     underline("Ploting training info")
 
     # Plot the training loss and accuracy
-    # compare_trainings(all_cfgs, logs, logs_names)
+    compare_trainings(all_cfgs, logs, logs_names)
 
 
     # Test the network or show validation
