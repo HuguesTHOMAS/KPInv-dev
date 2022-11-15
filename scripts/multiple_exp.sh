@@ -13,14 +13,18 @@ max_containers="2"
 # Training script used
 # ********************
 
-# training_script="experiments/ScanObjectNN/train.py"
-training_script="experiments/S3DIS_simple/train_S3DIS_simple.py"
+training_script="experiments/ScanObjectNN/train.py"
+# training_script="experiments/S3DIS_simple/train_S3DIS_simple.py"
 
 
 # Declare an array variable
 # *************************
 
-declare -a arg_arr=("--inv_groups 0")
+declare -a arg_arr=("--inv_groups 8 --layer_blocks 4 4 12 20 4"
+                    "--inv_groups 8"
+                    "--inv_groups 8 --layer_blocks 4 4 12 20 4"
+                    "--inv_groups 8"
+                    "--inv_groups 8 --layer_blocks 4 4 12 20 4")
 
 
 echo ""

@@ -162,7 +162,15 @@ class SceneSegDataset(Dataset):
                              HueSaturationTranslation()]
         # self.full_augments.append(RandomDropColor(p=a_cfg.color_drop))
         if a_cfg.chromatic_norm:
-            self.full_augments += [ChromaticNormalize()]
+            if self.name == 'ScanNetV2':
+                color_mean = [0.46259782, 0.46253258, 0.46253258]
+                color_std =  [0.693565  , 0.6852543 , 0.68061745]
+            elif self.name.startswith('S3DI'):
+                color_mean = [0.5136457, 0.49523646, 0.44921124]
+                color_std = [0.18308958, 0.18415008, 0.19252081]
+            else:
+                raise ValueError('Unknown color mean/std for the dataset')
+            self.full_augments += [ChromaticNormalize(color_mean=color_mean, color_std=color_std)]
         self.full_augments.append(RandomFullColor(p=a_cfg.color_drop))
             
         if 'height_norm' in a_cfg and a_cfg.height_norm:
@@ -668,8 +676,10 @@ class SceneSegDataset(Dataset):
             # Add original height as additional feature (note: in_points is not centered here)
             in_features = np.hstack((in_features, np.copy(in_points[:, 2:]))).astype(np.float32)
 
+
             # Data augmentation
             in_points2, in_features, in_labels = self.augmentation_transform(in_points, in_features, in_labels)
+            
             
             # Select features for the network
             in_features = self.select_features(in_features)
@@ -730,6 +740,11 @@ class SceneSegDataset(Dataset):
 
             # Update batch size
             batch_n_pts += int(in_points.shape[0])
+
+            # Fake number of points if number of input points is fixed to avoid going over the limit
+            if self.in_radius < 0:
+                k = - self.in_radius 
+                batch_n_pts += k - int(in_points.shape[0])
 
             # In case batch is full, stop
             if batch_n_pts > int(self.b_lim):

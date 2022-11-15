@@ -225,6 +225,9 @@ class ObjClassifDataset(Dataset):
 
             # Data augmentation
             in_points, in_features, _ = self.augmentation_transform(in_points, in_features, None)
+
+            # Add augmented points to features in addition to original points
+            in_features = np.hstack((in_features, in_points))
             
             # Select features for the network
             in_features = self.select_features(in_features)
@@ -430,7 +433,7 @@ class ObjClassifDataset(Dataset):
         minp = np.min(cloud_lengths)
         if maxp - minp < 1:
             cloud_lengths = int(minp)
-            new_b_lim = cloud_lengths * batch_size - 1
+            new_b_lim = cloud_lengths * batch_size + 1
             return new_b_lim
 
         

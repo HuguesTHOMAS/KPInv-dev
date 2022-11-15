@@ -45,7 +45,8 @@ from utils.ply import read_ply, write_ply
 from utils.config import load_cfg
 
 from experiments.S3DIS_simple.S3DIS import S3DISDataset
-from experiments.S3DIS_simple.test_S3DIS_simple import test_log
+from experiments.S3DIS_simple.test_S3DIS_simple import test_S3DIS_log
+from experiments.ScanObjectNN.test_ScanObjNN import test_ScanObj_log
 
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -370,13 +371,14 @@ def load_snap_clouds(path, cfg, only_last=False):
     conf_epochs = np.array([int(f[:-4].split('_')[-1]) for f in conf_names])
     conf_votes = np.array([int(f.split('_')[1]) for f in conf_names])
     
-    confs = np.zeros((len(conf_epochs), cfg.data.num_classes, cfg.data.num_classes), dtype=np.int32)
+    num_valid = len(cfg.data.pred_values)
+    confs = np.zeros((len(conf_epochs), num_valid, num_valid), dtype=np.int32)
     for v_i, conf_path in enumerate(conf_paths):
         confs[v_i] += np.loadtxt(conf_path, dtype=np.int32)
  
     vote_conf_names = np.array(['vote_' + f for f in conf_names])
     vote_conf_paths = np.array([join(val_path, f) for f in vote_conf_names])
-    vote_confs = np.zeros((len(conf_epochs), cfg.data.num_classes, cfg.data.num_classes), dtype=np.int32)
+    vote_confs = np.zeros((len(conf_epochs), num_valid, num_valid), dtype=np.int32)
     for v_i, conf_path in enumerate(vote_conf_paths):
         if exists(conf_path):
             vote_confs[v_i] += np.loadtxt(conf_path, dtype=np.int32)
@@ -1046,6 +1048,7 @@ def compare_convergences_classif(list_of_cfg, list_of_paths, list_of_names=None)
     print('\nCollecting validation logs')
     t0 = time.time()
     smooth_n = 2
+    gaussian_plot_smooth = 2.0
 
     if list_of_names is None:
         list_of_names = [str(i) for i in range(len(list_of_paths))]
@@ -1058,6 +1061,8 @@ def compare_convergences_classif(list_of_cfg, list_of_paths, list_of_names=None)
     all_train_OA = []
     all_vote_OA = []
     all_vote_confs = []
+    all_val_mAcc = []
+    all_vote_mAcc = []
 
     all_n_params = []
     all_val_throughput = []
@@ -1097,7 +1102,22 @@ def compare_convergences_classif(list_of_cfg, list_of_paths, list_of_names=None)
         all_vote_OA += [vote_ACC]
         all_vote_confs += [vote_C2]
 
-    print()
+        # mAcc as well
+        TP_plus_FN = np.sum(vote_C2, axis=-1, keepdims=True)
+        class_avg_confs = vote_C2.astype(np.float32) / TP_plus_FN.astype(np.float32)
+        diags = np.diagonal(class_avg_confs, axis1=-2, axis2=-1)
+        class_avg_ACC = np.sum(diags, axis=-1) / np.sum(class_avg_confs, axis=(-1, -2))
+        all_vote_mAcc += [class_avg_ACC]
+
+        TP_plus_FN = np.sum(val_C1, axis=-1, keepdims=True)
+        class_avg_confs = val_C1.astype(np.float32) / TP_plus_FN.astype(np.float32)
+        diags = np.diagonal(class_avg_confs, axis1=-2, axis2=-1)
+        class_avg_ACC = np.sum(diags, axis=-1) / np.sum(class_avg_confs, axis=(-1, -2))
+        all_val_mAcc += [class_avg_ACC]
+
+
+
+
 
     # Best scores
     # ***********
@@ -1115,30 +1135,12 @@ def compare_convergences_classif(list_of_cfg, list_of_paths, list_of_names=None)
         best_epoch = np.argmax(all_vote_OA[i])
         print('Best Accuracy : {:.1f} % (epoch {:d})'.format(100 * all_vote_OA[i][best_epoch], best_epoch))
 
-
-        confs = all_vote_confs[i]
-
-        """
-        s = ''
-        for cc in confs[best_epoch]:
-            for c in cc:
-                s += '{:.0f} '.format(c)
-            s += '\n'
-        print(s)
-        """
-
-        TP_plus_FN = np.sum(confs, axis=-1, keepdims=True)
-        class_avg_confs = confs.astype(np.float32) / TP_plus_FN.astype(np.float32)
-        diags = np.diagonal(class_avg_confs, axis1=-2, axis2=-1)
-        class_avg_ACC = np.sum(diags, axis=-1) / np.sum(class_avg_confs, axis=(-1, -2))
-
-        print('Corresponding mAcc : {:.1f} %'.format(100 * class_avg_ACC[best_epoch]))
-
+        print('Corresponding mAcc : {:.1f} %'.format(100 * all_vote_mAcc[i][best_epoch]))
         all_best_OA.append(100 * all_vote_OA[i][best_epoch])
-        all_corresp_mAcc.append(100 * class_avg_ACC[best_epoch])
+        all_corresp_mAcc.append(100 * all_vote_mAcc[i][best_epoch])
 
-        best_epoch_2 = np.argmax(class_avg_ACC)
-        all_best_mAcc.append(100 * class_avg_ACC[best_epoch_2])
+        best_epoch_2 = np.argmax(all_vote_mAcc[i])
+        all_best_mAcc.append(100 * all_vote_mAcc[i][best_epoch_2])
         all_corresp_OA.append(100 * all_vote_OA[i][best_epoch_2])
 
 
@@ -1163,25 +1165,56 @@ def compare_convergences_classif(list_of_cfg, list_of_paths, list_of_names=None)
     # Plots
     # *****
 
-    for fig_name, OA in zip(['Validation', 'Vote'], [all_val_OA, all_vote_OA]):
+    for fig_name, vote_score, val_score in zip(['OA', 'mACC'], [all_vote_OA, all_vote_mAcc], [all_val_OA, all_val_mAcc]):
 
         # Figure
-        fig = plt.figure(fig_name)
-        for i, label in enumerate(list_of_names):
-            plt.plot(all_pred_epochs[i], OA[i], linewidth=1, label=label)
-        plt.xlabel('epochs')
-        plt.ylabel(fig_name + ' Accuracy')
+        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=[8.8, 4.8], sharey=True)
 
-        # Set limits for y axis
-        #plt.ylim(0.55, 0.95)
+        # Vote axis
+        max_v = 0
+        for i, name in enumerate(list_of_names):
+            ysmoothed = gaussian_filter1d(vote_score[i], sigma=gaussian_plot_smooth)
+            ax1.plot(all_pred_epochs[i], ysmoothed, linewidth=1, label=name)
+            max_v = max(max_v, np.max(ysmoothed))
+        ax1.set_xlabel('epochs')
+        ax1.set_ylabel(fig_name)
+        ax1.set_ylim(max(0.0, max_v - 0.08), min(max_v + 0.03, 1.01))
+
+        # Val axis
+        for i, name in enumerate(list_of_names):
+            ysmoothed = gaussian_filter1d(val_score[i], sigma=gaussian_plot_smooth)
+            ax2.plot(all_pred_epochs[i], ysmoothed, linewidth=1, label=name)
+        ax2.set_xlabel('epochs')
 
         # Display legends and title
-        plt.legend(loc=4)
+        ax2.legend(loc=4)
 
         # Customize the graph
-        ax = fig.gca()
-        ax.grid(linestyle='-.', which='both')
-        #ax.set_yticks(np.arange(0.8, 1.02, 0.02))
+        ax1.grid(linestyle='-.', which='both')
+        ax2.grid(linestyle='-.', which='both')
+
+
+
+    # for fig_name, (OA, mAcc) in zip(['Validation', 'Vote'], [all_val_OA, all_vote_OA]):
+
+
+    #     # Figure
+    #     fig = plt.figure(fig_name)
+    #     for i, label in enumerate(list_of_names):
+    #         plt.plot(all_pred_epochs[i], OA[i], linewidth=1, label=label)
+    #     plt.xlabel('epochs')
+    #     plt.ylabel(fig_name + ' Accuracy')
+
+    #     # Set limits for y axis
+    #     #plt.ylim(0.55, 0.95)
+
+    #     # Display legends and title
+    #     plt.legend(loc=4)
+
+    #     # Customize the graph
+    #     ax = fig.gca()
+    #     ax.grid(linestyle='-.', which='both')
+    #     #ax.set_yticks(np.arange(0.8, 1.02, 0.02))
 
     #for i, label in enumerate(list_of_names):
     #    print(label, np.max(all_train_OA[i]), np.max(all_val_OA[i]))
@@ -1314,7 +1347,8 @@ def compare_convergences_SLAM(dataset, list_of_paths, list_of_names=None):
 def compare_on_test_set(list_of_cfg,
                         list_of_paths,
                         list_of_names=None,
-                        redo_test=False):
+                        redo_test=False,
+                        profile=False):
 
     ############
     # Parameters
@@ -1324,6 +1358,8 @@ def compare_on_test_set(list_of_cfg,
         list_of_names = [str(i) for i in range(len(list_of_paths))]
 
     all_confs = []
+    all_profiles = []
+    all_chkp = []
 
 
     ##############
@@ -1335,25 +1371,42 @@ def compare_on_test_set(list_of_cfg,
         # Define parameters
         # *****************
 
-        # Change some parameters
-        cfg.data.cylindric_input = True
-        cfg.test.in_radius = 6.0
-        cfg.test.batch_limit = 1
-        cfg.test.max_steps_per_epoch = 9999999
-        cfg.test.max_votes = 5
-        cfg.test.chkp_idx = 2
+        if cfg.data.task == 'cloud_segmentation':
 
-        # Augmentations
-        cfg.augment_test.anisotropic = False
-        cfg.augment_test.scale = [0.99, 1.01]
-        cfg.augment_test.flips = [0.5, 0, 0]
-        cfg.augment_test.rotations = 'vertical'
-        cfg.augment_test.jitter = 0
-        cfg.augment_test.color_drop = 0.0
-        cfg.augment_test.chromatic_contrast = False
-        cfg.augment_test.chromatic_all = False
-        # cfg.augment_test.chromatic_norm = cfg.augment_test.chromatic_norm
-        # cfg.augment_test.height_norm = cfg.augment_test.height_norm
+            # Change some parameters
+            # cfg.data.cylindric_input = True
+            # cfg.test.in_radius = 6.0
+            cfg.test.batch_limit = 1
+            cfg.test.max_steps_per_epoch = 9999999
+            cfg.test.max_votes = 6
+            cfg.test.chkp_idx = None
+
+            # Augmentations
+            cfg.augment_test.anisotropic = False
+            cfg.augment_test.scale = [0.99, 1.01]
+            cfg.augment_test.flips = [0.5, 0, 0]
+            cfg.augment_test.rotations = 'vertical'
+            cfg.augment_test.jitter = 0
+            cfg.augment_test.color_drop = 0.0
+            cfg.augment_test.chromatic_contrast = False
+            cfg.augment_test.chromatic_all = False
+            # cfg.augment_test.chromatic_norm = cfg.augment_test.chromatic_norm
+            # cfg.augment_test.height_norm = cfg.augment_test.height_norm
+
+            if profile:
+
+                cfg.test.in_radius = -15000
+                cfg.test.batch_limit = 15000 * 16 - 1
+                cfg.test.data_sampler = 'A-random'
+
+
+        
+        elif cfg.data.task == 'classification':
+            cfg.test.max_steps_per_epoch = 9999999
+            cfg.test.max_votes = 15
+            cfg.test.chkp_idx = None
+            cfg.test.batch_limit = 1024 * 128 + 2
+
 
         
         # Read test results if available
@@ -1380,30 +1433,81 @@ def compare_on_test_set(list_of_cfg,
         # Compute test results if not found
         # *********************************
 
-        # Perform test
-        if found_test is None:
-            test_log(path, cfg)
-            
-        # Get the new test folder
-        test_folders2 = [join(test_path, f) for f in listdir(test_path) if f.startswith('test_')]
-        for test_folder in test_folders2:
-            if test_folder not in test_folders:
-                found_test = test_folder
-                break
+        if profile:
+
+            get_flops = False
+
+            # Check if profile exists   
+            profile_path1 = os.path.join(test_path, 'profile_speed.txt')
+            profile_path2 = os.path.join(test_path, 'profile_flops.txt')
+
+            if get_flops:
+                profile_path = profile_path2
+            else:
+                profile_path = profile_path1
+            if not exists(profile_path):
+                if cfg.data.name.startswith('S3DI'):
+                    test_S3DIS_log(path, cfg, profile=True, get_flops=get_flops)
+
+            # Get profile
+            gpu_mem = -1
+            speed = -1
+            flops = -1
+            if exists(profile_path1):
+                with open(profile_path1, "r") as text_file:
+                    lines = text_file.readlines()
+                    speed = float(lines[1].split()[0])
+                    gpu_mem = float(lines[1].split()[1])
+            if exists(profile_path2):
+                with open(profile_path2, "r") as text_file:
+                    lines = text_file.readlines()
+                    flops = float(lines[1].split()[0])
+
+            all_profiles.append([speed, gpu_mem, flops])
+        
+        else:
 
 
-        # Save test data
-        # **************
+            # Perform test
+            if found_test is None:
+                if cfg.data.name.startswith('S3DI'):
+                    test_S3DIS_log(path, cfg)
+                if cfg.data.name.startswith('ScanObj'):
+                    test_ScanObj_log(path, cfg)
 
-        # Read confision matrix
-        all_conf_pathes = np.sort([join(found_test, f) for f in listdir(found_test) if f.startswith('full_conf_')])
-        log_confs = []
-        for conf_path in all_conf_pathes:
-            if isfile(conf_path):
-                log_confs.append(np.loadtxt(conf_path, dtype=np.int32))
+            # Get the new test folder
+            test_folders2 = [join(test_path, f) for f in listdir(test_path) if f.startswith('test_')]
+            for test_folder in test_folders2:
+                if test_folder not in test_folders:
+                    found_test = test_folder
+                    break
 
-        all_confs.append(np.stack(log_confs,  axis=0))
 
+            # Read test data
+            # **************
+
+            # Read confision matrix
+            if cfg.data.task == 'cloud_segmentation':
+                all_conf_pathes = np.sort([join(found_test, f) for f in listdir(found_test) if f.startswith('full_conf_')])
+            elif cfg.data.task == 'classification':
+                all_conf_pathes = np.sort([join(found_test, f) for f in listdir(found_test) if f.startswith('vote_conf_')])
+
+            log_confs = []
+            for conf_path in all_conf_pathes:
+                if isfile(conf_path):
+                    log_confs.append(np.loadtxt(conf_path, dtype=np.int32))
+            all_confs.append(np.stack(log_confs,  axis=0))
+
+
+
+        # Add checkpoint here:
+        chkp_path = os.path.join(path, 'checkpoints')
+        chkps = [f for f in os.listdir(chkp_path) if f[:4] == 'chkp']
+        if cfg.test.chkp_idx is None:
+            chosen_chkp = 'current_chkp.tar'
+        else:
+            chosen_chkp = np.sort(chkps)[cfg.test.chkp_idx]
+        all_chkp.append(chosen_chkp)
 
 
 
@@ -1411,33 +1515,79 @@ def compare_on_test_set(list_of_cfg,
     # Show results
     ##############
 
-    print('\n')
-    print('________________________________________________________________________________________________________')
-    underline('Test Results')
 
-    # Get IoUs from the final vote
-    all_IoUs = [IoU_from_confusions(full_conf[-1]) for full_conf in all_confs]
+    if profile:
 
-    class_list = [name for label, name in list_of_cfg[0].data.label_and_names
-                  if label not in list_of_cfg[0].data.ignored_labels]
-    
-    num_classes = len(class_list)
+        all_troughput = [profile[0] for profile in all_profiles]
+        all_gpu = [profile[1] / 1024 ** 3 for profile in all_profiles]
+        all_flops = [profile[2] for profile in all_profiles]
+
+        columns = [list_of_names,
+                   all_troughput,
+                   all_gpu,
+                   all_flops,
+                   [path.split('/')[-1] for path in list_of_paths],
+                all_chkp]
+        table_str = table_to_str(['logs', 'throughput', 'GPU Memory', 'GFLOPs', 'date', 'chkp'],
+                                columns,
+                                ['{:s}', '{:.2f}', '{:.2f}', '{:.2f}', '{:s}', '{:s}'])
+        print('Profile')
+        print(table_str)
+        print()
 
 
-    # Print spheres validation
-    s = '{:^10}|'.format('mean')
-    for c in class_list:
-        s += '{:^10}'.format(c)
-    print(s)
-    print(10*'-' + '|' + 10*num_classes*'-')
-    for log_IoUs in all_IoUs:
-        s = '{:^10.1f}|'.format(100*np.mean(log_IoUs))
-        for IoU in log_IoUs:
-            s += '{:^10.1f}'.format(100*IoU)    
+    else:
+        print('\n')
+        print('________________________________________________________________________________________________________')
+        underline('Test Results')
+
+        # Get IoUs from the final vote
+        all_IoUs = [IoU_from_confusions(full_conf[-1]) for full_conf in all_confs]
+
+        class_list = [name for label, name in list_of_cfg[0].data.label_and_names
+                    if label not in list_of_cfg[0].data.ignored_labels]
+        
+        num_classes = len(class_list)
+
+
+        # Print spheres validation
+        s = '{:^10}|'.format('mean')
+        for c in class_list:
+            s += '{:^10}'.format(c)
         print(s)
+        print(10*'-' + '|' + 10*num_classes*'-')
+        for log_IoUs in all_IoUs:
+            s = '{:^10.1f}|'.format(100*np.mean(log_IoUs))
+            for IoU in log_IoUs:
+                s += '{:^10.1f}'.format(100*IoU)    
+            print(s)
 
-    print('________________________________________________________________________________________________________')
-    print('\n')
+        print('________________________________________________________________________________________________________')
+        print('\n')
+
+
+        # Print table of results
+        # **********************
+
+        
+        all_metrics = [metrics_from_confusions(full_conf[-1]) for full_conf in all_confs]
+
+        all_OA = [metrics[0] for metrics in all_metrics]
+        all_mAcc = [np.mean(metrics[2], axis=-1) for metrics in all_metrics]
+        all_mIoUs = [np.mean(metrics[1], axis=-1) for metrics in all_metrics]
+
+        columns = [list_of_names,
+                [100 * mIoU for mIoU in all_mIoUs],
+                [100 * OA for OA in all_OA],
+                [100 * mAcc for mAcc in all_mAcc],
+                [path.split('/')[-1] for path in list_of_paths],
+                all_chkp]
+        table_str = table_to_str(['logs', 'mIoU', 'OA', 'mAcc', 'date', 'chkp'],
+                                columns,
+                                ['{:s}', '{:.2f}', '{:.2f}', '{:.2f}', '{:s}', '{:s}'])
+        print('Vote')
+        print(table_str)
+        print()
 
     return
 

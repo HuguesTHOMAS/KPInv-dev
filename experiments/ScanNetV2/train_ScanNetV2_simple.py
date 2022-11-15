@@ -65,8 +65,8 @@ def my_config():
     # Network parameters
     # ------------------
 
-    # cfg.model.layer_blocks = (3,  3,  9, 12, 3)   # KPNetX-S
-    cfg.model.layer_blocks = (4,  4, 12, 20,  4)    # KPNetX-L
+    # cfg.model.layer_blocks = (1,  3,  3,  9, 12, 3)   # KPNetX-S
+    cfg.model.layer_blocks = (1,  4,  4, 12, 20,  4)    # KPNetX-L
 
     cfg.model.norm = 'batch' # batch, layer
     cfg.model.init_channels = 64  # 48, 64, 80, 96
@@ -103,7 +103,8 @@ def my_config():
 
     cfg.model.input_channels = 5    # This value has to be compatible with one of the dataset input features definition
     
-    cfg.model.neighbor_limits = [13, 14, 16, 16, 16]      # Use empty list to let calibration get the values
+    cfg.model.neighbor_limits = [11, 12, 13, 14, 14, 14]      # Use empty list to let calibration get the values
+    # cfg.model.neighbor_limits = [12, 13, 14, 14, 14]      # Use empty list to let calibration get the values
     # cfg.model.neighbor_limits = [12, 14, 16, 16, 16]      # Use empty list to let calibration get the values
     # cfg.model.neighbor_limits = [16, 17, 18, 18, 18]      # Use empty list to let calibration get the values
     # cfg.model.neighbor_limits = [35, 40, 50, 50, 50]    # Use empty list to let calibration get the values
@@ -113,7 +114,7 @@ def my_config():
     # Specific parameters for involution and transformers
     cfg.model.use_strided_conv = True           # Use convolution op for strided layers instead of involution
     cfg.model.first_inv_layer = 1               # Use involution layers only from this layer index (from 0 to n_layer - 1)
-    cfg.model.inv_groups = 8                    # negative values to specify CpG instead of G
+    cfg.model.inv_groups = 0                    # negative values to specify CpG instead of G
     cfg.model.inv_grp_norm = True
     cfg.model.inv_act = 'sigmoid'               # 'none', 'sigmoid', 'softmax', 'tanh'
             
@@ -135,15 +136,15 @@ def my_config():
     cfg.train.data_sampler = 'A-random'   # 'c-random' for class balanced random sampling
 
     # Input spheres radius. Adapt this with model.in_sub_size. Try to keep a ratio of ~50
-    cfg.train.in_radius = 2.0  # If negative, =number of points per input. Use negative to compare models
+    cfg.train.in_radius = -64000  # If negative, =number of points per input. Use negative to compare models
 
     # Batch related_parames
-    cfg.train.batch_size = 4                 # Target batch size. If you don't want calibration, you can directly set train.batch_limit
-    cfg.train.accum_batch = 6                 # Accumulate batches for an effective batch size of batch_size * accum_batch.
+    cfg.train.batch_size = 2                # Target batch size. If you don't want calibration, you can directly set train.batch_limit
+    cfg.train.accum_batch = 8               # Accumulate batches for an effective batch size of batch_size * accum_batch.
     cfg.train.steps_per_epoch = 300
     
     # Training length
-    cfg.train.max_epoch = 180
+    cfg.train.max_epoch = 250
     
     # Deformations
     cfg.train.deform_loss_factor = 0.1      # Reduce to reduce influence for deformation on overall features
@@ -181,7 +182,7 @@ def my_config():
 
     # Train Augmentations
     cfg.augment_train.anisotropic = True
-    cfg.augment_train.scale = [0.9, 1.1]
+    cfg.augment_train.scale = [0.8, 1.2]
     cfg.augment_train.flips = [0.5, 0, 0]
     cfg.augment_train.rotations = 'vertical'
     cfg.augment_train.jitter = 0.005

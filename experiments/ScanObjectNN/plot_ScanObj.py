@@ -512,6 +512,128 @@ def test_architecture2():
     return logs, logs_names
 
 
+def exp_final():
+    """
+    GOGO KPNext experiments
+    """
+
+    # Using the dates of the logs, you can easily gather consecutive ones. All logs should be of the same dataset.
+    start = 'Log_2022-11-09_11-45-35'
+    end = 'Log_2022-12-09_19-03-25'
+
+    # Name of the result path
+    res_path = 'results'
+
+    # Gather logs and sort by date
+    logs = np.sort([join(res_path, l) for l in listdir_str(res_path) if start <= l <= end])
+
+    # Optionally add a specific log at a specific place in the log list
+    logs = logs.astype('<U50')
+    logs = np.insert(logs, 0, 'results/Log_2022-10-25_09-15-27')
+    logs = np.insert(logs, 1, 'results/Log_2022-10-27_14-38-48')
+
+    # Give names to the logs (for plot legends)
+    logs_names = ['net1 (12)',
+                  'net1bis + gridpool',
+                  'KPNeXt-S 1/14/28',
+                  'KPNeXt-L 1/14/28',
+                  'KPNeXt-S/2.0 G=0 NoUpC',
+                  'KPNeXt-S/2.0 G=8 NoUpC',
+                  'KPNeXt-S/2.0 G=8',
+                  'KPNeXt-L/2.0 G=8',
+                  'KPNeXt-L/2.0 G=0 NoUpC',
+                  'KPNeXt-L/2.0 G=8 NoUpC',
+                  'KPNeXt-C']
+
+    # OK stop for now, best so far was net1 (12). Use it as base for new experiemnts in the future
+
+    # TODO: What we have not done yet:
+    #           - Try different kp_radius than 1.2 (it will mean more neighbors) and other disp as 1 14 28
+    #           - Try more architectures
+    #           - Try no group in inv
+    #           - Add other stuff from convnext like droppath etc
+    #           - Faster to reach  4000 instances per second at test time?
+
+    # TODO:
+    #
+    #       2. Poisson disk sampling
+    #
+    #       3. (Border repulsive loss) + (Mix3D) + (model ensemble) and submit to Scannetv2
+    #
+    #       Need to cite point transformer v2: https://arxiv.org/pdf/2210.05666.pdf
+    #
+    #       4. Go implement other datasets (NPM3D, Semantic3D, Scannetv2)
+    #          Also other task: ModelNet40, ShapeNetPart, SemanticKitti
+    #          Add code for completely different tasks??? Invariance??
+    #          New classif dataset: ScanObjectNN
+    #          Revisiting point cloud classification: A new benchmark dataset 
+    #          and classification model on real-world data
+    #
+    #       5. Parameters to play with at the end
+    #           > color drop
+    #           > init_feature_dim
+    #           > layers
+    #           > radius (sphere or cylinder)
+    #           > knn
+    #           > kp radius (for kp) and K and shells
+    #           > trainer
+    #           > KPConvX vs KPConvD vs KPInv
+    #           > groups in KPConvX
+    #           > n_layers in KPConvX
+    #
+
+
+    # safe check log names
+    if len(logs) > len(logs_names):
+        logs = logs[:len(logs_names)]
+    logs_names = np.array(logs_names[:len(logs)])
+
+    # logs = logs[[-1, -3, -4]]
+    # logs_names = logs_names[[-1, -3, -4]]
+
+    return logs, logs_names
+
+
+def exp_final3():
+    """
+    GOGO KPNext experiments
+    """
+
+    # Using the dates of the logs, you can easily gather consecutive ones. All logs should be of the same dataset.
+    start = 'Log_2022-11-10_21-48-09'
+    end = 'Log_2022-12-09_19-03-25'
+
+    # Name of the result path
+    res_path = 'results'
+
+    # Gather logs and sort by date
+    logs = np.sort([join(res_path, l) for l in listdir_str(res_path) if start <= l <= end])
+
+    # Optionally add a specific log at a specific place in the log list
+    logs = logs.astype('<U50')
+    logs = np.insert(logs, 0, 'results/Log_2022-11-10_16-48-48')
+
+    # logs = np.insert(logs, 3, 'results/Log_2022-10-27_14-38-48')
+    # logs = np.insert(logs, 4, 'results/Log_2022-10-27_14-38-48')
+
+    # Give names to the logs (for plot legends)
+    logs_names = ['KPNeXt-S G=8',
+                  'KPNeXt-L G=8',
+                  'KPNeXt-S G=8',
+                  'KPNeXt-L G=8',
+                  'KPNeXt-S G=8',
+                  'KPNeXt-L G=8',
+                  '...']
+
+    # safe check log names
+    if len(logs) > len(logs_names):
+        logs = logs[:len(logs_names)]
+    logs_names = np.array(logs_names[:len(logs)])
+
+    # logs = logs[[-1, -3, -4]]
+    # logs_names = logs_names[[-1, -3, -4]]
+
+    return logs, logs_names
 
 # ----------------------------------------------------------------------------------------------------------------------
 #
@@ -538,7 +660,7 @@ if __name__ == '__main__':
     ######################################################
 
     # My logs: choose the logs to show
-    logs, logs_names = test_architecture2()
+    logs, logs_names = exp_final3()
 
     frame_lines_1(["Plot ScanObjectNN experiments"])
 
@@ -585,11 +707,11 @@ if __name__ == '__main__':
     underline("Ploting training info")
 
     # Plot the training loss and accuracy
-    compare_trainings(all_cfgs, logs, logs_names)
+    # compare_trainings(all_cfgs, logs, logs_names)
 
 
     # Test the network or show validation
-    perform_test = False
+    perform_test = True
     if perform_test:
 
         print()

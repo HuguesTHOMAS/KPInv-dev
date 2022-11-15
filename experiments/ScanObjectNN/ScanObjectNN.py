@@ -164,6 +164,8 @@ class ScanObjectNNDataset(ObjClassifDataset):
             selected_features = np.hstack((selected_features, in_features[:, 2:3]))
         elif self.cfg.model.input_channels == 4:
             selected_features = np.hstack((selected_features, in_features[:, :3]))
+        elif self.cfg.model.input_channels == 7:
+            selected_features = np.hstack((selected_features, in_features[:, :6]))
         else:
             raise ValueError('Only accepted input dimensions are 1, 4 and 5')
 

@@ -524,7 +524,7 @@ class KPNeXt(nn.Module):
 
             # New head
             self.head = nn.Sequential(self.get_unary_block(layer_C[-1], 256, cfg, norm_type='none'),
-                                      nn.Dropout(0.5),
+                                      nn.Dropout(0.4),
                                       nn.Linear(256, self.num_logits))
 
             # # Old head

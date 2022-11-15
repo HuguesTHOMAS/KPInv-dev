@@ -66,17 +66,18 @@ def my_config():
 
     # Network parameters
     # ------------------
+
+    cfg.model.layer_blocks = (4,  6,  9, 12, 4)   # KPNetX-S
+
+    # cfg.model.layer_blocks = (3,  3,  9, 12, 3)   # KPNetX-S
+    # cfg.model.layer_blocks = (4,  4, 12, 20,  4)    # KPNetX-L
     
-    # cfg.model.layer_blocks = (3,  6,  9,  9,  3)  # for r_scaling 2.5
+    # cfg.model.layer_blocks = (6,  9,  9,  4)    # strange test
 
-    # cfg.model.layer_blocks = (3,  3,  5,  9,  3)
-    cfg.model.layer_blocks = (4,  6,  9, 12,  4)
+    # cfg.model.layer_blocks = (3, 9, 12, 3, 3)   # KPNetX-S bis
+    # cfg.model.layer_blocks = (3, 3, 9, 3, 3)   # KPNetX-S bisbis
 
-    # cfg.model.layer_blocks = (1,  2,  3,  3,  9,  3)
-    # cfg.model.layer_blocks = (3,  3,  5,  9,  12,  3)
 
-    # cfg.model.layer_blocks = (4,  5, 12, 21,  5)
-    # cfg.model.layer_blocks = (2, 2, 3, 3, 3, 5, 5, 3, 3)   # this with channelscaling = 1.2
     
     cfg.model.norm = 'batch' # batch, layer
     cfg.model.init_channels = 48  # 48, 64, 80, 96
@@ -106,14 +107,15 @@ def my_config():
     cfg.train.in_radius = -1024         # If negative, =number of points per input
 
 
+    cfg.model.kpx_upcut = False
     cfg.model.grid_pool = True         #  Bool, Are we using pure grid pooling and unpooling like PointTransformer v2
+    cfg.model.drop_path_rate = 0.3      # Rate for DropPath to make a stochastic depth model.
 
-    cfg.model.input_channels = 2    # This value has to be compatible with one of the dataset input features definition
+    cfg.model.input_channels = 7    # This value has to be compatible with one of the dataset input features definition
     
-
     # cfg.model.neighbor_limits = [8, 8, 8, 9, 9, 10, 10, 10, 10]
     # cfg.model.neighbor_limits = [8, 9, 10, 12, 12, 12]
-    cfg.model.neighbor_limits = [10, 11, 12, 12, 12]        
+    cfg.model.neighbor_limits = [10, 11, 12, 14, 14]        
     # cfg.model.neighbor_limits = [16, 17, 18, 18, 18]      
     # cfg.model.neighbor_limits = [35, 40, 50, 50, 50]      # Use empty list to let calibration get the values
     # cfg.model.neighbor_limits = [16, 16, 16, 16, 16]      # List for point_transformer
@@ -125,7 +127,6 @@ def my_config():
     cfg.model.inv_groups = 8                    # negative values to specify CpG instead of G
     cfg.model.inv_grp_norm = True
     cfg.model.inv_act = 'sigmoid'               # 'none', 'sigmoid', 'softmax', 'tanh'
-    cfg.model.kpx_upcut = False
             
     # Specific parameters for kpinv 
     cfg.model.kpinv_reduc = 1
@@ -145,7 +146,7 @@ def my_config():
     cfg.train.data_sampler = 'c-regular'   # 'random', 'c-random', 'regular' or 'c-regular'
 
     # Batch related_parames
-    cfg.train.batch_size = 16                 # Target batch size. If you don't want calibration, you can directly set train.batch_limit
+    cfg.train.batch_size = 32                 # Target batch size. If you don't want calibration, you can directly set train.batch_limit
     cfg.train.accum_batch = 2                 # Accumulate batches for an effective batch size of batch_size * accum_batch.
     cfg.train.steps_per_epoch = None
     
@@ -190,9 +191,9 @@ def my_config():
     # Train Augmentations
     cfg.augment_train.anisotropic = True
     cfg.augment_train.scale = [0.9, 1.1]
-    cfg.augment_train.flips = [0.5, 0, 0]
+    cfg.augment_train.flips = [0.2, 0, 0]
     cfg.augment_train.rotations = 'vertical'
-    cfg.augment_train.jitter = 0.005
+    cfg.augment_train.jitter = 0.001
     cfg.augment_train.color_drop = 0.2
     cfg.augment_train.chromatic_contrast = True
     cfg.augment_train.chromatic_all = False

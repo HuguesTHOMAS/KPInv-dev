@@ -116,7 +116,7 @@ def my_config():
     # Specific parameters for involution and transformers
     cfg.model.use_strided_conv = True           # Use convolution op for strided layers instead of involution
     cfg.model.first_inv_layer = 1               # Use involution layers only from this layer index (from 0 to n_layer - 1)
-    cfg.model.inv_groups = -1                    # negative values to specify CpG instead of G
+    cfg.model.inv_groups = 8                    # negative values to specify CpG instead of G
     cfg.model.inv_grp_norm = True
     cfg.model.inv_act = 'sigmoid'               # 'none', 'sigmoid', 'softmax', 'tanh'
     

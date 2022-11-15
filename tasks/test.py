@@ -20,6 +20,7 @@ from utils.printing import underline, frame_lines_1, color_str
 from utils.gpu_init import init_gpu
 from utils.ply import read_ply, write_ply
 from utils.config import save_cfg
+from utils.printing import table_to_str
 
 from tasks.training import training_epoch, training_epoch_debug
 from tasks.validation import validation_epoch
@@ -59,6 +60,7 @@ def test_model(net, test_loader, cfg, on_gpu=True, save_visu=False):
 
     # Get the network to the device we chose
     net.to(device)
+    net.eval()
 
 
     ######################################
@@ -68,8 +70,8 @@ def test_model(net, test_loader, cfg, on_gpu=True, save_visu=False):
     if cfg.data.task == 'cloud_segmentation':
         test_epoch_func = cloud_segmentation_test
 
-    # elif cfg.data.task == 'classification':
-    #     test_epoch_func = object_classification_test
+    elif cfg.data.task == 'classification':
+        test_epoch_func = object_classification_test
 
     # elif cfg.data.task == 'part_segmentation':
     #     test_epoch_func = object_segmentation_test
@@ -129,14 +131,16 @@ def test_model(net, test_loader, cfg, on_gpu=True, save_visu=False):
                             saving_path=new_test_path,
                             save_visu=save_visu)
 
-        # Create new sampling points for next test epoch
-        t1 = time.time()
-        print('Creating new sampling points for next test epoch')
-        test_loader.dataset.reg_sampling_i *= 0
-        test_loader.dataset.new_reg_sampling_pts()
-        test_loader.dataset.reg_votes += 1
-        t2 = time.time()
-        print('Done in {:.1f}s\n'.format(t2 - t1))
+        
+        if cfg.data.task == 'cloud_segmentation':
+            # Create new sampling points for next test epoch
+            t1 = time.time()
+            print('Creating new sampling points for next test epoch')
+            test_loader.dataset.reg_sampling_i *= 0
+            test_loader.dataset.new_reg_sampling_pts()
+            test_loader.dataset.reg_votes += 1
+            t2 = time.time()
+            print('Done in {:.1f}s\n'.format(t2 - t1))
 
         vote_n += 1
 
@@ -149,8 +153,8 @@ def test_model(net, test_loader, cfg, on_gpu=True, save_visu=False):
 
 # ----------------------------------------------------------------------------------------------------------------------
 #
-#           Validation Functions
-#       \**************************/
+#           Test Functions
+#       \********************/
 #
 
 
@@ -527,6 +531,202 @@ def cloud_segmentation_test(epoch, net, test_loader, cfg, test_data, device, sav
     return
 
 
+
+def object_classification_test(epoch, net, test_loader, cfg, test_data, device, saving_path=None, save_visu=False):
+    """
+    Test method for shape classification models
+    """
+    
+    ############
+    # Initialize
+    ############
+
+    saving = saving_path is not None
+    
+    underline('Test epoch {:d}'.format(epoch))
+    message =  '\n                                                          Timings        '
+    message += '\n Steps |   Votes   | GPU usage |      Speed      |   In   Batch  Forw  End '
+    message += '\n-------|-----------|-----------|-----------------|-------------------------'
+    print(message)
+
+    t0 = time.time()
+
+    # Choose validation smoothing parameter (0 for no smothing, 0.99 for big smoothing)
+    test_smooth = cfg.test.test_momentum
+    softmax = torch.nn.Softmax(1)
+
+    # Number of classes predicted by the model
+    nc_model = net.num_logits
+    
+    # Initiate global prediction over validation clouds
+    if 'probs' not in test_data:
+        test_data.probs = np.zeros((test_loader.dataset.n_objects, nc_model))
+
+
+    #####################
+    # Network predictions
+    #####################
+
+    probs = []
+    targets = []
+    obj_inds = []
+    speeds = []
+
+    t = [time.time()]
+    last_display = time.time()
+    mean_dt = np.zeros(1)
+
+    t1 = time.time()
+
+    # Start validation loop
+    for step, batch in enumerate(test_loader):
+
+        # New time
+        t = t[-1:]
+        if 'cuda' in device.type:
+            torch.cuda.synchronize(device)
+        t += [time.time()]
+
+        if 'cuda' in device.type:
+            batch.to(device)
+
+        if 'cuda' in device.type:
+            torch.cuda.synchronize(device)
+        t += [time.time()]
+
+        # Forward pass
+        outputs = net(batch)
+        
+        if 'cuda' in device.type:
+            torch.cuda.synchronize(device)
+        t += [time.time()]
+
+        # Get probs and labels
+        probs += [softmax(outputs).cpu().detach().numpy()]
+        targets += [batch.in_dict.labels.cpu().numpy()]
+        obj_inds += [batch.in_dict.obj_inds.cpu().numpy()]
+
+        # Get CUDA memory stat to see what space is used on GPU
+        if 'cuda' in device.type:
+            cuda_stats = torch.cuda.memory_stats(device)
+            used_GPU_MB = cuda_stats["allocated_bytes.all.peak"]
+            _, tot_GPU_MB = torch.cuda.mem_get_info(device)
+            gpu_usage = 100 * used_GPU_MB / tot_GPU_MB
+            torch.cuda.reset_peak_memory_stats(device)
+        else:
+            gpu_usage = 0
+
+        # # Empty GPU cache (helps avoiding OOM errors)
+        # # Loses ~10% of speed but allows batch 2 x bigger.
+        # torch.cuda.empty_cache()
+
+        if 'cuda' in device.type:
+            torch.cuda.synchronize(device)
+        t += [time.time()]
+
+        # Average timing
+        if step < 5:
+            mean_dt = np.array(t[1:]) - np.array(t[:-1])
+        else:
+            mean_dt = 0.8 * mean_dt + 0.2 * (np.array(t[1:]) - np.array(t[:-1]))
+
+        # Measure speed
+        stps_per_sec = 1 / np.sum(mean_dt)
+        ins_per_sec = stps_per_sec * len(batch.in_dict.lengths[0])
+        speeds.append(ins_per_sec)
+
+        # Display
+        if (t[-1] - last_display) > 1.0:
+            last_display = t[-1]
+            message = ' {:5d} | {:9.2f} | {:7.1f} % | {:7.1f} stp/min | {:6.1f} {:5.1f} {:5.1f} {:5.1f}'
+            print(message.format(step,
+                                 test_loader.dataset.get_votes(),
+                                 gpu_usage,
+                                 60 / np.sum(mean_dt),
+                                 1000 * mean_dt[0],
+                                 1000 * mean_dt[1],
+                                 1000 * mean_dt[2],
+                                 1000 * mean_dt[3]))
+
+
+    t2 = time.time()
+
+    # Stack all validation predictions
+    probs = np.vstack(probs)
+    targets = np.hstack(targets)
+    obj_inds = np.hstack(obj_inds)
+
+    # Voting
+    test_data.probs[obj_inds] = test_smooth * test_data.probs[obj_inds] + (1-test_smooth) * probs
+
+    # Speed
+    avg_speed = np.mean(speeds[6:-2])
+
+    print('\nOne vote computed in {:.1f}s\n'.format(t2 - t1))
+
+    # Get scores
+    # **********
+
+    # Compute classification results
+    C1 = fast_confusion(targets,
+                        test_loader.dataset.probs_to_preds(probs),
+                        test_loader.dataset.pred_values)
+
+    # Compute votes confusion
+    C2 = fast_confusion(test_loader.dataset.input_labels,
+                        test_loader.dataset.probs_to_preds(test_data.probs),
+                        test_loader.dataset.pred_values)
+
+    # Compute OA and mAcc
+    TP = np.diagonal(C1, axis1=-2, axis2=-1)
+    OA1 = np.sum(TP, axis=-1) / (np.sum(C1, axis=(-2, -1)) + 1e-6)
+    TP_plus_FN = np.sum(C1, axis=-1, keepdims=True)
+    class_avg_confs = C1.astype(np.float32) / TP_plus_FN.astype(np.float32)
+    diags = np.diagonal(class_avg_confs, axis1=-2, axis2=-1)
+    mAcc1 = np.sum(diags, axis=-1) / np.sum(class_avg_confs, axis=(-1, -2))
+    TP = np.diagonal(C2, axis1=-2, axis2=-1)
+    OA2 = np.sum(TP, axis=-1) / (np.sum(C2, axis=(-2, -1)) + 1e-6)
+    TP_plus_FN = np.sum(C2, axis=-1, keepdims=True)
+    class_avg_confs = C2.astype(np.float32) / TP_plus_FN.astype(np.float32)
+    diags = np.diagonal(class_avg_confs, axis1=-2, axis2=-1)
+    mAcc2 = np.sum(diags, axis=-1) / np.sum(class_avg_confs, axis=(-1, -2))
+
+
+    report_lines = ['']
+    report_lines += ['Score report without / with vote']
+    report_lines += ['*' * len(report_lines[1])]
+    report_lines += ['']
+    report_lines += ['throughput = {:.1f} ins/sec'.format(avg_speed)]
+    report_lines += ['']
+
+    columns = [['no', 'yes'],
+               [100*OA1, 100*OA2],
+               [100*mAcc1, 100*mAcc2]]
+    table_str = table_to_str(['voting', 'OA',  'mAcc'],
+                             columns,
+                             ['{:s}', '{:.1f} %', '{:.1f} %'])
+
+
+    report_lines += table_str.split('\n')
+
+    report_str = frame_lines_1(report_lines, no_print=True)
+
+    print(report_str)
+    
+    # Save report in text file
+    if saving:
+        report_path = join(saving_path, 'report.txt')
+        with open(report_path, "a") as text_file:
+            text_file.write('\nVote {:d}: \n\n'.format(epoch))
+            text_file.write(report_str)
+            text_file.write('\n\n')
+
+        conf_path = join(saving_path, 'conf_{:03d}.txt'.format(epoch))
+        np.savetxt(conf_path, C1, '%15d')
+        conf_path = join(saving_path, 'vote_conf_{:03d}.txt'.format(epoch))
+        np.savetxt(conf_path, C2, '%15d')
+
+    return
 
 
 

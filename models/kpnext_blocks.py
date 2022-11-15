@@ -523,6 +523,8 @@ class KPConvX(nn.Module):
         # MLP to get weights
         modulations = self.alpha_mlp(pooled_feats)  # (M, C) -> (M, C//r) -> (M, K*CpG)
 
+        # TODO: Sparse implementation of MLP where we only produce the necessary modulations
+
         # Optional normalization per kernel
         if self.mod_grp_norm:
             modulations = modulations.transpose(0, 1).unsqueeze(0)  # (M, K*CpG) -> (B=1, K*CpG, M)

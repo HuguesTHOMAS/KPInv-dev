@@ -1642,8 +1642,8 @@ def exp_shells():
         logs = logs[:len(logs_names)]
     logs_names = np.array(logs_names[:len(logs)])
 
-    # logs = logs[[-1, -3, -4]]
-    # logs_names = logs_names[[-1, -3, -4]]
+    # logs = logs[[0]]
+    # logs_names = logs_names[[0]]
 
     return logs, logs_names
 
@@ -1667,7 +1667,9 @@ def exp_groups():
     logs = logs.astype('<U50')
     logs = np.insert(logs, 0, 'results/Log_2022-11-04_23-40-28')
     logs = np.insert(logs, 1, 'results/Log_2022-11-05_03-34-32')
-    logs = np.insert(logs, 2, 'results/Log_2022-11-05_19-32-44')
+    logs = np.insert(logs, 2, 'results/Log_2022-11-02_17-59-39')
+    logs = np.insert(logs, 5, 'results/Log_2022-11-07_21-45-32')
+    logs = np.insert(logs, 6, 'results/Log_2022-11-08_07-31-26')
 
     # Give names to the logs (for plot legends)
     logs_names = ['KPNetX-L G1',
@@ -1676,6 +1678,7 @@ def exp_groups():
                   'KPNetX-L G16',
                   'KPNetX-L G-1',
                   'KPNetX-L G0',
+                  'KPNetX-L G0',
                   'todo']
 
     # safe check log names
@@ -1683,17 +1686,10 @@ def exp_groups():
         logs = logs[:len(logs_names)]
     logs_names = np.array(logs_names[:len(logs)])
 
-    # logs = logs[[-1, -3, -4]]
-    # logs_names = logs_names[[-1, -3, -4]]
+    # logs = logs[[5, 2]]
+    # logs_names = logs_names[[5, 2]]
 
     return logs, logs_names
-
-
-
-
-
-
-
 
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -1721,7 +1717,7 @@ if __name__ == '__main__':
     ######################################################
 
     # My logs: choose the logs to show
-    logs, logs_names = exp_groups()
+    logs, logs_names = exp_shells()
 
     frame_lines_1(["Plot S3DIS experiments"])
 
@@ -1744,7 +1740,10 @@ if __name__ == '__main__':
     print_cfg_diffs(logs_names,
                     all_cfgs,
                     # show_params=['model.in_sub_size',
-                    #              'train.in_radius'],
+                    #              'train.in_radius',
+                    #              'train.batch_size',
+                    #              'train.accum_batch',
+                    #              'train.batch_limit'],
                     hide_params=['test.batch_limit',
                                  'train.batch_limit',
                                  'test.batch_size',
@@ -1765,11 +1764,11 @@ if __name__ == '__main__':
     underline("Ploting training info")
 
     # Plot the training loss and accuracy
-    compare_trainings(all_cfgs, logs, logs_names)
+    # compare_trainings(all_cfgs, logs, logs_names)
 
 
     # Test the network or show validation
-    perform_test = False
+    perform_test = True
     if perform_test:
 
         print()
@@ -1778,6 +1777,7 @@ if __name__ == '__main__':
 
         # Plot the validation
         compare_on_test_set(all_cfgs, logs, logs_names)
+        # compare_on_test_set(all_cfgs, logs, logs_names, profile=True)
 
 
     else:
