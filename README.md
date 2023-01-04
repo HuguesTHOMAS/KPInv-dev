@@ -1,4 +1,6 @@
 
+Ongoing project with University of Toronto. Final improved version will be published in a new repository
+
 List of upgrades compared to KPConv-Pytorch
 
 - New pytorch implementation of grid subsampling on GPU tensors using `torch.unique` function.
